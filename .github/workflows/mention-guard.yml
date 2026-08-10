@@ -1,0 +1,97 @@
+name: mention-guard
+
+# Org-wide PR gate. Required across all open-platform-model repos via an
+# organization ruleset ("Require workflows to pass before merging").
+#
+# Scans the PR title, PR body, and every branch commit message for text that
+# becomes permanent and outward-facing once merged:
+#
+#   1. Bare @mentions (`@v1`, `->@v1`, `"@v1"`) — GitHub pings the named user.
+#      Squash commits are built from branch commit messages
+#      (squash_merge_commit_message: COMMIT_MESSAGES), and release-please copies
+#      commit text into changelogs and GitHub release notes, which re-render
+#      mentions. Commit messages are not Markdown: backticks do NOT protect.
+#   2. Session identifiers (`Claude-Session:`, claude.ai/code/session URLs).
+#   3. AI generated-with footers ("Generated with Claude Code" etc.).
+#   4. AI co-author trailers in any form other than exactly
+#      `Co-Authored-By: Claude <noreply@anthropic.com>` (the one allowed form —
+#      no model or version names, no links). Human co-authors are untouched.
+#
+# Break-glass: org admins are on the ruleset bypass list.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: mention-guard-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: mention-guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Scan PR title, body and commit messages
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // A bare mention: @ followed by alnum, not glued to a preceding
+            // word character (core@v2, emails) and not part of @@ diff hunks.
+            const MENTION = /(?<![\w@])@[A-Za-z0-9][A-Za-z0-9-]*/g;
+            const SESSION = /(claude-session\s*:|claude\.ai\/code\/session)/i;
+            const GENERATED = /generated\s+with/i;
+            const AI_NAME = /\b(claude|anthropic|copilot|openai|chatgpt|gpt-?[0-9o]|gemini|codex|aider|devin|cursor|windsurf)\b/i;
+            const PLAIN_TRAILER = 'co-authored-by: claude <noreply@anthropic.com>';
+
+            const findings = [];
+            const scan = (surface, text) => {
+              (text ?? '').split(/\r?\n/).forEach((raw, idx) => {
+                const line = raw.trim();
+                const loc = `${surface}, line ${idx + 1}`;
+                for (const m of raw.matchAll(MENTION)) {
+                  findings.push({ loc, line, why: `bare mention "${m[0]}" pings the GitHub user "${m[0].slice(1)}" — glue the @ to a word character (core@v2) or drop it; backticks do not protect commit messages` });
+                }
+                if (SESSION.test(raw)) {
+                  findings.push({ loc, line, why: 'session identifier — never allowed in commits, PR text, issues or releases' });
+                }
+                if (GENERATED.test(raw) && (AI_NAME.test(raw) || raw.includes('\u{1F916}'))) {
+                  findings.push({ loc, line, why: 'AI generated-with footer — never allowed' });
+                }
+                const t = line.toLowerCase();
+                if (t.startsWith('co-authored-by:') && AI_NAME.test(raw) && t !== PLAIN_TRAILER) {
+                  findings.push({ loc, line, why: 'AI co-author trailer must be exactly "Co-Authored-By: Claude <noreply@anthropic.com>" — no model or version names, no links' });
+                }
+              });
+            };
+
+            const pr = context.payload.pull_request;
+            scan('PR title', pr.title);
+            scan('PR body', pr.body);
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+            for (const c of commits) scan(`commit ${c.sha.slice(0, 7)}`, c.commit.message);
+
+            if (findings.length === 0) {
+              core.info('mention-guard: clean');
+              return;
+            }
+
+            core.summary.addHeading('mention-guard: violations found', 2);
+            core.summary.addRaw('\nThese strings become permanent once merged: the squash commit is built from branch commit messages, and release notes are generated from commits later.\n\n');
+            for (const f of findings) {
+              core.summary.addRaw(`- **${f.loc}** — ${f.why}\n\n  > ${f.line}\n`);
+            }
+            core.summary.addRaw('\n**Fix:** edit the PR title/body in the web UI; rewrite commit messages with `git commit --amend` or `git rebase -i` and force-push the branch.\n');
+            await core.summary.write();
+            for (const f of findings) core.error(`${f.loc}: ${f.why} | ${f.line}`);
+            core.setFailed(`mention-guard: ${findings.length} violation(s) — see the job summary for details`);
