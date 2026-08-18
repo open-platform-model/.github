@@ -17,6 +17,10 @@ name: mention-guard
 #      `Co-Authored-By: Claude <noreply@anthropic.com>` (the one allowed form —
 #      no model or version names, no links). Human co-authors are untouched.
 #
+# Two exceptions keep bot PRs mergeable (see BOT_HANDLES and BODY_IS_ADVISORY
+# below): automation handles are not strangers, and a generated PR body that
+# nobody can reword must not be able to block a merge.
+#
 # Break-glass: org admins are on the ruleset bypass list.
 
 on:
@@ -49,30 +53,60 @@ jobs:
             const AI_NAME = /\b(claude|anthropic|copilot|openai|chatgpt|gpt-?[0-9o]|gemini|codex|aider|devin|cursor|windsurf)\b/i;
             const PLAIN_TRAILER = 'co-authored-by: claude <noreply@anthropic.com>';
 
+            // Exception 1 — automation accounts you address BY NAME to drive
+            // them: `@dependabot rebase`, `@renovate recreate`. Every Dependabot
+            // PR body ends with that command list, so the guard used to fail
+            // every dependency bump in the org. The rule exists to stop an
+            // uninvolved stranger being pinged and left with a permanent
+            // backlink on their profile; these are bots already subscribed to
+            // the thread, and the handle has to stay literal or the documented
+            // command stops working. Exact-match only: @dependabotx still fails.
+            const BOT_HANDLES = new Set([
+              'dependabot',
+              'dependabot-preview',
+              'renovate',
+              'renovate-bot',
+              'github-actions',
+            ]);
+
             const findings = [];
-            const scan = (surface, text) => {
+            const scan = (surface, text, { advisory = false } = {}) => {
               (text ?? '').split(/\r?\n/).forEach((raw, idx) => {
                 const line = raw.trim();
                 const loc = `${surface}, line ${idx + 1}`;
+                const flag = (why) => findings.push({ loc, line, why, advisory });
                 for (const m of raw.matchAll(MENTION)) {
-                  findings.push({ loc, line, why: `bare mention "${m[0]}" pings the GitHub user "${m[0].slice(1)}" — glue the @ to a word character (core@v2) or drop it; backticks do not protect commit messages` });
+                  if (BOT_HANDLES.has(m[0].slice(1).toLowerCase())) continue;
+                  flag(`bare mention "${m[0]}" pings the GitHub user "${m[0].slice(1)}" — glue the @ to a word character (core@v2) or drop it; backticks do not protect commit messages`);
                 }
                 if (SESSION.test(raw)) {
-                  findings.push({ loc, line, why: 'session identifier — never allowed in commits, PR text, issues or releases' });
+                  flag('session identifier — never allowed in commits, PR text, issues or releases');
                 }
                 if (GENERATED.test(raw) && (AI_NAME.test(raw) || raw.includes('\u{1F916}'))) {
-                  findings.push({ loc, line, why: 'AI generated-with footer — never allowed' });
+                  flag('AI generated-with footer — never allowed');
                 }
                 const t = line.toLowerCase();
                 if (t.startsWith('co-authored-by:') && AI_NAME.test(raw) && t !== PLAIN_TRAILER) {
-                  findings.push({ loc, line, why: 'AI co-author trailer must be exactly "Co-Authored-By: Claude <noreply@anthropic.com>" — no model or version names, no links' });
+                  flag('AI co-author trailer must be exactly "Co-Authored-By: Claude <noreply@anthropic.com>" — no model or version names, no links');
                 }
               });
             };
 
             const pr = context.payload.pull_request;
+
+            // Exception 2 — a bot-authored PR body is generated boilerplate. No
+            // maintainer can reword it (Dependabot rewrites it on every rebase
+            // or recreate), and no repo in this org puts the body into the
+            // squash commit (squash_merge_commit_message: COMMIT_MESSAGES), so
+            // it never reaches permanent history. A finding there is reported,
+            // not blocking — otherwise the only way to merge is admin bypass.
+            // The title and the commit messages, which DO land in history, stay
+            // hard failures for bots and humans alike.
+            const authorIsBot =
+              pr.user?.type === 'Bot' || /\[bot\]$/.test(pr.user?.login ?? '');
+
             scan('PR title', pr.title);
-            scan('PR body', pr.body);
+            scan('PR body', pr.body, { advisory: authorIsBot });
             const commits = await github.paginate(github.rest.pulls.listCommits, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -86,12 +120,32 @@ jobs:
               return;
             }
 
-            core.summary.addHeading('mention-guard: violations found', 2);
-            core.summary.addRaw('\nThese strings become permanent once merged: the squash commit is built from branch commit messages, and release notes are generated from commits later.\n\n');
-            for (const f of findings) {
-              core.summary.addRaw(`- **${f.loc}** — ${f.why}\n\n  > ${f.line}\n`);
+            const blocking = findings.filter((f) => !f.advisory);
+            const advisory = findings.filter((f) => f.advisory);
+            const render = (list) => {
+              for (const f of list) {
+                core.summary.addRaw(`- **${f.loc}** — ${f.why}\n\n  > ${f.line}\n`);
+              }
+            };
+
+            if (blocking.length > 0) {
+              core.summary.addHeading('mention-guard: violations found', 2);
+              core.summary.addRaw('\nThese strings become permanent once merged: the squash commit is built from branch commit messages, and release notes are generated from commits later.\n\n');
+              render(blocking);
+              core.summary.addRaw('\n**Fix:** edit the PR title in the web UI; rewrite commit messages with `git commit --amend` or `git rebase -i` and force-push the branch.\n');
             }
-            core.summary.addRaw('\n**Fix:** edit the PR title/body in the web UI; rewrite commit messages with `git commit --amend` or `git rebase -i` and force-push the branch.\n');
+            if (advisory.length > 0) {
+              core.summary.addHeading('mention-guard: advisory (bot-authored PR body)', 2);
+              core.summary.addRaw('\nThe body of a bot PR is generated and never enters the squash commit, so these do not block the merge. Nothing to do unless the bot template itself is wrong.\n\n');
+              render(advisory);
+            }
             await core.summary.write();
-            for (const f of findings) core.error(`${f.loc}: ${f.why} | ${f.line}`);
-            core.setFailed(`mention-guard: ${findings.length} violation(s) — see the job summary for details`);
+
+            for (const f of advisory) core.notice(`${f.loc}: ${f.why} | ${f.line}`);
+            for (const f of blocking) core.error(`${f.loc}: ${f.why} | ${f.line}`);
+
+            if (blocking.length > 0) {
+              core.setFailed(`mention-guard: ${blocking.length} violation(s) — see the job summary for details`);
+            } else {
+              core.info(`mention-guard: ${advisory.length} advisory finding(s) in a bot-authored PR body — not blocking`);
+            }

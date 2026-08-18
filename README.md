@@ -24,6 +24,32 @@ It fails the PR when it finds:
 headers, human `Co-Authored-By` trailers, and the plain
 `Co-Authored-By: Claude <noreply@anthropic.com>` trailer.
 
+## Bot exceptions
+
+Two carve-outs keep automated PRs mergeable. Neither weakens the rule for
+anything that reaches permanent history.
+
+**1. Automation handles are allowed anywhere.** `@dependabot`, `@renovate`,
+`@renovate-bot`, `@github-actions` and `@dependabot-preview` never count as
+violations. Every Dependabot PR body ends with its command list
+(`` `@dependabot rebase` ``, `` `@dependabot recreate` ``, …), which failed the
+gate on every dependency bump in the org. The rule exists so an uninvolved
+stranger is not pinged and left with a permanent backlink on their profile —
+these are bots already on the thread, and the handle has to stay literal or the
+documented command stops working. The match is exact: `@dependabotx` still
+fails.
+
+**2. A bot-authored PR body is advisory, not blocking.** Findings there are
+reported as notices and the job passes. The body is generated boilerplate no
+maintainer can reword — Dependabot rewrites it on every rebase or recreate —
+and no repo in this org puts the PR body into the squash commit (every repo
+uses `squash_merge_commit_message: COMMIT_MESSAGES`), so it never reaches
+permanent history. Without this, the only way to merge a release-please PR
+whose changelog quotes a contributor would be an admin bypass.
+
+The **PR title** and **commit messages** of a bot PR are still hard failures —
+those are the surfaces that become the squash commit and the release notes.
+
 **Limits (by design):** the gate cannot un-ping a mention typed into a PR
 title/body (that fires on submit — the gate keeps it out of *permanent*
 history), and it cannot see a squash message retyped in the merge box. The
