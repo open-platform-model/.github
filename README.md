@@ -1,6 +1,7 @@
 # open-platform-model/.github
 
-Org-wide GitHub configuration. Currently hosts one thing:
+Org-wide GitHub configuration. Currently hosts two things: the `mention-guard`
+required PR workflow and the `tag-ledger` drift check.
 
 ## `mention-guard` (required PR workflow)
 
@@ -60,3 +61,85 @@ positive, prefer rewording; bypass is for emergencies.
 
 Changing the rules: edit the workflow here on `main` — the ruleset references
 this file by path, so every repo picks the change up immediately.
+
+## `tag-ledger` (daily drift check)
+
+Release tags are immutable: no tag under `refs/tags/` is ever moved, deleted or
+re-created, and a broken release is fixed by releasing the next version. The
+docs site pins refs per site version, so a moved tag silently changes published
+docs. The org rulesets prevent it;
+[`.github/workflows/tag-ledger.yml`](.github/workflows/tag-ledger.yml) detects
+it if prevention ever fails or is switched off.
+
+Scope: `core`, `library`, `catalog_opm`, `cli`, `opm-operator` (the repos that
+release). `modules` is out of scope. The list is `REPOS` in the workflow.
+
+It runs daily at 04:17 UTC and on manual dispatch. Each run:
+
+1. **Verifies the ledger before trusting it.** `ledger.tsv` on the
+   `tag-ledger` branch of this repo holds one row per tag (repo, tag, object
+   SHA, peeled SHA, first seen). Every trusted run ends by uploading an
+   artifact named `tag-ledger-anchor-<commit>`, outside the branch. The next
+   run takes the newest such artifact from a scheduled or dispatched run of
+   this workflow on the default branch, and requires the branch head to
+   descend from that commit and `ledger.tsv` to start with its content at it.
+   Rows appended after the anchor were not written by a trusted run; each one
+   is reported in the issue as a notice. A missing branch,
+   a missing or expired anchor, rewritten history or an edited row is a
+   finding, and nothing is appended. The ledger is never re-created or
+   re-baselined silently: only a manual run with `bootstrap: true` creates the
+   branch or accepts its current head, and that run reports what it did in the
+   issue. The first run must be such a bootstrap run.
+2. **Records tags.** `git ls-remote --tags` (public repos, no token) gives each
+   tag's object SHA and, for annotated tags, the peeled commit. New tags are
+   appended with a plain push (never forced); rows are never rewritten.
+3. **Fails on drift.** A ledger tag that is gone, or whose object or peeled SHA
+   changed, fails the run. The ledger keeps the original row as evidence.
+4. **Checks the org rulesets.** Each repo must have these, from the org (a
+   same-named repo-level ruleset is a finding), active and excluding nothing.
+   `tags-immutable` is required now. `tags-create-app-only` and
+   `release-branches` are planned: while one does not exist, the run reports
+   it as a pending warning in the job summary; once it exists, every
+   assertion below applies to it.
+
+   | Ruleset | Target | Refs | Rules | Bypass |
+   | --- | --- | --- | --- | --- |
+   | `tags-immutable` | tag | `~ALL` | update, deletion, non_fast_forward | none |
+   | `tags-create-app-only` | tag | `~ALL` | creation | only the `opm-release-please` App (5132303), always |
+   | `release-branches` | branch | `refs/heads/release/*` | deletion, non_fast_forward, pull_request (squash only) | none |
+
+   **CI does not verify the bypass lists.** The API returns them only to
+   callers who can edit the ruleset, so with `GITHUB_TOKEN` that assertion is
+   listed under "Not verified" in the job summary. The owner checks bypass
+   lists in Settings > Rules; the workflow never asks for a stronger token.
+
+Any finding, and any failed step, opens an issue titled
+`tag-ledger: release tag or ruleset drift`, or comments on it while it is
+open, and fails the run. A bootstrap is reported on the same issue without
+failing.
+
+**Responding to drift.** Never move a tag back: that is a second mutation.
+Release the next version, then open a PR here adding a row to
+[`tag-ledger/acknowledged.tsv`](tag-ledger/acknowledged.tsv) (repo, tag, live
+object SHA, live peeled SHA, note; tab-separated, `-` for both SHAs of a
+deleted tag). Until it merges, every run stays red. Once merged, that exact
+state is reported as a warning; any further change fails again.
+
+Acknowledgements live on the default branch, never on the ledger branch. The
+ledger branch takes plain pushes (the job's own token can write it), so a row
+there could silence a finding without anyone reviewing it. The default branch
+already holds this workflow's code: whoever can change it can change the check
+itself, so the acknowledgement file adds no new way in. A PR there passes
+`mention-guard` and review.
+
+**Token:** `GITHUB_TOKEN` with `contents: write`, `issues: write` and
+`actions: read`. `contents: write` covers every branch of this repo, `main`
+included (the branch the org ruleset reads `mention-guard.yml` from); the job
+only pushes to `tag-ledger`. The scanned repos are only read.
+
+**Before merging:** the owner confirms `tags-immutable` (the other two may
+follow later and show as pending), adds a branch ruleset on
+`refs/heads/tag-ledger` in this repo (deletion, non_fast_forward, no bypass)
+and one on this repo's default branch requiring a pull request, so an
+acknowledgement cannot land by direct push. The first run is then a manual
+one with `bootstrap: true`.
