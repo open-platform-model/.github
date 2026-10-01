@@ -67,44 +67,104 @@ this file by path, so every repo picks the change up immediately.
 Release tags are immutable: no tag under `refs/tags/` is ever moved, deleted or
 re-created, and a broken release is fixed by releasing the next version. The
 docs site pins refs per site version, so a moved tag silently changes published
-docs. The org tag ruleset `tags-immutable` prevents it;
+docs. The org rulesets prevent it;
 [`.github/workflows/tag-ledger.yml`](.github/workflows/tag-ledger.yml) detects
 it if prevention ever fails or is switched off.
 
 Scope: `core`, `library`, `catalog_opm`, `cli`, `opm-operator` (the repos that
-release). `modules` is out of scope for now. The list is `REPOS` in the
-workflow.
+release). `modules` is out of scope. The list is `REPOS` in the workflow.
 
-It runs daily at 04:17 UTC and on manual dispatch. For each repo it:
+It runs daily at 04:17 UTC and on manual dispatch. Each run:
 
-1. **Records tags in an append-only ledger.** `git ls-remote --tags` (public
-   repos, no token) gives each tag's object SHA and, for annotated tags, the
-   peeled commit. `ledger.tsv` on the `tag-ledger` branch of this repo holds
-   one row per tag: repo, tag, object, peeled, first seen. New tags are
-   appended with a plain push (never forced); rows are never rewritten. The
-   workflow creates the branch on its first run.
-2. **Fails on drift.** A ledger tag that is gone, or whose object or peeled SHA
+1. **Verifies the ledger before trusting it.** `ledger.tsv` on the
+   `tag-ledger` branch of this repo holds one row per tag (repo, tag, object
+   SHA, peeled SHA, first seen). Every trusted run ends by uploading an
+   artifact named `tag-ledger-anchor-<commit>`, outside the branch. The next
+   run requires the branch head to descend from that commit and `ledger.tsv`
+   and `acknowledged.tsv` to start with their content at it. A missing branch,
+   a missing or expired anchor, rewritten history or an edited row is a
+   finding, and nothing is appended. The ledger is never re-created or
+   re-baselined silently: only a manual run with `bootstrap: true` creates the
+   branch or accepts its current head, and that run reports what it did in the
+   issue. The first run must be such a bootstrap run.
+2. **Records tags.** `git ls-remote --tags` (public repos, no token) gives each
+   tag's object SHA and, for annotated tags, the peeled commit. New tags are
+   appended with a plain push (never forced); rows are never rewritten.
+3. **Fails on drift.** A ledger tag that is gone, or whose object or peeled SHA
    changed, fails the run. The ledger keeps the original row as evidence.
-3. **Checks the ruleset.** `GET /repos/{owner}/{repo}/rulesets` must list a tag
-   ruleset named `tags-immutable` that is active, includes `~ALL`, excludes
-   nothing, carries the `update`, `deletion` and `non_fast_forward` rules and
-   has an empty bypass list (in any mode, `exempt` included). The API returns
-   the bypass list only to callers who can edit the ruleset, so with the
-   default `GITHUB_TOKEN` that assertion is skipped with a warning. The
-   workflow never asks for a stronger token.
+4. **Checks the org rulesets.** Each repo must have these, from the org (a
+   same-named repo-level ruleset is a finding), active and excluding nothing:
 
-Any finding opens an issue titled `tag-ledger: release tag or ruleset drift`,
-or comments on it while it is open. Until the owner creates the
-`tags-immutable` ruleset, every run fails on the ruleset check; that is the
-intended signal.
+   | Ruleset | Target | Refs | Rules | Bypass |
+   | --- | --- | --- | --- | --- |
+   | `tags-immutable` | tag | `~ALL` | update, deletion, non_fast_forward | none |
+   | `tags-create-app-only` | tag | `~ALL` | creation | only the `opm-release-please` App (5132303), always |
+   | `release-branches` | branch | `refs/heads/release/*` | deletion, non_fast_forward, pull_request (squash only) | none |
+
+   **CI does not verify the bypass lists.** The API returns them only to
+   callers who can edit the ruleset, so with `GITHUB_TOKEN` that assertion is
+   listed under "Not verified" in the job summary. The owner checks bypass
+   lists in Settings > Rules; the workflow never asks for a stronger token.
+
+Any finding, and any failed step, opens an issue titled
+`tag-ledger: release tag or ruleset drift`, or comments on it while it is
+open, and fails the run. A bootstrap is reported on the same issue without
+failing.
 
 **Responding to drift.** Never move a tag back: that is a second mutation.
 Release the next version, then append a row to `acknowledged.tsv` on the
 ledger branch (repo, tag, live object SHA, live peeled SHA, note;
 tab-separated, `-` for both SHAs of a deleted tag). That exact state is then
-reported as a warning; any further change fails again.
+reported as a warning; any further change fails again. An appended row keeps
+the ledger's integrity check green.
 
-**Token:** `GITHUB_TOKEN` with `contents: write` (ledger branch of this repo
-only) and `issues: write`. The scanned repos are only read. Protect the
-`tag-ledger` branch against deletion and force pushes with a ruleset; plain
-pushes from the workflow stay allowed.
+**Token:** `GITHUB_TOKEN` with `contents: write`, `issues: write` and
+`actions: read`. `contents: write` covers every branch of this repo, `main`
+included (the branch the org ruleset reads `mention-guard.yml` from); the job
+only pushes to `tag-ledger`. The scanned repos are only read.
+
+**Before merging:** the owner creates the three rulesets above and a branch
+ruleset on `refs/heads/tag-ledger` in this repo (deletion, non_fast_forward,
+no bypass); then the first run is a manual one with `bootstrap: true`.
+
+## `cut-release-branch` (reusable workflow)
+
+[`.github/workflows/cut-release-branch.yml`](.github/workflows/cut-release-branch.yml)
+cuts a maintenance branch `release/<tag_prefix><minor>` (for example
+`release/v2.0`, `release/opm-v4.4`). It is the only way a release branch is
+created; branches are cut lazily, at GA or when main starts work a released
+minor must not get, and are never deleted.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `tag_prefix` | `v` | Tag text before the version (`opm-v`, `k8s-v` in `catalog_opm`) |
+| `minor` | required | `X.Y` |
+| `package_path` | `.` | Package key in `release-please-config.json` (`opm`, `k8s`) |
+| `release_workflow` | `.github/workflows/release.yml` | Caller workflow that runs release-please |
+| `release_app_client_id` | empty | With secret `release_app_private_key`: mint the release App token |
+
+Secrets: `release_app_private_key`, or `token`.
+
+It finds the highest final `<tag_prefix><minor>.<patch>` tag (prereleases are
+ignored) and refuses when none exists or the branch already exists. It creates
+the branch at that tag's commit, then opens a PR into it that, on that branch
+only:
+
+- sets `versioning: always-bump-patch` and `prerelease: false` for the package,
+  and removes any other package from the branch's release-please config;
+- adds `release/**` to the release workflow's push trigger and sets
+  `target-branch: ${{ github.ref_name }}` on its release-please step
+  (release-please otherwise targets the default branch).
+
+Files are edited as text to keep their layout and checked against a
+`jq`/`yq` edit; on a mismatch the `jq`/`yq` output is used.
+
+**Token.** Callers pass a token with `contents: write` and
+`pull-requests: write` on their repo. The release App is preferred: pass its
+client id and private key and the workflow mints the token itself, so CI runs
+on the setup PR without manual approval (a token cannot be handed over from
+another job of the caller). Caller example in the workflow header.
+
+**Unproven until the sandbox runs it:** that the `release-branches` ruleset
+lets the API create a `release/*` branch at an existing commit, and that
+release-please on the branch anchors on the cut tag.
