@@ -7,10 +7,12 @@
 #    repos, no token) and records <repo> <tag> <object sha> <peeled sha>.
 # 2. Compares against <ledger-dir>/ledger.tsv. A ledger row whose tag is gone
 #    is DELETED; a row whose object or peeled SHA differs is CHANGED. Both are
-#    findings unless acknowledged.tsv records that exact state. Tags not in
-#    the ledger yet are APPENDED (never rewritten).
-# 3. Asserts that three org rulesets apply to each repo, active and with no
-#    excluded refs:
+#    findings unless ACK_FILE records that exact state. Tags not in the
+#    ledger yet are APPENDED (never rewritten).
+# 3. Asserts the org rulesets below, active and with no excluded refs.
+#    tags-immutable is required now; a missing tags-create-app-only or
+#    release-branches is reported as a pending warning until the owner
+#    creates it, and checked in full from then on:
 #      tags-immutable        tag, ~ALL, update + deletion + non_fast_forward,
 #                            no bypass actors
 #      tags-create-app-only  tag, ~ALL, creation, bypass only the release App
@@ -26,8 +28,10 @@
 #   REPOS           space-separated repo names
 #   RELEASE_APP_ID  opm-release-please App id (default 5132303)
 #   GH_TOKEN        optional; used for the REST calls
-#   FINDINGS      file that receives one Markdown bullet per finding
-#   WARNINGS      file that receives one Markdown bullet per skipped check
+#   ACK_FILE        reviewed acknowledgements, read from the default branch of
+#                   the .github repo; never a file on the ledger branch
+#   FINDINGS        file that receives one Markdown bullet per finding
+#   WARNINGS        file that receives one Markdown bullet per warning
 #
 # Exit status: 0 when the scan completed (findings are reported via FINDINGS),
 # non-zero when the scan itself could not run (network, malformed ledger).
@@ -116,17 +120,19 @@ awk -F'\t' -v OFS='\t' -v now="$now" -v repos="$REPOS" \
     }
   }' "$ledger" "$current"
 
-# A drift row the owner has reviewed is acknowledged by appending
-# "<repo> <tag> <object> <peeled> <note>" (tab-separated, "-" for both SHAs of
-# a deleted tag) to acknowledged.tsv on the ledger branch. It is then reported
-# as a warning, and only while the live state still equals the acknowledged one.
-ack="$ledger_dir/acknowledged.tsv"
+# A drift row the owner has reviewed is acknowledged by a PR to the default
+# branch of the .github repo adding "<repo> <tag> <object> <peeled> <note>"
+# (tab-separated, "-" for both SHAs of a deleted tag) to ACK_FILE. It is then
+# reported as a warning, and only while the live state still equals the
+# acknowledged one. The file is deliberately not on the ledger branch: that
+# branch takes plain pushes, and an acknowledgement must be reviewed.
+ack=${ACK_FILE:-}
 if [[ -s "$drift" ]]; then
   while IFS=$'\t' read -r kind repo tag lobj lpeel lseen cobj cpeel; do
     msg="tag $kind \`$repo\` \`$tag\` (ledger: object $lobj, peeled $lpeel, first seen $lseen"
     [[ "$kind" == CHANGED ]] && msg+="; now: object $cobj, peeled $cpeel"
     msg+=")"
-    if [[ -f "$ack" ]] && awk -F'\t' -v r="$repo" -v t="$tag" -v o="$cobj" -v p="$cpeel" \
+    if [[ -n "$ack" && -f "$ack" ]] && awk -F'\t' -v r="$repo" -v t="$tag" -v o="$cobj" -v p="$cpeel" \
       '!/^#/ && $1 == r && $2 == t && $3 == o && $4 == p { found = 1 } END { exit !found }' "$ack"; then
       warning "acknowledged: $msg"
     else
@@ -144,7 +150,6 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   echo "appended=$new_count" >>"$GITHUB_OUTPUT"
 fi
 
-
 # --- 3. org rulesets ---------------------------------------------------------
 # GET returns the body in $work/body.json and the HTTP status in $status. A
 # 401/403 with the token is retried anonymously (the repos are public and
@@ -160,13 +165,15 @@ api_get() {
   status=$(curl "${common[@]}" "$url")
 }
 
-# check_ruleset <repo> <name> <target> <include ref pattern> <bypass> <rule>...
+# check_ruleset <repo> <required|pending> <name> <target> <include> <bypass> <rule>...
+#   pending: the ruleset is planned but not created yet; its absence is a
+#   warning, anything wrong with it once it exists is a finding.
 #   bypass: "none" (empty list) or "app:<id>" (exactly that Integration, mode
 #   always). The ruleset must come from the org: a repo-level ruleset of the
 #   same name can be edited by repo admins and does not count.
 check_ruleset() {
-  local repo=$1 name=$2 target=$3 include=$4 bypass=$5
-  shift 5
+  local repo=$1 need=$2 name=$3 target=$4 include=$5 bypass=$6
+  shift 6
   api_get "repos/$ORG/$repo/rulesets?includes_parents=true&targets=$target&per_page=100"
   case "$status" in
     200) ;;
@@ -187,7 +194,11 @@ check_ruleset() {
   [[ "$others" == "[]" ]] ||
     finding "ruleset \`$repo\`: a ruleset named \`$name\` comes from a source other than the org: $others"
   if [[ -z "$id" ]]; then
-    finding "ruleset \`$repo\`: no org $target ruleset named \`$name\` applies"
+    if [[ "$need" == pending ]]; then
+      warning "pending: \`$repo\`: org $target ruleset \`$name\` does not exist yet"
+    else
+      finding "ruleset \`$repo\`: no org $target ruleset named \`$name\` applies"
+    fi
     return
   fi
   api_get "repos/$ORG/$repo/rulesets/$id"
@@ -235,7 +246,7 @@ check_ruleset() {
 }
 
 for repo in $REPOS; do
-  check_ruleset "$repo" tags-immutable tag '~ALL' none update deletion non_fast_forward
-  check_ruleset "$repo" tags-create-app-only tag '~ALL' "app:$RELEASE_APP_ID" creation
-  check_ruleset "$repo" release-branches branch 'refs/heads/release/*' none deletion non_fast_forward pull_request
+  check_ruleset "$repo" required tags-immutable tag '~ALL' none update deletion non_fast_forward
+  check_ruleset "$repo" pending tags-create-app-only tag '~ALL' "app:$RELEASE_APP_ID" creation
+  check_ruleset "$repo" pending release-branches branch 'refs/heads/release/*' none deletion non_fast_forward pull_request
 done

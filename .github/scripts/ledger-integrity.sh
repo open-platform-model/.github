@@ -10,8 +10,10 @@
 # anchor. The ledger is trusted when:
 #   - the branch exists,
 #   - ANCHOR is set and is an ancestor of the branch head, and
-#   - ledger.tsv and acknowledged.tsv at the anchor are byte prefixes of the
-#     same files at the head (rows were appended, none edited or removed).
+#   - ledger.tsv at the anchor is a byte prefix of ledger.tsv at the head
+#     (rows were appended, none edited or removed).
+# Every commit after the anchor was written by something other than a trusted
+# run, so each row it appended is reported as a notice (it reaches the issue).
 #
 # Anything else is a finding, never a silent re-baseline. The only way past
 # one is BOOTSTRAP=true (workflow_dispatch input), which creates the branch
@@ -26,6 +28,7 @@
 #   BOOTSTRAP      "true" to create or re-anchor the ledger
 #   FINDINGS       file that receives one Markdown bullet per finding
 #   NOTICES        file that receives one Markdown bullet per bootstrap event
+#                  or row appended outside a trusted run
 #
 # Outputs (GITHUB_OUTPUT): trusted=true|false.
 # Exit status: non-zero only when the check itself could not run.
@@ -75,12 +78,8 @@ release, written by `.github/workflows/tag-ledger.yml` on `main`. Rows are
 only ever appended; never edit, reorder or delete one, and never delete or
 force-push this branch. Each run proves the branch head descends from the
 commit the previous run ended on and that no row changed; anything else
-fails the run.
-
-After reviewing a reported drift, append a row to `acknowledged.tsv` (repo,
-tag, live object SHA, live peeled SHA, note; tab-separated, `-` for both SHAs
-of a deleted tag). That exact state is then reported as a warning instead of
-failing the run.
+fails the run. Acknowledgements of reviewed drift are not kept here: they go
+by PR into `tag-ledger/acknowledged.tsv` on the default branch.
 EOF
     git add README.md
     output trusted=true
@@ -104,16 +103,22 @@ elif ! git cat-file -e "$ANCHOR^{commit}" 2>/dev/null ||
   ! git merge-base --is-ancestor "$ANCHOR" HEAD; then
   problem="the last trusted ledger commit \`$ANCHOR\` is not an ancestor of \`$LEDGER_BRANCH\` head \`$head\`: the branch history was rewritten"
 else
-  for f in ledger.tsv acknowledged.tsv; do
-    git cat-file -e "$ANCHOR:$f" 2>/dev/null || continue
+  f=ledger.tsv
+  if git cat-file -e "$ANCHOR:$f" 2>/dev/null; then
     old=$(mktemp)
     git show "$ANCHOR:$f" >"$old"
     size=$(wc -c <"$old")
     if [[ ! -f "$f" ]] || ! cmp -s -n "$size" "$old" "$f" || (($(wc -c <"$f") < size)); then
       problem="\`$f\` at head \`$head\` does not start with its content at the last trusted commit \`$ANCHOR\`: a recorded row was edited or removed"
+    else
+      # Rows appended after the anchor were not written by a trusted run.
+      while IFS= read -r row; do
+        [[ -n "$row" ]] || continue
+        notice "row appended to \`$f\` outside a trusted run (after \`$ANCHOR\`): \`${row//$'\t'/ }\`"
+      done < <(tail -c +"$((size + 1))" "$f")
     fi
     rm -f "$old"
-  done
+  fi
 fi
 
 if [[ -z "$problem" ]]; then

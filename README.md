@@ -80,8 +80,11 @@ It runs daily at 04:17 UTC and on manual dispatch. Each run:
    `tag-ledger` branch of this repo holds one row per tag (repo, tag, object
    SHA, peeled SHA, first seen). Every trusted run ends by uploading an
    artifact named `tag-ledger-anchor-<commit>`, outside the branch. The next
-   run requires the branch head to descend from that commit and `ledger.tsv`
-   and `acknowledged.tsv` to start with their content at it. A missing branch,
+   run takes the newest such artifact from a scheduled or dispatched run of
+   this workflow on the default branch, and requires the branch head to
+   descend from that commit and `ledger.tsv` to start with its content at it.
+   Rows appended after the anchor were not written by a trusted run; each one
+   is reported in the issue as a notice. A missing branch,
    a missing or expired anchor, rewritten history or an edited row is a
    finding, and nothing is appended. The ledger is never re-created or
    re-baselined silently: only a manual run with `bootstrap: true` creates the
@@ -93,7 +96,11 @@ It runs daily at 04:17 UTC and on manual dispatch. Each run:
 3. **Fails on drift.** A ledger tag that is gone, or whose object or peeled SHA
    changed, fails the run. The ledger keeps the original row as evidence.
 4. **Checks the org rulesets.** Each repo must have these, from the org (a
-   same-named repo-level ruleset is a finding), active and excluding nothing:
+   same-named repo-level ruleset is a finding), active and excluding nothing.
+   `tags-immutable` is required now. `tags-create-app-only` and
+   `release-branches` are planned: while one does not exist, the run reports
+   it as a pending warning in the job summary; once it exists, every
+   assertion below applies to it.
 
    | Ruleset | Target | Refs | Rules | Bypass |
    | --- | --- | --- | --- | --- |
@@ -112,59 +119,27 @@ open, and fails the run. A bootstrap is reported on the same issue without
 failing.
 
 **Responding to drift.** Never move a tag back: that is a second mutation.
-Release the next version, then append a row to `acknowledged.tsv` on the
-ledger branch (repo, tag, live object SHA, live peeled SHA, note;
-tab-separated, `-` for both SHAs of a deleted tag). That exact state is then
-reported as a warning; any further change fails again. An appended row keeps
-the ledger's integrity check green.
+Release the next version, then open a PR here adding a row to
+[`tag-ledger/acknowledged.tsv`](tag-ledger/acknowledged.tsv) (repo, tag, live
+object SHA, live peeled SHA, note; tab-separated, `-` for both SHAs of a
+deleted tag). Until it merges, every run stays red. Once merged, that exact
+state is reported as a warning; any further change fails again.
+
+Acknowledgements live on the default branch, never on the ledger branch. The
+ledger branch takes plain pushes (the job's own token can write it), so a row
+there could silence a finding without anyone reviewing it. The default branch
+already holds this workflow's code: whoever can change it can change the check
+itself, so the acknowledgement file adds no new way in. A PR there passes
+`mention-guard` and review.
 
 **Token:** `GITHUB_TOKEN` with `contents: write`, `issues: write` and
 `actions: read`. `contents: write` covers every branch of this repo, `main`
 included (the branch the org ruleset reads `mention-guard.yml` from); the job
 only pushes to `tag-ledger`. The scanned repos are only read.
 
-**Before merging:** the owner creates the three rulesets above and a branch
-ruleset on `refs/heads/tag-ledger` in this repo (deletion, non_fast_forward,
-no bypass); then the first run is a manual one with `bootstrap: true`.
-
-## `cut-release-branch` (reusable workflow)
-
-[`.github/workflows/cut-release-branch.yml`](.github/workflows/cut-release-branch.yml)
-cuts a maintenance branch `release/<tag_prefix><minor>` (for example
-`release/v2.0`, `release/opm-v4.4`). It is the only way a release branch is
-created; branches are cut lazily, at GA or when main starts work a released
-minor must not get, and are never deleted.
-
-| Input | Default | Meaning |
-| --- | --- | --- |
-| `tag_prefix` | `v` | Tag text before the version (`opm-v`, `k8s-v` in `catalog_opm`) |
-| `minor` | required | `X.Y` |
-| `package_path` | `.` | Package key in `release-please-config.json` (`opm`, `k8s`) |
-| `release_workflow` | `.github/workflows/release.yml` | Caller workflow that runs release-please |
-| `release_app_client_id` | empty | With secret `release_app_private_key`: mint the release App token |
-
-Secrets: `release_app_private_key`, or `token`.
-
-It finds the highest final `<tag_prefix><minor>.<patch>` tag (prereleases are
-ignored) and refuses when none exists or the branch already exists. It creates
-the branch at that tag's commit, then opens a PR into it that, on that branch
-only:
-
-- sets `versioning: always-bump-patch` and `prerelease: false` for the package,
-  and removes any other package from the branch's release-please config;
-- adds `release/**` to the release workflow's push trigger and sets
-  `target-branch: ${{ github.ref_name }}` on its release-please step
-  (release-please otherwise targets the default branch).
-
-Files are edited as text to keep their layout and checked against a
-`jq`/`yq` edit; on a mismatch the `jq`/`yq` output is used.
-
-**Token.** Callers pass a token with `contents: write` and
-`pull-requests: write` on their repo. The release App is preferred: pass its
-client id and private key and the workflow mints the token itself, so CI runs
-on the setup PR without manual approval (a token cannot be handed over from
-another job of the caller). Caller example in the workflow header.
-
-**Unproven until the sandbox runs it:** that the `release-branches` ruleset
-lets the API create a `release/*` branch at an existing commit, and that
-release-please on the branch anchors on the cut tag.
+**Before merging:** the owner confirms `tags-immutable` (the other two may
+follow later and show as pending), adds a branch ruleset on
+`refs/heads/tag-ledger` in this repo (deletion, non_fast_forward, no bypass)
+and one on this repo's default branch requiring a pull request, so an
+acknowledgement cannot land by direct push. The first run is then a manual
+one with `bootstrap: true`.
