@@ -1,0 +1,154 @@
+name: tag-ledger
+
+# Daily drift check for the org rule "release tags are immutable".
+#
+# For every repo that releases (REPOS below):
+#   1. records each tag and its peeled SHA in an append-only ledger kept on the
+#      `tag-ledger` branch of this repo; a tag that later disappears or points
+#      elsewhere fails the run and opens (or comments on) an issue;
+#   2. asserts that the org tag ruleset `tags-immutable` applies: active,
+#      include ~ALL, rules update + deletion + non_fast_forward, no bypass
+#      actors. Checks the default token cannot perform are skipped with a
+#      warning, never escalated.
+#
+# Detection only: the ruleset prevents, this workflow notices. The scanned
+# repos are only read; the only writes are to this repo (ledger branch, issue).
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: tag-ledger
+  cancel-in-progress: false
+
+env:
+  ORG: open-platform-model
+  REPOS: core library catalog_opm cli opm-operator
+  RULESET_NAME: tags-immutable
+  LEDGER_BRANCH: tag-ledger
+  ISSUE_TITLE: 'tag-ledger: release tag or ruleset drift'
+
+jobs:
+  check:
+    name: tag-ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # append to the ledger branch of this repo
+      issues: write # report drift
+    steps:
+      - name: Check out the scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: src
+          persist-credentials: false
+
+      - name: Check out the ledger branch (create it on first run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q ledger
+          cd ledger
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config "http.https://github.com/.extraheader" \
+            "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin "$LEDGER_BRANCH" >/dev/null; then
+            git fetch -q --depth=1 origin "$LEDGER_BRANCH"
+            git checkout -q -b "$LEDGER_BRANCH" FETCH_HEAD
+          else
+            echo "::notice::$LEDGER_BRANCH does not exist yet; starting an orphan branch"
+            git checkout -q --orphan "$LEDGER_BRANCH"
+            cat >README.md <<'EOF'
+          # tag-ledger
+
+          Append-only record of every release tag in the open-platform-model repos
+          that release, written by `.github/workflows/tag-ledger.yml` on `main`.
+          Rows are only ever appended; never edit, reorder or delete one, and never
+          force-push this branch. A row that no longer matches the live tag is the
+          evidence the workflow reports.
+
+          After reviewing a reported drift, append a row to `acknowledged.tsv`
+          (repo, tag, live object SHA, live peeled SHA, note; tab-separated, `-` for
+          both SHAs of a deleted tag). That exact state is then reported as a
+          warning instead of failing the run.
+          EOF
+            git add README.md
+          fi
+
+      - name: Scan tags and rulesets
+        id: scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINDINGS: ${{ runner.temp }}/findings.md
+          WARNINGS: ${{ runner.temp }}/warnings.md
+        run: |
+          set -euo pipefail
+          : >"$FINDINGS"
+          : >"$WARNINGS"
+          src/.github/scripts/tag-ledger.sh ledger
+
+      - name: Append new tags to the ledger
+        if: steps.scan.outputs.appended != '0'
+        env:
+          APPENDED: ${{ steps.scan.outputs.appended }}
+        run: |
+          set -euo pipefail
+          cd ledger
+          git add ledger.tsv
+          git commit -q -m "chore(ledger): record $APPENDED new tag(s)" \
+            -m "Run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          # Plain push: a non-fast-forward is rejected, never forced.
+          git push origin "HEAD:refs/heads/$LEDGER_BRANCH"
+
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINDINGS: ${{ runner.temp }}/findings.md
+          WARNINGS: ${{ runner.temp }}/warnings.md
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## tag-ledger'
+            echo
+            echo "Repos: $REPOS. New tags recorded: ${{ steps.scan.outputs.appended }}."
+            if [[ -s "$WARNINGS" ]]; then
+              echo; echo '### Skipped checks'; echo; cat "$WARNINGS"
+            fi
+            if [[ -s "$FINDINGS" ]]; then
+              echo; echo '### Drift'; echo; cat "$FINDINGS"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+
+          if [[ ! -s "$FINDINGS" ]]; then
+            echo 'tag-ledger: clean'
+            exit 0
+          fi
+
+          body="${RUNNER_TEMP}/issue.md"
+          {
+            echo "Run: $RUN_URL"
+            echo
+            cat "$FINDINGS"
+            echo
+            echo 'A changed or deleted tag is never repaired by moving it back: release the next version and record what happened here. The ledger keeps the original row.'
+          } >"$body"
+
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$ISSUE_TITLE\" in:title" --json number,title \
+            --jq "[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty")
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body-file "$body"
+          fi
+          echo "::error::tag-ledger: drift found, see the job summary"
+          exit 1

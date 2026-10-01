@@ -1,6 +1,7 @@
 # open-platform-model/.github
 
-Org-wide GitHub configuration. Currently hosts one thing:
+Org-wide GitHub configuration. Currently hosts two things: the `mention-guard`
+required PR workflow and the `tag-ledger` drift check.
 
 ## `mention-guard` (required PR workflow)
 
@@ -60,3 +61,50 @@ positive, prefer rewording; bypass is for emergencies.
 
 Changing the rules: edit the workflow here on `main` — the ruleset references
 this file by path, so every repo picks the change up immediately.
+
+## `tag-ledger` (daily drift check)
+
+Release tags are immutable: no tag under `refs/tags/` is ever moved, deleted or
+re-created, and a broken release is fixed by releasing the next version. The
+docs site pins refs per site version, so a moved tag silently changes published
+docs. The org tag ruleset `tags-immutable` prevents it;
+[`.github/workflows/tag-ledger.yml`](.github/workflows/tag-ledger.yml) detects
+it if prevention ever fails or is switched off.
+
+Scope: `core`, `library`, `catalog_opm`, `cli`, `opm-operator` (the repos that
+release). `modules` is out of scope for now. The list is `REPOS` in the
+workflow.
+
+It runs daily at 04:17 UTC and on manual dispatch. For each repo it:
+
+1. **Records tags in an append-only ledger.** `git ls-remote --tags` (public
+   repos, no token) gives each tag's object SHA and, for annotated tags, the
+   peeled commit. `ledger.tsv` on the `tag-ledger` branch of this repo holds
+   one row per tag: repo, tag, object, peeled, first seen. New tags are
+   appended with a plain push (never forced); rows are never rewritten. The
+   workflow creates the branch on its first run.
+2. **Fails on drift.** A ledger tag that is gone, or whose object or peeled SHA
+   changed, fails the run. The ledger keeps the original row as evidence.
+3. **Checks the ruleset.** `GET /repos/{owner}/{repo}/rulesets` must list a tag
+   ruleset named `tags-immutable` that is active, includes `~ALL`, excludes
+   nothing, carries the `update`, `deletion` and `non_fast_forward` rules and
+   has an empty bypass list (in any mode, `exempt` included). The API returns
+   the bypass list only to callers who can edit the ruleset, so with the
+   default `GITHUB_TOKEN` that assertion is skipped with a warning. The
+   workflow never asks for a stronger token.
+
+Any finding opens an issue titled `tag-ledger: release tag or ruleset drift`,
+or comments on it while it is open. Until the owner creates the
+`tags-immutable` ruleset, every run fails on the ruleset check; that is the
+intended signal.
+
+**Responding to drift.** Never move a tag back: that is a second mutation.
+Release the next version, then append a row to `acknowledged.tsv` on the
+ledger branch (repo, tag, live object SHA, live peeled SHA, note;
+tab-separated, `-` for both SHAs of a deleted tag). That exact state is then
+reported as a warning; any further change fails again.
+
+**Token:** `GITHUB_TOKEN` with `contents: write` (ledger branch of this repo
+only) and `issues: write`. The scanned repos are only read. Protect the
+`tag-ledger` branch against deletion and force pushes with a ruleset; plain
+pushes from the workflow stay allowed.
