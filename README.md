@@ -8,9 +8,20 @@ required PR workflow and the `tag-ledger` drift check.
 An organization ruleset ("Require workflows to pass before merging") runs
 [`.github/workflows/mention-guard.yml`](.github/workflows/mention-guard.yml)
 on every pull request in every repo of this org. It scans the **PR title, PR
-body, and every branch commit message** — the surfaces that become the squash
-commit (all repos use `squash_merge_commit_message: COMMIT_MESSAGES`) and later
-leak into release-please changelogs and GitHub release notes.
+body, and every branch commit message**. All three are public on the PR, and
+the squash commit is built from them: release-please later copies it into
+changelogs and GitHub release notes, which re-render mentions.
+
+What the squash commit carries depends on the repo's merge settings. Repos that
+squash with `squash_merge_commit_message: COMMIT_MESSAGES` put the branch commit
+messages into its body. The release repos (core, catalog_opm, library,
+opm-operator, cli, opm) switch to `BLANK` with a `PR_TITLE` title once the owner
+applies the
+[workspace `RELEASING.md` "Owner settings"](https://github.com/open-platform-model/workspace/blob/main/RELEASING.md#owner-settings),
+so only the PR title reaches `main` there; until then they still squash with
+`COMMIT_MESSAGES`. Every other org repo stays on `COMMIT_MESSAGES`. That page is
+the source of truth for the settings; check it, or `gh api
+repos/open-platform-model/<repo>`, rather than this paragraph.
 
 It fails the PR when it finds:
 
@@ -43,13 +54,17 @@ fails.
 **2. A bot-authored PR body is advisory, not blocking.** Findings there are
 reported as notices and the job passes. The body is generated boilerplate no
 maintainer can reword — Dependabot rewrites it on every rebase or recreate —
-and no repo in this org puts the PR body into the squash commit (every repo
-uses `squash_merge_commit_message: COMMIT_MESSAGES`), so it never reaches
-permanent history. Without this, the only way to merge a release-please PR
-whose changelog quotes a contributor would be an admin bypass.
+and no repo in this org puts the PR body into the squash commit (repos squash
+with `COMMIT_MESSAGES` or, in the release repos, `BLANK`; neither includes the
+PR body), so it never reaches permanent history. Without this, the only way
+to merge a release-please PR whose changelog quotes a contributor would be an
+admin bypass.
 
-The **PR title** and **commit messages** of a bot PR are still hard failures —
-those are the surfaces that become the squash commit and the release notes.
+The **PR title** and **commit messages** of a bot PR are still hard failures.
+The title becomes the squash title and the release-notes entry (except in a
+one-commit PR in a repo on GitHub's default `COMMIT_OR_PR_TITLE`, where the
+commit subject does). The commit messages become the squash body in repos that
+squash with `COMMIT_MESSAGES`, and stay public on the PR everywhere.
 
 **Limits (by design):** the gate cannot un-ping a mention typed into a PR
 title/body (that fires on submit — the gate keeps it out of *permanent*

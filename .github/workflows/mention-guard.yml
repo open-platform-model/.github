@@ -7,10 +7,16 @@ name: mention-guard
 # becomes permanent and outward-facing once merged:
 #
 #   1. Bare @mentions (`@v1`, `->@v1`, `"@v1"`) — GitHub pings the named user.
-#      Squash commits are built from branch commit messages
-#      (squash_merge_commit_message: COMMIT_MESSAGES), and release-please copies
-#      commit text into changelogs and GitHub release notes, which re-render
-#      mentions. Commit messages are not Markdown: backticks do NOT protect.
+#      The squash commit carries the PR title (or, under GitHub's default
+#      COMMIT_OR_PR_TITLE, a one-commit PR's subject) and, in repos that
+#      squash with squash_merge_commit_message: COMMIT_MESSAGES, the branch
+#      commit messages.
+#      The release repos (core, catalog_opm, library, opm-operator, cli, opm)
+#      move to BLANK, title only, once the owner applies workspace RELEASING.md
+#      "Owner settings"; until then they squash with COMMIT_MESSAGES too.
+#      release-please copies commit text into changelogs and GitHub release
+#      notes, which re-render mentions. Commit messages are not Markdown:
+#      backticks do NOT protect.
 #   2. Session identifiers (`Claude-Session:`, claude.ai/code/session URLs).
 #   3. AI generated-with footers ("Generated with Claude Code" etc.).
 #   4. AI co-author trailers in any form other than exactly
@@ -97,11 +103,13 @@ jobs:
             // Exception 2 — a bot-authored PR body is generated boilerplate. No
             // maintainer can reword it (Dependabot rewrites it on every rebase
             // or recreate), and no repo in this org puts the body into the
-            // squash commit (squash_merge_commit_message: COMMIT_MESSAGES), so
-            // it never reaches permanent history. A finding there is reported,
-            // not blocking — otherwise the only way to merge is admin bypass.
-            // The title and the commit messages, which DO land in history, stay
-            // hard failures for bots and humans alike.
+            // squash commit (repos squash with COMMIT_MESSAGES or, in the
+            // release repos, BLANK; neither includes the PR body), so it never
+            // reaches permanent history. A finding there is reported, not
+            // blocking — otherwise the only way to merge is admin bypass.
+            // The title, which DOES land in history, and the commit messages,
+            // which DO land in history in repos that squash with
+            // COMMIT_MESSAGES, stay hard failures for bots and humans alike.
             const authorIsBot =
               pr.user?.type === 'Bot' || /\[bot\]$/.test(pr.user?.login ?? '');
 
@@ -130,7 +138,7 @@ jobs:
 
             if (blocking.length > 0) {
               core.summary.addHeading('mention-guard: violations found', 2);
-              core.summary.addRaw('\nThese strings become permanent once merged: the squash commit is built from branch commit messages, and release notes are generated from commits later.\n\n');
+              core.summary.addRaw('\nThese strings become permanent once merged: the PR title (and, in repos squashing with COMMIT_MESSAGES, the branch commit messages) become the squash commit; release-please copies it into release notes.\n\n');
               render(blocking);
               core.summary.addRaw('\n**Fix:** edit the PR title in the web UI; rewrite commit messages with `git commit --amend` or `git rebase -i` and force-push the branch.\n');
             }
