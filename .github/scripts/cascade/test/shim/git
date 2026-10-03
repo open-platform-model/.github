@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# git stand-in for the resolver's offline tests. `git ls-remote ... <url>
+# [<pattern>]` answers from $CASCADE_FIXTURE_DIR/git/<repo>.refs (ls-remote
+# output, filtered by the refs pattern like real git); a missing file, or a
+# <repo>.refs.fail marker, fails like an unreachable remote. Every other
+# subcommand runs the real git found on PATH after this directory.
+set -uo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${1:-}" = ls-remote ]; then
+  dir="${CASCADE_FIXTURE_DIR:?CASCADE_FIXTURE_DIR is not set}"
+  printf 'git %s\n' "$*" >>"$dir/git.log"
+  url="" pat=""
+  for x in "$@"; do
+    case "$x" in
+      https://*) url="$x" ;;
+      refs/*) pat="$x" ;;
+    esac
+  done
+  repo="${url##*/}"
+  repo="${repo%.git}"
+  f="$dir/git/$repo.refs"
+  if [ -z "$url" ] || [ ! -f "$f" ] || [ -e "$f.fail" ]; then
+    echo "fatal: unable to access '$url'" >&2
+    exit 128
+  fi
+  while IFS=$'\t' read -r sha ref; do
+    [ -n "$ref" ] || continue
+    # shellcheck disable=SC2053 # the pattern is a glob, as in real git
+    [ -z "$pat" ] || [[ $ref == $pat ]] || continue
+    printf '%s\t%s\n' "$sha" "$ref"
+  done <"$f"
+  exit 0
+fi
+IFS=: read -r -a parts <<<"$PATH"
+rest=""
+for p in "${parts[@]}"; do
+  [ "$p" = "$here" ] || rest="${rest:+$rest:}$p"
+done
+real=$(PATH="$rest" command -v git) || { echo "git shim: no real git on PATH" >&2; exit 127; }
+exec "$real" "$@"

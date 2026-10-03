@@ -186,7 +186,7 @@ the stub-agreement cases with the exclusions §2.10 lists.
 `cascade-resolver.yml`: `on: pull_request` and `push: branches: [main]`, no `paths:` filter;
 `permissions: contents: read`; one job, `name: Resolver tests`, `runs-on: ubuntu-latest`,
 `timeout-minutes: 10`. Steps: checkout (the SHA `tag-ledger.yml` pins, `persist-credentials:
-false`), `yq --version` must report mikefarah v4, `shellcheck` on `find .github/scripts -name
+false`), `yq --version` must report mikefarah v4, `shellcheck -x` on `find .github/scripts -name
 '*.sh' -print0` plus the two shims (wider than contract §2.11, which names only
 `.github/scripts/cascade`, to match the repo's validation gate; `tag-ledger.sh` and
 `ledger-integrity.sh` pass today), `actionlint` on `.github/workflows/*.yml`, then

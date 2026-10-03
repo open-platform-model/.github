@@ -1,0 +1,72 @@
+name: cascade-resolver
+
+# Tests the release-cascade resolver (.github/scripts/cascade/) offline:
+# shellcheck on every script, actionlint on every workflow, then the table
+# test, which answers every HTTP and git request from fixture files.
+#
+# This is the check the main ruleset of this repo requires (workspace
+# RELEASING.md, section "Rulesets on main"), so it has no path filter: a
+# filtered required check never reports on other PRs and blocks them.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cascade-resolver-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Resolver tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      ACTIONLINT_VERSION: 1.7.12
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tool versions
+        run: |
+          set -euo pipefail
+          v=$(yq --version)
+          echo "$v"
+          case "$v" in
+            *mikefarah*" v4."*) ;;
+            *) echo "::error::the resolver needs mikefarah yq v4, found: $v"; exit 1 ;;
+          esac
+          shellcheck --version
+          jq --version
+          git --version
+          bash --version | head -n 1
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          find .github/scripts -name '*.sh' -print0 \
+            | xargs -0 shellcheck -x \
+                .github/scripts/cascade/test/shim/curl \
+                .github/scripts/cascade/test/shim/git
+
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          tgz="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -q -sSfL --retry 3 -o "$RUNNER_TEMP/$tgz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$tgz"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color .github/workflows/*.yml
+
+      - name: Offline resolver tests
+        run: bash .github/scripts/cascade/test/run.sh
