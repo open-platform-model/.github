@@ -63,6 +63,7 @@ Prior art in the workspace, read and borrowed from, never called:
   lib/ghcr.sh               # token, tags walk with Link pagination, manifest HEAD, modulefile blob
   lib/goproxy.sh            # @v/list, @v/<v>.info, new-major probe path
   lib/release.sh            # git ls-remote candidates, asset download probes
+  lib/query.sh              # query kinds and pin keys, published, pin-of, language-of
   lib/files.sh              # .cascade-frozen and .cascade-hold readers and validation
   lib/newest.sh             # candidate pipeline, holds, never-backwards, --expect, --json
   lib/classify.sh           # classes-file matcher

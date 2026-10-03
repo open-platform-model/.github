@@ -60,6 +60,8 @@ CASCADE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
 . "$CASCADE_LIB/goproxy.sh"
 # shellcheck source=lib/release.sh
 . "$CASCADE_LIB/release.sh"
+# shellcheck source=lib/query.sh
+. "$CASCADE_LIB/query.sh"
 # shellcheck source=lib/newest.sh
 . "$CASCADE_LIB/newest.sh"
 # shellcheck source=lib/classify.sh
