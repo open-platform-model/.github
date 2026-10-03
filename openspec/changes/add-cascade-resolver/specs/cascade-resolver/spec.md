@@ -2,7 +2,8 @@
 
 The shared resolver every repo's `task deps:cascade` calls to decide which published upstream
 version a pin moves to, and whether a pin is held or frozen. Source: workspace RELEASING.md,
-section "The receiver", and the Phase 2 cascade contract §2.
+section "The receiver", and the Phase 2 cascade contract, version 1, §2 (kept with this change
+as `contract.md`).
 
 ## ADDED Requirements
 
@@ -55,7 +56,8 @@ release above the same version with a prerelease; prerelease identifiers left to
 by value, alphanumeric in ASCII order, numeric below alphanumeric, a longer list above its
 prefix; build metadata ignored. It MUST NOT use the `sed 's/-/~/' | sort -V` trick or a `jq`
 comparator. `semver-cmp` SHALL print exactly one of `-1`, `0`, `1` and exit 0; `semver-sort`
-SHALL print stdin's versions ascending.
+SHALL print stdin's versions ascending, one per line, and exit 2 when a line is not a valid
+version.
 
 #### Scenario: Numeric identifiers compare by value
 
@@ -81,6 +83,11 @@ SHALL print stdin's versions ascending.
 
 - **WHEN** `semver-cmp v1.0.0+a v1.0.0+b` runs
 - **THEN** it prints `0`
+
+#### Scenario: Sort ascending
+
+- **WHEN** `semver-sort` reads `v2.0.0`, `v2.0.0-beta.10`, `v2.0.0-beta.2` and `v2.0.0-alpha.1`
+- **THEN** it prints `v2.0.0-alpha.1`, `v2.0.0-beta.2`, `v2.0.0-beta.10`, `v2.0.0` and exits 0
 
 ### Requirement: Candidate rules for newest
 
@@ -129,7 +136,8 @@ unpublished. A `cue` coordinate whose `@vN` disagrees with `--current`'s major S
 The resolver SHALL support these kinds, with "published" defined per kind:
 
 - `cue <module>@vN`: candidates from the anonymous GHCR tag list of
-  `open-platform-model/<module>`, following `Link` pagination and failing beyond 20 pages;
+  `open-platform-model/<module>`, following `Link: <...>; rel="next"` pagination (a relative
+  link resolved against `https://ghcr.io`) and failing beyond 20 pages;
   published when the manifest `HEAD` with `Accept: application/vnd.oci.image.manifest.v1+json`
   answers 200.
 - `go <module path>`: candidates from `<proxy>/<path>/@v/list`, never `@latest`; published when
@@ -199,8 +207,12 @@ resolver MUST NOT fall back to an older or guessed version. `--expect <v>` SHALL
 `<v>` is valid, in-major, above `--current`, allowed by the prerelease rule and not above an
 in-date hold; when it applies and `<v>` is unpublished, `newest` SHALL poll `published` every 30
 seconds up to `--max-wait` seconds (default `${CASCADE_MAX_WAIT:-600}`), then make its normal
-pass. Running out of time SHALL warn and answer what is published, not fail. `<v>` SHALL never be
-the answer unless it is the newest published candidate.
+pass. Elapsed time SHALL be the sum of the sleep intervals the resolver requested, never the wall
+clock, so a faked `CASCADE_SLEEP` makes the wait instant. An `--expect` version confirmed
+published (before or during the wait) SHALL join the candidate set of the normal pass even when
+the upstream list does not hold it yet; it stays subject to every other candidate rule. Running
+out of time SHALL warn and answer what is published, not fail. `<v>` SHALL never be the answer
+unless it is the newest published candidate.
 
 #### Scenario: Transient error recovers
 
@@ -215,12 +227,12 @@ the answer unless it is the newest published candidate.
 #### Scenario: Expected version appears late
 
 - **WHEN** `--expect v1.0.0-beta.4` names a version absent from the proxy list whose `.info` answers 404 twice and then 200
-- **THEN** `newest` polls three times and prints `v1.0.0-beta.4`
+- **THEN** `newest` polls three times, adds `v1.0.0-beta.4` to the candidates and prints it
 
 #### Scenario: Expected version never appears
 
-- **WHEN** the expected version is still unpublished when `--max-wait` runs out
-- **THEN** `newest` warns that it is not published after the wait and answers the newest published candidate, or exits 3 if none is newer
+- **WHEN** the expected version is still unpublished when `--max-wait` runs out, with `CASCADE_SLEEP` faked
+- **THEN** `newest` returns without real waiting, warns that it is not published after the wait and answers the newest published candidate, or exits 3 if none is newer
 
 #### Scenario: Expect above a hold is ignored
 
@@ -239,7 +251,7 @@ be exit 1 for every subcommand that reads the file. `check-files` SHALL validate
 exit 0 when an entry lists the key and its path (trailing `/` stripped) equals `<path>` or is a
 directory prefix of it, else 3. `hold <pin-key>` SHALL print `max` and exit 0 for an in-date hold
 (today is `CASCADE_TODAY` or the UTC date, in date through `expires`), and exit 3 for an expired
-hold (with a warning) or no hold.
+hold (with a warning) or no hold. An empty file, `frozen: []` and `holds: []` SHALL be valid.
 
 #### Scenario: Directory entry with trailing slash
 
@@ -255,6 +267,16 @@ hold (with a warning) or no hold.
 
 - **WHEN** a `.cascade-hold` entry has no `reason`
 - **THEN** `check-files` exits 1 naming the entry and the missing key
+
+#### Scenario: Empty steering files
+
+- **WHEN** `.cascade-frozen` is empty and `.cascade-hold` holds `holds: []`
+- **THEN** `check-files` exits 0
+
+#### Scenario: Real frozen files
+
+- **WHEN** `.cascade-frozen` is a verbatim copy of library's or cli's committed file
+- **THEN** `check-files` exits 0
 
 #### Scenario: Expired hold
 
@@ -281,9 +303,12 @@ An in-date hold SHALL cap `newest`'s target at its `max`, warning "held at `<max
 
 `pin-of <module>@vN <v> <dep>@vM` SHALL print the version that published `<module>` at `<v>` pins
 for `<dep>`, read from the `application/vnd.cue.modulefile.v1` layer of its GHCR manifest, and
-exit 3 when the dep is absent. `language-of <module>@vN <v>` SHALL print that module file's
-`language.version`, exiting 3 when there is none. `next-patch <v>` SHALL print `<v>` with its
-patch number plus one.
+exit 3 when the dep is absent. It SHALL take only the first `v:` inside that dep's `{ ... }`
+block, never a `v:` of a later dep, and exit 1 when the dep key appears more than once. The parse
+SHALL NOT depend on whether `cue` is on `PATH`. `language-of <module>@vN <v>` SHALL print that
+module file's `language.version`, exiting 3 when there is none. `next-patch <v>` SHALL print a
+release `<v>` with its patch number plus one; a prerelease or build-metadata `<v>` SHALL be exit
+2.
 
 #### Scenario: Catalog's core pin
 
@@ -295,6 +320,21 @@ patch number plus one.
 - **WHEN** the module file has no entry for the named dep
 - **THEN** `pin-of` exits 3 with empty stdout
 
+#### Scenario: Dependency followed by another
+
+- **WHEN** the module file pins `opmodel.dev/catalogs/opm@v4` at `v4.4.4` and the next dep `opmodel.dev/core@v2` at `v2.0.0-beta.1`
+- **THEN** `pin-of <module> <v> opmodel.dev/catalogs/opm@v4` prints only `v4.4.4`
+
+#### Scenario: Language version
+
+- **WHEN** the module file has `language: { version: "v0.16.0" }`
+- **THEN** `language-of` prints `v0.16.0`, and for a file without `language` it exits 3
+
+#### Scenario: Next patch
+
+- **WHEN** `next-patch v1.0.3` runs
+- **THEN** it prints `v1.0.4`, and `next-patch v1.0.0-beta.3` exits 2
+
 ### Requirement: Warnings and JSON output
 
 Every warning SHALL be printed to stderr as `cascade-resolve: warning: <message>` and, when
@@ -303,6 +343,11 @@ Every warning SHALL be printed to stderr as `cascade-resolve: warning: <message>
 versions and paths in backticks and contain no `@` that is not preceded by a word character.
 `newest --json` SHALL print one object with `pin`, `kind`, `current`, `newest`, `target`,
 `moved`, `hold`, `newer_major` and `warnings`, with `hold` and `newer_major` `null` when absent.
+
+#### Scenario: JSON shape
+
+- **WHEN** `newest cue opmodel.dev/core@v2 --current v2.0.0-beta.1 --json` moves to `v2.0.0-beta.2` with no hold
+- **THEN** it prints one JSON object whose `target` is `v2.0.0-beta.2`, `moved` is `true`, and `hold` and `newer_major` are `null`
 
 #### Scenario: Release warning key
 

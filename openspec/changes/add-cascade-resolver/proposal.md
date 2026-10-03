@@ -17,9 +17,8 @@ frozen, and what the cascade PR is called. Today those answers are scattered and
 
 RELEASING.md, section "Rollout and changes", makes this change the first Phase 2 step: the
 shared resolver lives in `.github` and every `add-deps-cascade-task` depends on it. The
-interface is fixed in advance by the Phase 2 cascade contract (supervisor scratchpad
-`p2-cascade-contract.md`, version 1), so the four repo changes are written in parallel
-against its stub.
+interface is fixed in advance by the Phase 2 cascade contract, version 1 (committed with this
+change as `contract.md`), so the four repo changes are written in parallel against its stub.
 
 `.github` has no OpenSpec workspace and no CI check of its own. RELEASING.md, section
 "Rulesets on main", requires "the CI check its `add-cascade-resolver` change adds" on
@@ -45,14 +44,21 @@ against its stub.
   - Exit codes 0 (yes or moved), 3 (nothing to do or no), 1 (error), 2 (usage).
 - **The canonical stub** `.github/scripts/cascade/stub-resolve.sh`, byte-identical to contract
   §7 (sha256 `970130f7…3d9c`), which the four repo changes copy into their test data.
+- **The contract itself**, version 1, as `openspec/changes/add-cascade-resolver/contract.md`, so
+  the specs' source archives with the change instead of living only in a scratch directory.
 - **An offline test suite** `.github/scripts/cascade/test/run.sh` with PATH shims for `curl`
-  and `git` answering from captured fixtures, covering every case in contract §2.10, plus a
-  stub-agreement test.
+  and `git` answering from captured fixtures, covering every case in contract §2.10 and the
+  plan review's additions, plus a stub-agreement test.
+- **Departures from the contract**, each reported to the supervisor: Notes pass through
+  unchanged (workspace RELEASING.md wins over contract §9.13); an `--expect` version confirmed
+  published joins the candidates and the wait is timed from requested sleeps (§2.9); `pin-of`
+  never shells out to `cue` (§2.6); `next-patch` refuses a prerelease; `CASCADE_SOURCE` is
+  validated; `shellcheck` in CI covers every script under `.github/scripts`.
 - **CI.** `.github/workflows/cascade-resolver.yml`, job `Resolver tests`, on every PR and push
   to `main` with no path filter: `shellcheck`, `actionlint`, then the offline suite. A
   separate non-required `.github/workflows/cascade-resolver-live.yml` (weekly and on dispatch)
   checks read-only invariants against the real services.
-- **README.** A `cascade` section next to `mention-guard` and `tag-ledger`.
+- **README.** A `cascade` section appended after the `tag-ledger` section.
 
 Not in this change:
 

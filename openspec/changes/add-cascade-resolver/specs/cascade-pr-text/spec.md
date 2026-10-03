@@ -2,7 +2,8 @@
 
 One implementation of the cascade PR's title and body, computed from a repo's diff, its
 path-class map and its pin report, so every repo's cascade PR reads the same way. Source:
-workspace RELEASING.md, section "Title from diff class", and the Phase 2 cascade contract §4.
+workspace RELEASING.md, section "Title from diff class", and the Phase 2 cascade contract,
+version 1, §4 (kept with this change as `contract.md`).
 
 ## ADDED Requirements
 
@@ -14,7 +15,9 @@ with `#` comments and blank lines ignored; the first matching line SHALL win and
 no line SHALL be `shipped`. Patterns SHALL match as follows: `dir/` every path under `dir/`; a
 pattern with `/` and no `*` exactly that path; a name with no `/` and no `*` exactly that
 root-level path; a name with `*` and no `/` a basename glob at any depth; `**/name/` any path with
-a directory segment `name` at any depth, including the root. An unknown class SHALL be exit 1.
+a directory segment `name` at any depth, including the root. An unknown class, a line without a
+pattern, or a pattern that is none of these five forms (for example one with both `/` and `*`
+other than `**/name/`) SHALL be exit 1 naming the line.
 
 #### Scenario: Unmatched path is shipped
 
@@ -35,6 +38,11 @@ a directory segment `name` at any depth, including the root. An unknown class SH
 
 - **WHEN** the classes file has `release-tool .opm-cli-version` and the path is `sub/.opm-cli-version`
 - **THEN** `classify` prints `shipped` and the path
+
+#### Scenario: Pattern of no known form
+
+- **WHEN** the classes file has `test src/*.cue`
+- **THEN** `classify` exits 1 naming that line
 
 ### Requirement: Diff and moved pins
 
@@ -87,18 +95,53 @@ type and MUST NOT use any other type.
 
 ### Requirement: Cascade PR body
 
-`body` SHALL print, deterministically and with no timestamps, a `<!-- cascade-title: ... -->`
-marker holding the title, a `<!-- cascade-labels: ... -->` marker holding the union of the moved
-pins' labels, then the sections `## Moved pins` (a table `Pin | Class | From | To`, one row per
-moved pin, or the single row `| none | - | - | - |`, followed by the changed-file counts per
-class), `## Triggering releases` (from `CASCADE_SOURCE` and `CASCADE_TAGS`, tags not matching
-`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$` dropped with a warning, or
-`- None recorded (daily sweep or manual run).`), `## Warnings` (from `--warnings`, default
-`<git-dir>/cascade/warnings`, de-duplicated keeping the first, key `-` rendered without a prefix,
-or `- None.`) and `## Notes` last, opened by the line
-`<!-- cascade-notes: the bot keeps everything below this line -->` and followed by
-`CASCADE_NOTES_FILE`'s content when set and non-empty. It SHALL NOT compute
-`deps-cascade:breaking`.
+`body` SHALL exit 0 and print, deterministically and with no timestamps, exactly these lines,
+where `<title>` is the `title` output (empty when the diff is empty) and each bracketed part is
+filled as described below:
+
+```
+<!-- cascade-title: <title> -->
+<!-- cascade-labels: <labels> -->
+## Moved pins
+
+| Pin | Class | From | To |
+| --- | --- | --- | --- |
+| <display> (`<pin-key>`) | <class> | `<from>` | `<to>` |
+
+Changed files: <s> shipped, <t> test, <r> release-tool.
+
+## Triggering releases
+
+- `<source>` `<tag>`
+
+## Warnings
+
+- `<pin-key>`: <message>
+
+## Notes
+
+<!-- cascade-notes: the bot keeps everything below this line -->
+<notes>
+```
+
+- `<labels>` SHALL be the union of the moved pins' `labels` columns, each label once, in
+  first-seen order (pins in `SCRIPT WORKTREE` order, labels in column order), joined with `,`;
+  empty when none. `body` SHALL NOT compute `deps-cascade:breaking`.
+- The table SHALL have one row per moved pin, or the single row `| none | - | - | - |`.
+- `<s>`, `<t>` and `<r>` SHALL count the changed paths per class.
+- Triggering releases SHALL list one line per valid tag in `CASCADE_TAGS` (space-separated) with
+  `CASCADE_SOURCE` as the source. A source outside `core`, `catalog_opm`, `library`,
+  `opm-operator` and `cli` SHALL be dropped with a warning, and its tags with it. A tag not
+  matching `^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$` SHALL be dropped with a warning. With nothing
+  valid the section SHALL be the single line `- None recorded (daily sweep or manual run).`.
+- Warnings SHALL be the lines of `--warnings` (default `<git-dir>/cascade/warnings`, missing
+  means none) followed by `body`'s own warnings, each `<pin-key>\t<message>`, de-duplicated
+  keeping the first. A key of `-` SHALL render as `- <message>`. With none the section SHALL be
+  `- None.`.
+- `<notes>` SHALL be the content of `CASCADE_NOTES_FILE`, byte for byte, when it is set and
+  non-empty (a final newline added if missing); otherwise the body SHALL end with the marker
+  line. Notes SHALL NOT be edited or linted (workspace RELEASING.md, section "Title from diff
+  class": a `## Notes` section the bot never edits).
 
 #### Scenario: Labels from moved pins
 
@@ -110,18 +153,31 @@ or `- None.`) and `## Notes` last, opened by the line
 - **WHEN** `body` runs twice on the same tree and environment
 - **THEN** the two outputs are byte-identical
 
+#### Scenario: No moved pin
+
+- **WHEN** paths changed but no pin moved
+- **THEN** the table's only row is `| none | - | - | - |`
+
+#### Scenario: Empty diff
+
+- **WHEN** nothing changed against the merge-base
+- **THEN** `body` exits 0 and its first line is `<!-- cascade-title:  -->`
+
 #### Scenario: Hostile tag dropped
 
 - **WHEN** `CASCADE_TAGS` holds `v1.0.0 $(id)`
 - **THEN** only `v1.0.0` is listed and a warning names the dropped tag
 
-### Requirement: Mention lint and Notes neutralization
+#### Scenario: Unknown source dropped
 
-Before printing, `title` and `body` SHALL check the whole title and the body above the
-`cascade-notes` marker against `(?<![\w@])@[A-Za-z0-9]`, and exit 1 naming the line on a match.
-In Notes, every `@` matching that pattern SHALL get a U+200D zero-width joiner inserted right
-after it, and the body SHALL add the warning "neutralized <n> mention(s) in Notes" under key `-`.
-Neutralization SHALL be idempotent.
+- **WHEN** `CASCADE_SOURCE` is `evil` and `CASCADE_TAGS` is `v1.0.0`
+- **THEN** the section is `- None recorded (daily sweep or manual run).` and a warning names the dropped source
+
+### Requirement: Mention lint
+
+Before printing, `title` and `body` SHALL check the whole title and every body line above the
+`cascade-notes` marker against `(?<![\w@])@[A-Za-z0-9]`, and exit 1 naming the line on a match,
+printing nothing on stdout. Notes below the marker SHALL pass through unchanged.
 
 #### Scenario: Module path passes
 
@@ -133,7 +189,7 @@ Neutralization SHALL be idempotent.
 - **WHEN** a warning in the generated part contains ` @octocat`
 - **THEN** `body` exits 1 naming the offending line
 
-#### Scenario: Mention in Notes neutralized
+#### Scenario: Mention in Notes passes through
 
 - **WHEN** `CASCADE_NOTES_FILE` contains `ping @octocat`
-- **THEN** `body` exits 0, the Notes text has a zero-width joiner after that `@`, and a second run over that output adds no further joiner
+- **THEN** `body` exits 0 and the Notes text is byte-identical to the file

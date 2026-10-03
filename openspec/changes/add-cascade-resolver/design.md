@@ -1,7 +1,7 @@
 ## Context
 
-The interface is already fixed. The Phase 2 cascade contract (version 1, supervisor scratchpad
-`p2-cascade-contract.md`, cited below as "contract §N") defines the resolver's subcommands,
+The interface is already fixed. The Phase 2 cascade contract (version 1, committed verbatim
+with this change as `contract.md` so it archives with it, cited below as "contract §N") defines the resolver's subcommands,
 exit codes, query kinds, file schemas, title and body format, the stub and the test cases, and
 four repo changes are being written against it in parallel. This design does not reopen any of
 that. It records how the code is laid out, which existing code it borrows from, and where it
@@ -109,10 +109,22 @@ All through `lib/http.sh`, which issues only the contract §2.9 curl shape
 | Release candidates | `git ls-remote --tags --refs https://github.com/open-platform-model/<repo> 'refs/tags/v*'` | non-zero git exit: exit 1 |
 | Release published | `HEAD -L https://github.com/open-platform-model/<repo>/releases/download/<v>/<asset>` per asset | all 200 yes; any 404 no |
 
+A GHCR `Link` header is relative (`</v2/<repo>/tags/list?last=...&n=1000>; rel="next"`), so
+the next URL is `https://ghcr.io` plus the link when it starts with `/`, and the link itself
+only when it is an absolute `https://ghcr.io/` URL; any other host is exit 1 (the token is never
+sent elsewhere).
+
 `<repo>` for `cue` is `open-platform-model/<module path without @vN>`, which matches the CUE
 registry mapping `opmodel.dev=ghcr.io/open-platform-model` (research: the short
 `open-platform-model/core` answers 403). The anonymous GHCR bearer token is sent only to `ghcr.io`, as an `Authorization` header
 argument; the test shim logs that argument, and fixture tokens are dummies.
+
+The modulefile parse for `pin-of` and `language-of` never uses `cue`, even when it is on `PATH`
+(a departure from contract §2.6, which allows either): one parser means local runs and CI test
+the same code. `pin-of` scans for the line holding `"<dep>": {`, fails with exit 1 if the key
+appears more than once, and takes the first `v: "<version>"` before that block's closing `}`, so
+a following dep's `v:` is never read. `language-of` takes the `version:` inside the
+`language: {` block. Both are `awk` over the plain `module.cue` blob.
 
 Retries: `000`, `429` and `5xx` get 4 attempts in all with `${CASCADE_SLEEP:-sleep}` 2, 4 and 8
 between them, then exit 1. Any other status outside a request's expected set is exit 1 with
@@ -127,6 +139,9 @@ list above its prefix, build metadata ignored. `semver_sort` is a merge sort ove
 (in-process, no subshell per comparison). `newest` filters before it sorts: only in-major
 candidates strictly above `--current` reach the sort, so a GHCR list of hundreds of tags
 (mostly `-0.dev.` builds) sorts a handful.
+`next_patch` accepts only a release (`vX.Y.Z`); a prerelease or build-metadata input is exit 2.
+Every version-advance input in the four repos is a release today (templates `1.0.3`, fixtures
+`0.x.y`).
 Candidate filtering drops anything that fails the version regex, `-0.dev.`/`-dev.` builds, Go
 pseudo-versions, other majors, and prereleases when `--current` is a release and `--pre` is
 absent; duplicates by build metadata collapse.
@@ -148,8 +163,15 @@ the merge-base, the changed paths (diff plus untracked, not ignored) and the mov
 `pins.sh <merge-base>` against `pins.sh WORKTREE`, then render §4.3 and §4.4 byte for byte. The
 mention lint uses `grep -P '(?<![\w@])@[A-Za-z0-9]'`, the prefix of mention-guard's own
 pattern (`mention-guard.yml:50`), and it deliberately has no bot-handle exemption: the cascade
-never needs to name a bot. Notes are neutralized with U+200D after each matching `@`, not linted
-(contract §9.13).
+never needs to name a bot. Notes are copied byte for byte and neither linted nor edited: see
+"Notes pass through" below.
+
+`body` on an empty diff still exits 0 and prints the whole layout with an empty title marker
+(`<!-- cascade-title:  -->`), so the Phase 3 workflow always gets the same shape; `title` is the
+command that answers 3. The labels marker joins the union of the moved pins' labels with `,`, each
+label once, in first-seen order. `CASCADE_SOURCE` is checked against the five cascade repos
+(`core`, `catalog_opm`, `library`, `opm-operator`, `cli`); any other value is dropped with a
+warning together with its tags, since the dispatch payload is untrusted.
 
 ### Stub
 
@@ -164,13 +186,28 @@ the stub-agreement cases with the exclusions §2.10 lists.
 `cascade-resolver.yml`: `on: pull_request` and `push: branches: [main]`, no `paths:` filter;
 `permissions: contents: read`; one job, `name: Resolver tests`, `runs-on: ubuntu-latest`,
 `timeout-minutes: 10`. Steps: checkout (the SHA `tag-ledger.yml` pins, `persist-credentials:
-false`), `yq --version` must report mikefarah v4, `shellcheck` on `find .github/scripts/cascade
--name '*.sh' -print0` plus the two shims, `actionlint` on `.github/workflows/*.yml`, then
+false`), `yq --version` must report mikefarah v4, `shellcheck` on `find .github/scripts -name
+'*.sh' -print0` plus the two shims (wider than contract §2.11, which names only
+`.github/scripts/cascade`, to match the repo's validation gate; `tag-ledger.sh` and
+`ledger-integrity.sh` pass today), `actionlint` on `.github/workflows/*.yml`, then
 `bash .github/scripts/cascade/test/run.sh`.
 
 `cascade-resolver-live.yml`: `workflow_dispatch` plus a weekly `schedule`, `permissions:
-contents: read`, job `Resolver live smoke`, the three invariants of contract §2.11. Never
-required.
+contents: read`, job `Resolver live smoke`, the invariants of contract §2.11. "The newest real
+version" comes from the resolver itself: `newest cue opmodel.dev/core@v2 --current v2.0.0-0`
+(below every v2 prerelease) must exit 0 with an in-major, non-dev version; a second run with that
+result as `--current` must exit 3. The same pair runs for `opm-cli` from `v1.0.0-0`, plus
+`published opm-cli <newest>` exiting 0. Never required.
+
+### Tests
+
+`test/lib.sh` isolates git from the caller: it exports `GIT_CONFIG_GLOBAL=/dev/null`,
+`GIT_CONFIG_NOSYSTEM=1`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`,
+`GIT_COMMITTER_EMAIL` and fixed dates, and creates repos with `git -c init.defaultBranch=main
+init`, so a signing key, hook or template in the user's config cannot change a result and a bare
+runner with no identity can commit. `test/run.sh` builds `PATH` from the shim directory plus the
+directories of the tools the resolver needs, with no `cue`, so the cue-free parse is what runs
+everywhere. The `curl` shim and the per-case fixture directory are the only network.
 
 ## Research & Decisions
 
@@ -216,6 +253,40 @@ newer" costs one pass.
 **Rationale**: the proxy can lag a fresh library tag; the daily sweep catches anything the
 wait misses, so running out is not an error.
 
+Two clarifications of contract §2.9, reported to the supervisor:
+
+- Elapsed time is the sum of the sleep intervals the resolver asked for (polls × 30 s), never
+  the wall clock or `$SECONDS`, so a faked `CASCADE_SLEEP` makes the "never appears" case instant.
+- An `--expect` version confirmed published joins the candidate set of the normal pass, even
+  when the upstream list does not hold it yet. Without this the contract's own test case (a
+  version absent from `@v/list` that becomes published on the third poll) could not answer that
+  version. It was already checked against the major, prerelease and hold rules before the wait.
+
+### Notes pass through
+
+**Context**: contract §4.4 and §9.13 neutralize a mention in Notes by inserting U+200D after the
+`@`. Workspace RELEASING.md, section "Title from diff class", says the body has "a `## Notes`
+section the bot never edits". §9.13 is a supervisor choice not confirmed by the owner, and the
+contract preamble says RELEASING.md wins.
+**Decision**: Notes are copied byte for byte, not edited and not linted. The lint covers the
+title and every body line above the `cascade-notes` marker.
+**Rationale**: it follows RELEASING.md. A human mention in Notes is human text that
+mention-guard reports on the PR body (advisory for a bot-authored PR) and that never reaches
+`main` under the `BLANK` squash message. Reported to the supervisor as a contract conflict; if
+the owner wants neutralization, RELEASING.md changes first and the body gains it in a follow-up.
+
+### Contract §9 choices recorded
+
+- §9.1: title and body live in the resolver (see "Title and body").
+- §9.2: retry budget and the `--expect` wait (see "Retry budget and `--expect`").
+- §9.3: prereleases are candidates only when `--current` is a prerelease or with `--pre`, so the
+  stable catalog line never moves onto an `-rc`.
+- §9.4: every printed version is `v`-prefixed, unlike workspace `latest-tag.sh`.
+- §9.5: `published oci` exists for the cli's docs-bundle check, which warns and never holds; the
+  tag is used exactly as given (`docs/library:1.0.0-beta.3`).
+- §9.8: `deps-cascade:breaking` is not computed here.
+- §9.13: not followed; see "Notes pass through".
+
 ### Unknown or private GHCR packages
 
 **Context**: an anonymous token request for a private package answers 403, the same as for a
@@ -238,6 +309,10 @@ mode `templates.sh` already documents.
   codes or output needs a contract revision and the stub checksum in every copy.
 - **Title and body in one place** (contract §9.1) means repo S5 tests need this resolver
   merged first; the merge order in contract §10 puts `.github` first.
-- **Notes neutralization edits human text**, while RELEASING.md, section "Title from diff
-  class", says the bot never edits Notes. Contract §9.13 records the choice; it inserts only an
-  invisible joiner after a mention `@`, so the visible text is unchanged.
+- **Notes pass through** unchanged, so a human mention there stays a live mention each time the
+  bot re-posts the body. Whether GitHub notifies again on an edit that keeps the same mention was
+  not verified here; the body never reaches `main` either way.
+- **README edits overlap** the sibling branch `docs/mention-guard-blank-squash`, which rewrites
+  the mention-guard part of `README.md` and `mention-guard.yml`. The cascade section is appended
+  after the `tag-ledger` section so the two merge cleanly; whichever merges second reruns
+  `actionlint`, because `Resolver tests` lints every workflow.
