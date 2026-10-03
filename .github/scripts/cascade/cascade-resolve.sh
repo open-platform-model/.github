@@ -83,7 +83,6 @@ BASE=""
 WARN_FILE=""
 POS=()
 
-# shellcheck disable=SC2034 # the flag variables are read by the lib functions
 parse_args() { # parse_args <allowed flags, space-separated> <args...>
   local allowed=" $1 " flag
   shift

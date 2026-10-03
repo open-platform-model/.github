@@ -175,7 +175,13 @@ never needs to name a bot. Notes are copied byte for byte and neither linted nor
 command that answers 3. The labels marker joins the union of the moved pins' labels with `,`, each
 label once, in first-seen order. `CASCADE_SOURCE` is checked against the five cascade repos
 (`core`, `catalog_opm`, `library`, `opm-operator`, `cli`); any other value is dropped with a
-warning together with its tags, since the dispatch payload is untrusted.
+warning together with its tags, since the dispatch payload is untrusted. A dropped source or
+tag is named only in a safe form (every character outside `[A-Za-z0-9._/-]` replaced by `?`,
+cut to 64 characters), so a hostile payload cannot plant a mention that would fail the lint and
+stall the cascade. Changed paths use `git diff --no-renames`, so a rename counts both its old
+and new path. A warnings line without a tab renders under key `-`. An explicit `--warnings` file
+or a `CASCADE_NOTES_FILE` that does not exist is exit 1 (a caller bug, not "no warnings"); the
+default warnings file may be missing.
 
 ### Stub
 

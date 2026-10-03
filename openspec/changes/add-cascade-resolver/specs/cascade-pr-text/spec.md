@@ -50,7 +50,8 @@ other than `**/name/`) SHALL be exit 1 naming the line.
 `--base`, else `CASCADE_BASE`, else `origin/main`. They SHALL compare against
 `M = git merge-base <base> HEAD`. Changed paths SHALL be `git diff --name-only M` plus untracked
 files that are not ignored. Moved pins SHALL be the keys present in both `SCRIPT M` and
-`SCRIPT WORKTREE` whose versions differ, in the order of `SCRIPT WORKTREE`. A pins script that
+`SCRIPT WORKTREE` whose versions differ, in the order of `SCRIPT WORKTREE`. A renamed file
+SHALL count as both its old and its new path. A pins script that
 exits non-zero SHALL make `title` or `body` exit 1.
 
 #### Scenario: Untracked file counts
@@ -132,10 +133,12 @@ Changed files: <s> shipped, <t> test, <r> release-tool.
 - Triggering releases SHALL list one line per valid tag in `CASCADE_TAGS` (space-separated) with
   `CASCADE_SOURCE` as the source. A source outside `core`, `catalog_opm`, `library`,
   `opm-operator` and `cli` SHALL be dropped with a warning, and its tags with it. A tag not
-  matching `^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$` SHALL be dropped with a warning. With nothing
+  matching `^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$` SHALL be dropped with a warning. A dropped
+  value SHALL be named only with every character outside `[A-Za-z0-9._/-]` replaced by `?`, so
+  payload text can never fail the mention lint. With nothing
   valid the section SHALL be the single line `- None recorded (daily sweep or manual run).`.
-- Warnings SHALL be the lines of `--warnings` (default `<git-dir>/cascade/warnings`, missing
-  means none) followed by `body`'s own warnings, each `<pin-key>\t<message>`, de-duplicated
+- Warnings SHALL be the lines of `--warnings` (default `<git-dir>/cascade/warnings`, which may
+  be missing; an explicit file that is missing SHALL be exit 1) followed by `body`'s own warnings, each `<pin-key>\t<message>`, de-duplicated
   keeping the first. A key of `-` SHALL render as `- <message>`. With none the section SHALL be
   `- None.`.
 - `<notes>` SHALL be the content of `CASCADE_NOTES_FILE`, byte for byte, when it is set and
