@@ -83,7 +83,10 @@ it works from any working directory and through the absolute path repos use (con
 
 Exactly contract §2.6, with the exit table of §2.3: 0 success or yes, 3 nothing to do or no, 1
 error, 2 usage. A malformed version argument, an unknown flag, a missing argument and a `cue`
-coordinate whose `@vN` disagrees with `--current`'s major are all 2. Stdout carries only the
+coordinate whose `@vN` disagrees with `--current`'s major are all 2, and so is a `--repo-root`
+that is not a directory (a missing steering file inside an existing root is still an empty
+file). `newest --json` prints its object on exit 3 too, with `moved: false` and `target` equal
+to `--current`; without `--json`, stdout on exit 3 stays empty. Stdout carries only the
 answer; every diagnostic goes to stderr prefixed `cascade-resolve: `. Warnings are also
 appended to `$CASCADE_WARNINGS` as `<pin-key>\t<message>` when that variable is set (§2.2).
 
