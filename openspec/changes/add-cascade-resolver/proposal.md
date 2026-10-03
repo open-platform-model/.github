@@ -53,7 +53,8 @@ change as `contract.md`), so the four repo changes are written in parallel again
   unchanged (workspace RELEASING.md wins over contract §9.13); an `--expect` version confirmed
   published joins the candidates and the wait is timed from requested sleeps (§2.9); `pin-of`
   never shells out to `cue` (§2.6); `next-patch` refuses a prerelease; `CASCADE_SOURCE` is
-  validated; `shellcheck` in CI covers every script under `.github/scripts`.
+  validated; a hold `reason` may not hold a bare mention (§2.8); `shellcheck` in CI covers
+  every script under `.github/scripts`.
 - **CI.** `.github/workflows/cascade-resolver.yml`, job `Resolver tests`, on every PR and push
   to `main` with no path filter: `shellcheck`, `actionlint`, then the offline suite. A
   separate non-required `.github/workflows/cascade-resolver-live.yml` (weekly and on dispatch)

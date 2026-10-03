@@ -85,6 +85,11 @@ expect "no hold for the key" 3 "" -- "$R" hold "$cat" --repo-root "$H"
 : >"$FX/w"
 run env CASCADE_WARNINGS="$FX/w" "$R" hold "$core" --repo-root "$H"
 check "expired-hold warning is keyed by the pin" grep -qxF "$core"$'\t'"hold on \`$core\` expired \`2026-10-02\`; moving again" "$FX/w"
+mkdir -p "$FX/oldyq"
+printf '#!/usr/bin/env bash\necho "yq 3.4.1"\n' >"$FX/oldyq/yq"
+chmod +x "$FX/oldyq/yq"
+expect "a yq that is not mikefarah v4 is a missing tool" 1 "" "missing tool: mikefarah yq v4" -- \
+  env PATH="$FX/oldyq:$PATH" "$R" check-files --repo-root "$H"
 expect "malformed CASCADE_TODAY" 1 "" -- env CASCADE_TODAY=yesterday "$R" hold "$core" --repo-root "$H"
 
 bad_hold() {
@@ -99,4 +104,5 @@ bad_hold "missing reason" "entry 1: missing key \`reason\`" $'holds:\n  - {pin: 
 bad_hold "bad expires" "YYYY-MM-DD" $'holds:\n  - {pin: k, max: v1.0.0, reason: r, expires: 2026-13-01}'
 bad_hold "bad max" "v-prefixed SemVer" $'holds:\n  - {pin: k, max: 1.0.0, reason: r, expires: 2026-12-01}'
 bad_hold "unknown key" "unknown key \`note\`" $'holds:\n  - {pin: k, max: v1.0.0, reason: r, expires: 2026-12-01, note: n}'
+bad_hold "a bare mention in reason" "holds a bare mention" $'holds:\n  - {pin: k, max: v1.0.0, reason: "ask @octocat", expires: 2026-12-01}'
 bad_hold "empty reason" "non-empty string" $'holds:\n  - {pin: k, max: v1.0.0, reason: "", expires: 2026-12-01}'

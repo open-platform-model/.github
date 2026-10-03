@@ -77,7 +77,8 @@ new_fx
 fx_text "$(ghcr_token_url "$CORE_REPO")" '{"token":"dummy-ghcr-token"}'
 fx_status "$(ghcr_tags_url "$CORE_REPO")" 404
 expect "tags 404: newest is exit 1" 1 "" "unknown on GHCR or private" -- "$R" newest cue opmodel.dev/core@v2 --current v2.0.0-beta.1
-expect "tags 404: published is 3" 3 "" "may be private" -- "$R" published cue opmodel.dev/catalogs/opm@v4 v4.5.1
+fx_status "$(ghcr_manifest_url "$CORE_REPO" v2.0.0-beta.2)" 404
+expect "tags 404: published reads no tag list, a manifest 404 is 3" 3 "" -- "$R" published cue opmodel.dev/core@v2 v2.0.0-beta.2
 
 # --- pagination --------------------------------------------------------------
 new_fx

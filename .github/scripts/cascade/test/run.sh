@@ -10,7 +10,7 @@ set -euo pipefail
 # shellcheck source=lib.sh disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-files=(semver files stub lookups newest agreement prtext)
+files=(semver files stub lookups newest agreement prtext requests)
 [ $# -eq 0 ] || files=("$@")
 for f in "${files[@]}"; do
   [ -f "$T_HERE/cases/$f.sh" ] || continue

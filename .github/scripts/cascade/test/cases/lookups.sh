@@ -141,13 +141,3 @@ new_fx
 fx_text "$(ghcr_token_url "$OPM_REPO")" '{"token":"dummy-ghcr-token"}'
 fx_text "$(ghcr_manifest_url "$OPM_REPO" v4.5.1)" '{"schemaVersion":2,"layers":[{"mediaType":"application/zip","digest":"sha256:0"}]}'
 expect "pin-of: manifest without a module file layer" 1 "" "no module file layer" -- "$R" pin-of opmodel.dev/catalogs/opm@v4 v4.5.1 opmodel.dev/core@v2
-
-# --- what every request looks like -----------------------------------------
-all_logs="$T_ROOT/all-curl.log"
-cat "$T_ROOT"/fx*/curl.log >"$all_logs"
-check "requests were made" test -s "$all_logs"
-check "curl always gets -q first" bash -c '! grep -v "^-q -sS --connect-timeout 10 --max-time 60 -o " "$1"' _ "$all_logs"
-check "no request goes to api.github.com" bash -c '! grep -q "api\.github\.com" "$1"' _ "$all_logs"
-check "no request carries GITHUB_TOKEN or GH_TOKEN" bash -c '! grep -qF -e "$2" -e "$3" "$1"' _ "$all_logs" "$GITHUB_TOKEN" "$GH_TOKEN"
-run "$T_HERE/shim/curl" -s https://ghcr.io/
-check "the curl shim exits 2 on another shape" test "$RC" = 2

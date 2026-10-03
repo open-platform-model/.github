@@ -41,7 +41,7 @@ headers from `<file>.headers`. The `git` shim SHALL answer `ls-remote` from
 captured from real GHCR, proxy and git answers. Git in the tests SHALL ignore the caller's
 global and system git config (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) and use a
 fixed author and committer, so a test gives the same result locally and on a bare runner. The
-suite SHALL hide any `cue` binary from `PATH`. It SHALL cover at least:
+suite SHALL put a `cue` that refuses to run first on `PATH`, so no case can depend on `cue`. It SHALL cover at least:
 
 - SemVer order: `alpha.2` < `alpha.10`, `beta.10` > `beta.2`, `v2.0.0` > `v2.0.0-beta.10`,
   `rc.1` > `beta.9`, `alpha.beta` > `alpha.1`, `alpha.1` < `alpha.a`, `alpha` < `alpha.1`, build

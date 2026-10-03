@@ -67,11 +67,13 @@ Prior art in the workspace, read and borrowed from, never called:
   lib/files.sh              # .cascade-frozen and .cascade-hold readers and validation
   lib/newest.sh             # candidate pipeline, holds, never-backwards, --expect, --json
   lib/classify.sh           # classes-file matcher
-  lib/title.sh, lib/body.sh # contract §4.3, §4.4, the mention lint
+  lib/prtext.sh             # title and body (contract §4.3, §4.4), the mention lint
   test/run.sh               # table test; exit 0 pass, 1 fail
-  test/lib.sh               # assertions, sandbox, shim setup
+  test/lib.sh               # assertions, sandbox, shim setup, fixture helpers
+  test/cases/*.sh           # the cases, one file per area; requests.sh runs last
   test/shim/curl, test/shim/git
-  test/fixtures/<case>/http/<host>/<path>[.status|.headers], test/fixtures/<case>/git/<repo>.refs
+  test/fixtures/            # answers captured from GHCR, the proxy and git, plus the
+                            # library and cli .cascade-frozen files, copied verbatim
 .github/workflows/cascade-resolver.yml       # job "Resolver tests"
 .github/workflows/cascade-resolver-live.yml  # weekly + dispatch, never required
 ```
@@ -157,7 +159,9 @@ with `jq` against the RELEASING.md, section "Cascade files", schemas as tightene
 §2.7 and §2.8: required keys, no unknown keys, non-empty strings, valid `max`, `YYYY-MM-DD`
 `expires`, safe `path` (no leading `/`, no `..`), at most one hold per pin. Any violation is
 exit 1 naming the file, the entry index and the key. Every reading subcommand validates first,
-so a malformed file can never be half-applied.
+so a malformed file can never be half-applied. One rule is stricter than contract §2.8: a hold
+`reason` with a bare mention is a violation, because the "held at" warning quotes it and a
+mention there would fail the body's lint only later, on the cascade PR.
 
 ### Title and body
 
@@ -215,9 +219,12 @@ result as `--current` must exit 3. The same pair runs for `opm-cli` from `v1.0.0
 `GIT_CONFIG_NOSYSTEM=1`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`,
 `GIT_COMMITTER_EMAIL` and fixed dates, and creates repos with `git -c init.defaultBranch=main
 init`, so a signing key, hook or template in the user's config cannot change a result and a bare
-runner with no identity can commit. `test/run.sh` builds `PATH` from the shim directory plus the
-directories of the tools the resolver needs, with no `cue`, so the cue-free parse is what runs
-everywhere. The `curl` shim and the per-case fixture directory are the only network.
+runner with no identity can commit. `test/lib.sh` puts the shim directory first on `PATH`, then a
+scratch directory whose `cue` refuses to run, so the cue-free parse is what runs everywhere and
+a stray `cue` call fails a case. The `curl` shim and the per-case fixture directory are the only network. Each case
+builds a fresh fixture directory (`<dir>/http/<host>/<path>` with `.status` and `.headers`
+files, `<dir>/git/<repo>.refs`) from the captured files plus the statuses it needs, so one case
+never leaks answers into another.
 
 ## Research & Decisions
 
@@ -326,3 +333,19 @@ mode `templates.sh` already documents.
   the mention-guard part of `README.md` and `mention-guard.yml`. The cascade section is appended
   after the `tag-ledger` section so the two merge cleanly; whichever merges second reruns
   `actionlint`, because `Resolver tests` lints every workflow.
+
+## Live check
+
+Run by hand on 2026-10-04 against the real services, read-only, from the implementing branch:
+
+| Command | Output | Exit |
+| --- | --- | --- |
+| `newest cue opmodel.dev/core@v2 --current v2.0.0-beta.1` | `v2.0.0-beta.2` | 0 |
+| `newest go github.com/open-platform-model/library --current v1.0.0-beta.1` | `v1.0.0-beta.3` | 0 |
+| `newest opm-cli --current v1.0.0-beta.4` | `v1.0.0-beta.7` | 0 |
+| `pin-of opmodel.dev/catalogs/opm@v4 v4.5.1 opmodel.dev/core@v2` | `v2.0.0-beta.1` | 0 |
+
+The live-smoke invariants held as well: `newest` from `v2.0.0-0` found `v2.0.0-beta.2` and a
+rerun from it exited 3; `newest opm-cli` from `v1.0.0-0` found `v1.0.0-beta.7`, `published
+opm-cli v1.0.0-beta.7` exited 0 and a rerun exited 3. The offline suite (319 cases) also passed
+in an `ubuntu:24.04` container, whose `awk` is mawk, as a user with no git identity.

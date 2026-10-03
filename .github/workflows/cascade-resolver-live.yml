@@ -1,0 +1,59 @@
+name: cascade-resolver-live
+
+# Read-only invariants of the release-cascade resolver against the real
+# services (GHCR, github.com), so a change in their answers shows up without
+# blocking any PR. Never a required check: the offline Resolver tests are.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cascade-resolver-live
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Resolver live smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Newest core is in-major, not a dev build, and stable on a rerun
+        run: |
+          set -euo pipefail
+          r=.github/scripts/cascade/cascade-resolve.sh
+          rc=0
+          core=$("$r" newest cue opmodel.dev/core@v2 --current v2.0.0-0) || rc=$?
+          [ "$rc" = 0 ] || { echo "::error::newest core from v2.0.0-0 exited $rc"; exit 1; }
+          echo "newest core: $core"
+          case "$core" in v2.*) ;; *) echo "::error::newest core $core is not v2"; exit 1 ;; esac
+          case "$core" in *-0.dev.* | *-dev.*) echo "::error::newest core $core is a dev build"; exit 1 ;; esac
+          rc=0
+          "$r" newest cue opmodel.dev/core@v2 --current "$core" || rc=$?
+          [ "$rc" = 3 ] || { echo "::error::newest core from $core exited $rc, want 3"; exit 1; }
+
+      - name: Newest opm CLI is published, and stable on a rerun
+        run: |
+          set -euo pipefail
+          r=.github/scripts/cascade/cascade-resolve.sh
+          rc=0
+          cli=$("$r" newest opm-cli --current v1.0.0-0) || rc=$?
+          [ "$rc" = 0 ] || { echo "::error::newest opm CLI from v1.0.0-0 exited $rc"; exit 1; }
+          echo "newest opm CLI: $cli"
+          rc=0
+          "$r" published opm-cli "$cli" || rc=$?
+          [ "$rc" = 0 ] || { echo "::error::published opm-cli $cli exited $rc, want 0"; exit 1; }
+          rc=0
+          "$r" newest opm-cli --current "$cli" || rc=$?
+          [ "$rc" = 3 ] || { echo "::error::newest opm CLI from $cli exited $rc, want 3"; exit 1; }

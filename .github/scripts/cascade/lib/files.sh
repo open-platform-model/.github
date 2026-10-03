@@ -77,7 +77,9 @@ top("holds"),
     ($e | keys_check($i; ["pin", "max", "reason", "expires"])),
     (if ($e | has("pin")) and ($e.pin | nonempty_str | not) then "entry \($i): `pin` must be a non-empty string" else empty end),
     (if ($e | has("max")) and (($e.max | type) != "string" or ($e.max | version | not)) then "entry \($i): `max` must be a v-prefixed SemVer version" else empty end),
-    (if ($e | has("reason")) and ($e.reason | nonempty_str | not) then "entry \($i): `reason` must be a non-empty string" else empty end),
+    (if ($e | has("reason")) and ($e.reason | nonempty_str | not) then "entry \($i): `reason` must be a non-empty string"
+     elif ($e | has("reason")) and ($e.reason | test("(?<![\\w@])@[A-Za-z0-9]")) then "entry \($i): `reason` holds a bare mention (it is quoted in a cascade PR warning); glue the @ to a word or drop it"
+     else empty end),
     (if ($e | has("expires")) and (($e.expires | type) != "string" or ($e.expires | test("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$") | not)) then "entry \($i): `expires` must be a YYYY-MM-DD date" else empty end)
   end
 end),

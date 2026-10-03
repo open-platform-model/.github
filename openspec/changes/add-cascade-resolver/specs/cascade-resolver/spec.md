@@ -151,8 +151,9 @@ The resolver SHALL support these kinds, with "published" defined per kind:
   types.
 
 The resolver MUST NOT send credentials to any host and MUST NOT call `api.github.com`. For an
-unknown or private GHCR package (token 403 or 404, or tags 404), `newest` SHALL exit 1 and
-`published` SHALL exit 3 with a warning that the package may be private.
+unknown or private GHCR package, `newest` SHALL exit 1 (token 403 or 404, or tags 404) and
+`published` SHALL exit 3 with a warning that the package may be private (token 403 or 404;
+`published` reads no tag list, and a manifest 404 is a plain "no").
 
 #### Scenario: Draft release skipped
 
@@ -245,7 +246,8 @@ The resolver SHALL read `.cascade-frozen` and `.cascade-hold` from `--repo-root`
 current directory), treating a missing file as empty. `.cascade-frozen` entries SHALL have
 exactly the keys `path` (non-empty, repo-relative, no leading `/`, no `..`), `pins` (non-empty
 list) and `reason` (non-empty). `.cascade-hold` entries SHALL have exactly `pin`, `max` (a valid
-version), `reason` and `expires` (`YYYY-MM-DD`), with at most one entry per pin. A violation SHALL
+version), `reason` (with no bare mention, since a warning quotes it) and `expires`
+(`YYYY-MM-DD`), with at most one entry per pin. A violation SHALL
 be exit 1 for every subcommand that reads the file. `check-files` SHALL validate both files.
 `frozen <pin-key>` SHALL print every frozen path for the key. `is-frozen <path> <pin-key>` SHALL
 exit 0 when an entry lists the key and its path (trailing `/` stripped) equals `<path>` or is a
