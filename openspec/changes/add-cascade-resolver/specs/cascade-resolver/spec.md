@@ -150,7 +150,10 @@ The resolver SHALL support these kinds, with "published" defined per kind:
 - `oci <repo>` (for `published` only): the manifest `HEAD` accepting the OCI manifest and index
   types.
 
-The resolver MUST NOT send credentials to any host and MUST NOT call `api.github.com`. For an
+The resolver MUST NOT send credentials to any host and MUST NOT call `api.github.com`. `git
+ls-remote` SHALL run outside any repository with no system, global or environment git config,
+no credential helper and `GIT_TERMINAL_PROMPT=0`, so a caller's persisted checkout token or
+credential helper never reaches `github.com` and git never prompts. For an
 unknown or private GHCR package, `newest` SHALL exit 1 (token 403 or 404, or tags 404) and
 `published` SHALL exit 3 with a warning that the package may be private (token 403 or 404;
 `published` reads no tag list, and a manifest 404 is a plain "no").
@@ -174,6 +177,11 @@ unknown or private GHCR package, `newest` SHALL exit 1 (token 403 or 404, or tag
 
 - **WHEN** the GHCR token request for a package answers 403
 - **THEN** `newest cue` for it exits 1 and `published cue` for it exits 3 with a warning
+
+#### Scenario: Caller's git credentials stay home
+
+- **WHEN** `newest release` runs from inside a checkout whose local, global and environment git config carry an `AUTHORIZATION` extraheader and a credential helper, with `GIT_DIR` set to it
+- **THEN** `git ls-remote` sees neither, runs with `GIT_TERMINAL_PROMPT=0`, and the answer is unchanged
 
 #### Scenario: No token leaves the process
 
@@ -202,7 +210,8 @@ answer a version of another major, and the new major MUST NOT change the exit co
 Every request SHALL use the curl shape `curl -q -sS --connect-timeout 10 --max-time 60 -o <body>
 -D <headers> -w '%{http_code}' [-I] [-L] [-H <header>]... <url>`, with `-q` first and no curl
 `--retry`. Status `000`, `429` and `5xx` SHALL be retried up to 4 attempts in all, sleeping 2, 4
-and 8 seconds through `${CASCADE_SLEEP:-sleep}`, then exit 1. A 404 (or 410 on the proxy) SHALL
+and 8 seconds through `${CASCADE_SLEEP:-sleep}`, then exit 1. A failed `git ls-remote` SHALL
+get the same 4 attempts and sleeps. A 404 (or 410 on the proxy) SHALL
 mean not published and SHALL NOT be retried. Any other unexpected status SHALL be exit 1; the
 resolver MUST NOT fall back to an older or guessed version. `--expect <v>` SHALL apply only when
 `<v>` is valid, in-major, above `--current`, allowed by the prerelease rule and not above an

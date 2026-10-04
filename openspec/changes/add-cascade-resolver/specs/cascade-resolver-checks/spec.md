@@ -36,8 +36,11 @@ code path of its own. The `curl` shim SHALL accept only the resolver's curl shap
 is exit 2), log its argument vector to `$CASCADE_FIXTURE_DIR/curl.log`, and answer from
 `<dir>/http/<host>/<path>` (`?` written as `%3F`) with status from `<file>.status` (default 200
 if the body exists, else 404; several lines consumed one per request, the last repeating) and
-headers from `<file>.headers`. The `git` shim SHALL answer `ls-remote` from
-`<dir>/git/<repo>.refs` and pass every other subcommand to the real `git`. Fixtures SHALL be
+headers from `<file>.headers`. The `git` shim SHALL answer `ls-remote` (after leading `-C` and `-c`
+options) from `<dir>/git/<repo>.refs`, fail it when `<repo>.refs.fail` exists (always when
+empty, else for the first N calls), log the isolation variables and every credential helper or
+extraheader the real `git config` would see with the same options, and pass every other command
+to the real `git`. Fixtures SHALL be
 captured from real GHCR, proxy and git answers. Git in the tests SHALL ignore the caller's
 global and system git config (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) and use a
 fixed author and committer, so a test gives the same result locally and on a bare runner. The
@@ -60,7 +63,9 @@ suite SHALL put a `cue` that refuses to run first on `PATH`, so no case can depe
 - GHCR token 403 and tags 404 (`newest` 1, `published` 3); `published oci` with both `Accept`
   types and the tag as given;
 - 5xx then 200, four 5xx, a 429 retry; a relative-`Link` pagination walk and 21 pages;
-- a draft or asset-less release skipped; a missing second asset;
+- a draft or asset-less release skipped; a missing second asset; a failing `git ls-remote`
+  tried 4 times and one retried to success; `git ls-remote` isolated from a credentialed
+  caller checkout;
 - `--expect` published on the third poll, never published with a fake clock, above a hold and
   a prerelease against a stable current ignored;
 - `-q` first in every `curl.log` line; no request to `api.github.com` and no token value sent;
@@ -68,7 +73,8 @@ suite SHALL put a `cue` that refuses to run first on `PATH`, so no case can depe
 - `classify`, `title` and `body` against throwaway git repos: every pattern form and an invalid
   one, every title type and subject form, empty diff, untracked file, byte-identical reruns,
   `| none | - | - | - |`, a hostile tag, an unknown source, the lint failing on a planted bare
-  mention, a mention in Notes passing through unchanged;
+  mention, a grep that cannot run `-P` failing the lint, a mention in Notes passing through
+  unchanged;
 - the stub checksum and the stub-agreement cases.
 
 #### Scenario: Runs without network

@@ -166,8 +166,41 @@ check "release warnings are keyed github.com/open-platform-model/<repo>" \
 new_fx
 fx_refs opm-operator v1.0.0-beta.3
 touch "$FX/git/opm-operator.refs.fail"
-expect "release: git ls-remote failure is exit 1" 1 "" "git ls-remote failed" -- \
+expect "release: git ls-remote failure is exit 1" 1 "" "git ls-remote failed after 4 attempts" -- \
   "$R" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3
+check "release: a failing git ls-remote is tried 4 times, sleeping 2, 4 and 8" \
+  bash -c '[ "$(grep -c "^git ls-remote" "$1/git.log")" = 4 ] && [ "$(cat "$1/sleep.log")" = $'"'"'2\n4\n8'"'"' ]' _ "$FX"
+new_fx
+fx_refs opm-operator v1.0.0-beta.3 v1.0.0-beta.4
+rel_ok opm-operator v1.0.0-beta.4 install.yaml
+echo 1 >"$FX/git/opm-operator.refs.fail"
+expect "release: one failed git ls-remote is retried" 0 v1.0.0-beta.4 "retrying in 2s" -- \
+  "$R" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3
+check "release: the retry slept 2s once" bash -c '[ "$(cat "$1/sleep.log")" = 2 ]' _ "$FX"
+
+# git ls-remote is isolated from the caller: run from inside a checkout whose
+# local, global and environment config carry an actions/checkout-style
+# AUTHORIZATION extraheader and a credential helper, with GIT_DIR pointing
+# at it and no GIT_TERMINAL_PROMPT.
+new_fx
+fx_refs opm-operator v1.0.0-beta.3 v1.0.0-beta.4
+rel_ok opm-operator v1.0.0-beta.4 install.yaml
+CK="$FX/checkout"
+git -c init.defaultBranch=main init -q "$CK"
+git -C "$CK" config http.https://github.com/.extraheader "AUTHORIZATION: basic bG9jYWwtc2VjcmV0"
+git -C "$CK" config credential.helper store
+printf '[http]\n\textraheader = AUTHORIZATION: basic Z2xvYmFsLXNlY3JldA==\n[credential]\n\thelper = cache\n' >"$FX/gitconfig"
+expect "release: ls-remote from inside a credentialed checkout still answers" 0 v1.0.0-beta.4 -- \
+  env -u GIT_TERMINAL_PROMPT GIT_DIR="$CK/.git" GIT_CONFIG_GLOBAL="$FX/gitconfig" \
+  GIT_CONFIG_PARAMETERS="'http.extraheader'='AUTHORIZATION: basic cGFyYW0tc2VjcmV0'" \
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=osxkeychain \
+  bash -c 'cd "$1" && "$2" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3' _ "$CK" "$R"
+check "release: ls-remote sees no extraheader and no credential helper" \
+  bash -c 'test -f "$1/git.config" && ! grep -v -x "credential.helper " "$1/git.config"' _ "$FX"
+check "release: ls-remote never prompts and reads no caller config" grep -qxF \
+  "GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_PARAMETERS=unset GIT_CONFIG_COUNT=unset GIT_ASKPASS=unset GIT_DIR=unset" "$FX/git.env"
+check "release: ls-remote runs outside the caller's checkout with no credential helper" \
+  bash -c 'o=$(cat "$1/git.opts"); [[ $o == "opts=-C "* && $o != *"$2"* && $o == *" -c credential.helper=" ]]' _ "$FX" "$CK"
 
 # --- holds --------------------------------------------------------------------------
 new_fx

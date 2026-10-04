@@ -7,13 +7,34 @@
 
 GH=https://github.com/open-platform-model
 
-# release_tags <repo>: sets RTAGS to the v* tag names.
+# ls_remote_tags <repo>: git ls-remote of the repo's v* tags, isolated from
+# the caller. It runs in $WORK (outside any repo, discovery stops there) with
+# no system, global or environment config and no credential helper, so an
+# actions/checkout tree's persisted AUTHORIZATION extraheader or a laptop's
+# helper never reaches github.com, and it never prompts for a username.
+ls_remote_tags() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_ASKPASS SSH_ASKPASS
+    export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="${WORK%/*}"
+    exec git -C "$WORK" -c credential.helper= ls-remote --tags --refs "$GH/$1" 'refs/tags/v*'
+  )
+}
+
+# release_tags <repo>: sets RTAGS to the v* tag names. A failed ls-remote is
+# retried like an HTTP request: 4 attempts in all, sleeping 2, 4 and 8
+# seconds between them, then exit 1.
 release_tags() {
-  local repo="$1" out
+  local repo="$1" out attempt=1 delays=(2 4 8)
   need_tools git
   work_dir
-  out=$(git ls-remote --tags --refs "$GH/$repo" 'refs/tags/v*' 2>"$WORK/git.err") \
-    || die "cannot list the tags of \`$repo\` (git ls-remote failed: $(head -c 200 "$WORK/git.err"))"
+  until out=$(ls_remote_tags "$repo" 2>"$WORK/git.err"); do
+    if [ "$attempt" -ge 4 ]; then
+      die "cannot list the tags of \`$repo\` (git ls-remote failed after 4 attempts: $(head -c 200 "$WORK/git.err"))"
+    fi
+    note "git ls-remote of \`$repo\` failed; retrying in ${delays[attempt - 1]}s"
+    "${CASCADE_SLEEP:-sleep}" "${delays[attempt - 1]}"
+    attempt=$((attempt + 1))
+  done
   mapfile -t RTAGS < <(printf '%s\n' "$out" | awk -F'\t' '$2 ~ /^refs\/tags\// {sub(/^refs\/tags\//, "", $2); print $2}')
 }
 
