@@ -176,3 +176,18 @@ check "static: the README names no cascade reference at main or a branch" bash -
 check "static: the README pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$ORG_ROOT/README.md"
 check "static: the README names no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$ORG_ROOT/README.md"
 
+for sbx in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox \
+  "$ORG_ROOT"/openspec/changes/archive/*-add-release-cascade-workflows/sandbox; do
+  [ -d "$sbx" ] || continue
+  seed="$sbx/down/.github/workflows/deps-cascade.yml"
+  expect "static: the sandbox receiver passes the stop switch to the reusable job" 0 "$DRY_EXPR" -- \
+    yq -r '.jobs.cascade.with["dry-run"]' "$seed"
+  expect "static: the sandbox publish job passes the stop switch to cascade-publish" 0 "$DRY_EXPR" -- \
+    yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["dry-run"]' "$seed"
+  expect "static: the sandbox publish if: is the README's" 0 "$(yq -r '.jobs.publish.if' "$FX/readme-receiver.yml")" -- \
+    yq -r '.jobs.publish.if' "$seed"
+  # Every cascade reference of the sandboxes at one full commit SHA.
+  refs=$(grep -rhoE "open-platform-model/\.github/\.github/[^@ ]+@[^ ]+" "$sbx" | sed 's/.*@//' | sort -u)
+  check "static: the sandbox callers pin every cascade reference to one full SHA" bash -c '[[ $1 =~ ^[0-9a-f]{40}$ ]]' _ "$refs"
+  check "static: the sandbox callers name no org-github-ref" bash -c '! grep -rn "org-github-ref" "$1"' _ "$sbx"
+done

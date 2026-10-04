@@ -20,8 +20,7 @@ jobs:
     permissions:
       statuses: write
       actions: write
-    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@30a98c6f7c4b16971bc74076bcc432a468e433c7 # feat/add-release-cascade-workflows
+    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@a2950ce6d314618c108cfdf2e978133c2ab09f4a # feat/add-release-cascade-workflows
     with:
       g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
       g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
-      org-github-ref: 30a98c6f7c4b16971bc74076bcc432a468e433c7
