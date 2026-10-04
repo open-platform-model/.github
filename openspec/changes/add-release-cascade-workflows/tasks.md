@@ -28,10 +28,10 @@ archive commit is the accepted exception to "one commit per section", as in ever
 
 ## 2. Notify
 
-- [ ] 2.1 Add `wiring/notify.sh` with `validate`, `wait-proxy` and `dispatch` per design "Script interfaces": targets from the contract §3.1 map, tag shapes from §3.3, the body built with `jq -n --arg`, 3 attempts per target (5, 15, 45 s via `CASCADE_SLEEP`), every target tried, one summary line each, exit 1 when any target failed
-- [ ] 2.2 Add `.github/workflows/cascade-notify.yml` per contract §4.1 and design "Workflows": inputs `tag` and `org-github-ref`; job `Notify downstream`, `environment: cascade`, `permissions: {contents: read}`, 20 min; the inline `Guard` step (design "The guard step"), `org-github` checkout, validate, the library-only proxy wait, the non-empty repository-list check, the mint (contract §2.3: targets, `permission-contents: write`), dispatch; actionlint clean
-- [ ] 2.3 Add cases: the exact payload bytes for library `v1.0.0-beta.4` to `opm-operator` and `cli`; one target failing three times while the next succeeds (job exit 1, both summary lines); a catalog tag without `opm-`; an unknown source; the proxy wait timing out with a fake clock and still exiting 0; the inline `Guard` step extracted from the workflow with `yq` and run for a sandbox and a production repo with a branch ref, a foreign owner and an empty name; wiring suite green
-- [ ] 2.4 Gates green, then commit `feat(cascade): add the reusable notify workflow`
+- [x] 2.1 Add `wiring/notify.sh` with `validate`, `wait-proxy` and `dispatch` per design "Script interfaces": targets from the contract §3.1 map, tag shapes from §3.3, the body built with `jq -n --arg`, 3 attempts per target (waits of 5 and 15 s between them, via `CASCADE_SLEEP`), every target tried, one summary line each, exit 1 when any target failed
+- [x] 2.2 Add `.github/workflows/cascade-notify.yml` per contract §4.1 and design "Workflows": inputs `tag` and `org-github-ref`; job `Notify downstream`, `environment: cascade`, `permissions: {contents: read}`, 20 min; the inline `Guard` step (design "The guard step"), `org-github` checkout, validate, the library-only proxy wait, the non-empty repository-list check, the mint (contract §2.3: targets, `permission-contents: write`), dispatch; actionlint clean
+- [x] 2.3 Add cases: the exact payload bytes for library `v1.0.0-beta.4` to `opm-operator` and `cli`; one target failing three times while the next succeeds (job exit 1, both summary lines); a catalog tag without `opm-`; an unknown source; the proxy wait timing out with a fake clock and still exiting 0; the inline `Guard` step extracted from the workflow with `yq` and run for a sandbox and a production repo with a branch ref, a foreign owner and an empty name; wiring suite green
+- [x] 2.4 Gates green, then commit `feat(cascade): add the reusable notify workflow`
 
 ## 3. Receiver: compute and publish
 

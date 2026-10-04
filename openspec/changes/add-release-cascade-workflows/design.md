@@ -159,7 +159,7 @@ All through `gh api` with the token named; GitHub answers are checked by status.
 | Request | Who | Token | Expected | On failure |
 | --- | --- | --- | --- | --- |
 | `GET https://proxy.golang.org/github.com/open-platform-model/library/@v/<tag>.info` | notify (library) | none | 200 | 404/410/other: poll again every 30 s, 10 min cap, then warn and continue |
-| `POST /repos/open-platform-model/<target>/dispatches` | notify | App (targets, contents write) | 204 | 3 attempts (5, 15, 45 s), then the target counts as failed |
+| `POST /repos/open-platform-model/<target>/dispatches` | notify | App (targets, contents write) | 204 | 3 attempts (waits of 5 and 15 s between them), then the target counts as failed |
 | PR list (`gh pr list --head deps/cascade --base main --state open --json …`) | compute, publish verify, gates-eval (own repo and G3 upstreams) | `GITHUB_TOKEN` | 200 | job error (compute, publish); evaluator error (G3) |
 | PR list for release PRs (`--state open --base main --json number,headRefName,headRefOid,isCrossRepository,labels,body`) | gates-eval, gates (missing artifact, enforce) | `GITHUB_TOKEN` | 200 | gates-eval exit 1; gates job fails |
 | `GET /repos/open-platform-model/<repo>/releases` (paginated) | compute breaking check | `GITHUB_TOKEN` | 200 | no label, summary warning |
@@ -281,6 +281,8 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   "independently of the action"). "Once per rise" relies on the body marker being rewritten with
   `T_computed`; the other actions never edit the body, so firing there would repeat the comment
   on every run.
+- **Notify waits 5 and 15 s between its 3 attempts** (contract §4.1 lists "5, 15 and 45 s").
+  Three attempts have two gaps; a 45 s wait after the last attempt would only delay the red job.
 - **E3/E4 (b) is split** (contract §11.4). As written, (b) closes the PR, reruns and expects
   "recreate with the Notes carried", but with no open PR `CASCADE_NOTES_FILE` is not set
   (contract §6.2 step 9) and "a recreate with no open PR carries nothing" (contract §6.4). (b) is

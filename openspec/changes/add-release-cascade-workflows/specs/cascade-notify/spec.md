@@ -51,8 +51,8 @@ job SHALL fail before the token is minted.
 For each target the job SHALL send `POST /repos/open-platform-model/<target>/dispatches` with
 exactly this body, built with `jq` and never by string interpolation:
 `{"event_type":"upstream-released","client_payload":{"source":"<source>","tags":["<tag>"]}}`.
-It SHALL try every target even after one fails, make up to 3 attempts per target with 5, 15 and
-45 second waits, write one summary line per target with its HTTP result, and fail the job when
+It SHALL try every target even after one fails, make up to 3 attempts per target with a 5 and then a 15 second
+wait between them, write one summary line per target with its HTTP result, and fail the job when
 any target still failed.
 
 #### Scenario: Payload bytes

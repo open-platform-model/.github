@@ -41,16 +41,23 @@ if [ -n "$GUARD_TEXT" ]; then
   # guard <GITHUB_REPOSITORY> <org-github-ref>: runs the inline Guard step.
   guard() {
     : >"$FX/gout"
-    env GITHUB_REPOSITORY="$1" INPUTS_REF="$2" GITHUB_OUTPUT="$FX/gout" bash -e -o pipefail -c "$GUARD_TEXT"
+    local rc=0
+    env GITHUB_REPOSITORY="$1" INPUTS_REF="$2" GITHUB_OUTPUT="$FX/gout" bash -e -o pipefail -c "$GUARD_TEXT" || rc=$?
     cat "$FX/gout"
+    return "$rc"
   }
-  expect "guard: a production repo at main" 0 $'::notice::repo library, org-github-ref main\nrepo=library' -- guard open-platform-model/library main
-  expect "guard: a production repo with a branch ref fails" 1 "" "org-github-ref may differ from main only in a sandbox repo" -- guard open-platform-model/library feat/x
-  expect "guard: a sandbox repo with a branch ref" 0 $'::notice::repo cascade-sandbox-down, org-github-ref feat/x\nrepo=cascade-sandbox-down' -- \
+  NOT_ORG="is not a repo of open-platform-model"
+  expect "guard: a production repo at main" 0 $'::notice::repo library\nrepo=library' -- guard open-platform-model/library main
+  expect "guard: a production repo with a branch ref fails" 1 "::error::org-github-ref may differ from main only in a sandbox repo" -- \
+    guard open-platform-model/library feat/x
+  expect "guard: a production repo with an empty ref fails" 1 "::error::org-github-ref may differ from main only in a sandbox repo" -- \
+    guard open-platform-model/cli ""
+  expect "guard: a sandbox repo with a branch ref" 0 $'::notice::repo cascade-sandbox-down\nrepo=cascade-sandbox-down' -- \
     guard open-platform-model/cascade-sandbox-down feat/x
-  expect "guard: a foreign owner fails" 1 "" "is not a repo of open-platform-model" -- guard someone-else/core main
-  expect "guard: a look-alike owner fails" 1 "" "is not a repo of open-platform-model" -- guard open-platform-model-x/cascade-sandbox-down feat/x
-  expect "guard: an empty name fails" 1 "" "is not a repo of open-platform-model" -- guard open-platform-model/ main
-  expect "guard: no repository fails" 1 "" "is not a repo of open-platform-model" -- guard "" main
-  expect "guard: a sandbox look-alike under another owner fails" 1 "" "is not a repo of open-platform-model" -- guard evil/cascade-sandbox-down feat/x
+  expect "guard: a foreign owner fails" 1 "::error::\`someone-else/core\` $NOT_ORG" -- guard someone-else/core main
+  expect "guard: a look-alike owner fails" 1 "::error::\`open-platform-model-x/cascade-sandbox-down\` $NOT_ORG" -- \
+    guard open-platform-model-x/cascade-sandbox-down feat/x
+  expect "guard: an empty name fails" 1 "::error::\`open-platform-model/\` $NOT_ORG" -- guard open-platform-model/ main
+  expect "guard: no repository fails" 1 "::error::\`\` $NOT_ORG" -- guard "" main
+  expect "guard: a name with a newline fails" 1 "::error::\`open-platform-model/a"$'\n'"repo=core\` $NOT_ORG" -- guard "open-platform-model/a"$'\n'"repo=core" main
 fi
