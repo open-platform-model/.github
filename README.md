@@ -445,6 +445,10 @@ offline through `task cascade:wiring:check`, and online in a step of its require
         run: bash .tasks/cascade/wiring-check.sh --pin-on-main
 ```
 
+Only SHA-pinned actions (checkout, setup) may come before it; every `run:` step goes after it.
+catalog_opm's `main` writes `OPM_CLI_VERSION` to `GITHUB_ENV` in a step before it, so its next
+pin bump moves the wiring step above that step.
+
 It prints every mismatch and exits 1, or prints `cascade wiring: ok, .github <SHA> (<pin
 comment>)`; offline (without `--pin-on-main`) a second line says `the copy was not compared`; a
 bad config exits 2. It checks:
