@@ -48,8 +48,10 @@ and the variable `CASCADE_APP_CLIENT_ID`.
   `CASCADE_G3_MODE`) and the stop switches.
 - **The sandbox cycle** (contract §11): the seed files are committed under
   `openspec/changes/add-release-cascade-workflows/sandbox/`, then pushed to `cascade-sandbox-up`
-  and `cascade-sandbox-down` to call these workflows at `@feat/add-release-cascade-workflows`
-  with that `org-github-ref`. Run E1, E1b, E2 to E7 (E6 with the supervisor toggling the setting
+  and `cascade-sandbox-down` to call these workflows at a full commit SHA of
+  `feat/add-release-cascade-workflows`, with that SHA as `org-github-ref` (the sandbox
+  Environments hold the production App key, so an unreviewed push to the branch must not reach
+  them). Run E1, E1b, E2 to E7 (E6 with the supervisor toggling the setting
   during the cycle, before merge) and S3 to S11, and record every run URL, PR URL and outcome in
   `design.md` under "Sandbox cycle" and in the scratchpad file `p3-gh-workflows-sandbox.md`.
   E4c decides `WF_GUARD_RULE` (`strict` stays unless E4c proves `tree` safe). The owner's
@@ -97,8 +99,8 @@ Not in this change:
   `cascade-resolver-live.yml` are untouched.
 - **Callers.** After this merges: core (notify only), catalog_opm, library, opm-operator and cli
   (notify, receiver, gates caller) through their `join-release-cascade`, all at `@main` (owner
-  decision 13); during the change only `cascade-sandbox-up` and `cascade-sandbox-down`, at
-  `@feat/add-release-cascade-workflows`.
+  decision 13); during the change only `cascade-sandbox-up` and `cascade-sandbox-down`, at a commit SHA of
+  `feat/add-release-cascade-workflows`.
 - **Hosts and APIs.** `api.github.com` (dispatches, pulls, releases, labels, comments, statuses,
   workflow dispatch), `github.com` (git fetch and push with the App token), `proxy.golang.org`
   (library notify only). The resolver keeps its own host list.

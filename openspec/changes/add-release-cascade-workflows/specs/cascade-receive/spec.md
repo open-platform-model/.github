@@ -233,7 +233,14 @@ workflows guard; recompute the final title from the live PR and refuse a mismatc
 title outside `fix(deps)`, `test(fixtures)` and `ci(deps)`; and lint the body above the Notes
 marker and every comment it builds for a bare mention. Every comment SHALL be built inside
 `publish` from fixed texts. Every push and branch delete SHALL carry a lease on the planned old
-tip (an empty lease where the branch must not exist).
+tip (an empty lease where the branch must not exist). When the re-derived cascade PR carries
+`deps-cascade:hold` that `compute` did not see, `publish` SHALL mint no token and publish nothing,
+and SHALL end with a notice, not a failure (stop switch 1 used as documented).
+
+#### Scenario: Hold added between compute and publish
+
+- **WHEN** a human adds `deps-cascade:hold` to the cascade PR after `compute` planned a `push`
+- **THEN** `publish` writes a notice, skips the mint and every write, and the run is not red
 
 #### Scenario: Human push between compute and publish
 

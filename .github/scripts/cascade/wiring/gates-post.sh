@@ -13,6 +13,10 @@
 # warning and no status; in enforce mode it is posted as `error` on every
 # open same-repo release PR head.
 #
+# Only open same-repo release PR heads are posted on: gates.json comes from
+# compute, which ran repo code, so an entry naming any other commit is
+# skipped with a warning.
+#
 # Mapping: ok is success; a problem is success "WARN: <msg>" in warn mode
 # and failure "<msg>" in enforce mode; an evaluator error is success "WARN:
 # gate could not run, see the run" or error "could not evaluate, see the
@@ -20,8 +24,8 @@
 #
 # Environment: CASCADE_REPO, CASCADE_RUN_URL (target_url), GH_TOKEN.
 #
-# Exit status: 0 every status posted; 1 a post failed, or (--missing) the
-# release PRs cannot be listed; 2 usage.
+# Exit status: 0 every status posted; 1 a post failed, or the release PRs
+# cannot be listed; 2 usage.
 #
 # Tools: bash, jq; gh through "${CASCADE_GH:-gh}".
 set -euo pipefail
@@ -52,12 +56,17 @@ post() {
   fi
 }
 
+# release_heads: the head commits of the open same-repo release PRs.
+release_heads() {
+  gh_ pr list -R "$ORG/$REPO" --base main --state open --limit 200 --json number,headRefName,headRefOid,isCrossRepository \
+    --jq '.[] | select((.headRefName | startswith("release-please--")) and .isCrossRepository == false) | .headRefOid' \
+    || die "cannot list the release PRs of $REPO"
+}
+
 if [ "$SRC" = --missing ]; then
   echo "::warning::no gate results from compute"
   if [ "$G2" = warn ] && [ "$G3" = warn ]; then exit 0; fi
-  heads=$(gh_ pr list -R "$ORG/$REPO" --base main --state open --limit 200 --json number,headRefName,headRefOid,isCrossRepository \
-    --jq '.[] | select((.headRefName | startswith("release-please--")) and .isCrossRepository == false) | .headRefOid') \
-    || die "cannot list the release PRs of $REPO"
+  heads=$(release_heads)
   for sha in $heads; do
     [[ $sha =~ ^[0-9a-f]{40}$ ]] || continue
     if [ "$G2" = enforce ]; then post "$sha" cascade/freshness enforce error "missing"; fi
@@ -69,8 +78,10 @@ fi
 
 [ -f "$SRC" ] || die "$SRC not found"
 jq -e 'type == "array"' "$SRC" >/dev/null || die "$SRC is not a JSON array"
+heads=" $(release_heads | tr '\n' ' ') "
 while IFS=$'\t' read -r sha s2 m2 s3 m3; do
   [[ $sha =~ ^[0-9a-f]{40}$ ]] || { note "skipping an entry without a commit id"; continue; }
+  [[ $heads == *" $sha "* ]] || { echo "::warning::skipping ${sha:0:12}: not the head of an open release PR"; continue; }
   post "$sha" cascade/freshness "$G2" "$s2" "$m2"
   post "$sha" cascade/settled "$G3" "$s3" "$m3"
 done < <(jq -r '.[] | [.sha, .freshness.state, .freshness.msg, .settled.state, .settled.msg] | map(tostring | gsub("[\t\n\r]"; " ")) | @tsv' "$SRC")

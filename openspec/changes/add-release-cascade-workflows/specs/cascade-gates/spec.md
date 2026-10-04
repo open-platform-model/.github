@@ -69,7 +69,15 @@ contexts `cascade/freshness` and `cascade/settled` on the release PR head, with 
 The `gates` job SHALL run after `compute` unless it was cancelled, also in dry runs and gates-only
 runs. When the `cascade-gates` artifact is missing it SHALL post nothing for a context in `warn`,
 and in `enforce` SHALL post `error`, `could not evaluate, see the run` on every in-scope release
-PR head, failing when even that list cannot be read.
+PR head, failing when even that list cannot be read. Because `compute` runs repo code before it
+writes `gates.json`, the `gates` job SHALL post only on commits that are the head of an open
+same-repo release PR, listed with `GITHUB_TOKEN`; it SHALL skip any other entry with a warning,
+and SHALL post nothing and fail when that list cannot be read.
+
+#### Scenario: Forged gate entry
+
+- **WHEN** `gates.json` holds an entry whose `sha` is not the head of an open same-repo release PR
+- **THEN** no status is posted on that commit and the run warns that it skipped it
 
 #### Scenario: Warn mode problem
 

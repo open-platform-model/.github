@@ -296,13 +296,14 @@ step_run() {
   st_set computed "$computed"
 }
 
-# breaking_check: exit 0 and print yes or no; exit 1 on an API or tool error.
+# breaking_check: exit 0 and print yes or no; exit 1 on an API or tool
+# error; exit 2 when the repo's pins.sh fails.
 breaking_check() {
   local m k from to repo prefix rels tag v brk c1 c2
   local pm pw
   m=$(g merge-base origin/main HEAD)
-  pm=$(cd "$RD" && run_repo_code .tasks/cascade/pins.sh "$m") || die ".tasks/cascade/pins.sh $m failed"
-  pw=$(cd "$RD" && run_repo_code .tasks/cascade/pins.sh WORKTREE) || die ".tasks/cascade/pins.sh WORKTREE failed"
+  pm=$(cd "$RD" && run_repo_code .tasks/cascade/pins.sh "$m") || { note ".tasks/cascade/pins.sh $m failed"; return 2; }
+  pw=$(cd "$RD" && run_repo_code .tasks/cascade/pins.sh WORKTREE) || { note ".tasks/cascade/pins.sh WORKTREE failed"; return 2; }
   local -A FROM=() TO=()
   while IFS=$'\t' read -r k _ _ v _; do [ -z "$k" ] || FROM[$k]="$v"; done <<<"$pm"
   while IFS=$'\t' read -r k _ _ v _; do [ -z "$k" ] || TO[$k]="$v"; done <<<"$pw"
@@ -356,12 +357,19 @@ step_text() {
     [[ ",$labels," == *",$l,"* ]] || labels="$labels,$l"
   done
   if [ -n "$computed" ]; then
-    if breaking=$(breaking_check); then
-      if [ "$breaking" = yes ]; then labels="$labels,deps-cascade:breaking"; fi
-    else
-      echo "::warning::the breaking check could not read the upstream releases; no label added, the next run retries"
-      trigger "- Warning: the breaking check could not read the upstream releases"
-    fi
+    local brc=0
+    breaking=$(breaking_check) || brc=$?
+    case "$brc" in
+      0) if [ "$breaking" = yes ]; then labels="$labels,deps-cascade:breaking"; fi ;;
+      2)
+        echo "::warning::the breaking check failed: .tasks/cascade/pins.sh failed; no label added, the next run retries"
+        trigger "- Warning: the breaking check failed: .tasks/cascade/pins.sh failed"
+        ;;
+      *)
+        echo "::warning::the breaking check could not read the upstream releases; no label added, the next run retries"
+        trigger "- Warning: the breaking check could not read the upstream releases"
+        ;;
+    esac
   fi
   st_set labels "$labels"
 }

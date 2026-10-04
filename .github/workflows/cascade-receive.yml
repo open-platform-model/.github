@@ -375,14 +375,17 @@ jobs:
           path: ${{ runner.temp }}/cascade/plan
 
       - name: Verify the plan
+        id: verify
         env:
           CASCADE_REPO: ${{ steps.guard.outputs.repo }}
           GH_TOKEN: ${{ github.token }}
           CASCADE_READ_TOKEN: ${{ github.token }}
         run: bash org-github/.github/scripts/cascade/wiring/receive-publish.sh verify
 
+      # publish=false: a deps-cascade:hold appeared since compute.
       - name: Mint the App token
         id: mint
+        if: steps.verify.outputs.publish == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
@@ -394,6 +397,7 @@ jobs:
           permission-issues: write
 
       - name: Act
+        if: steps.verify.outputs.publish == 'true'
         env:
           CASCADE_REPO: ${{ steps.guard.outputs.repo }}
           CASCADE_LABELS_MANAGED: ${{ inputs.labels-managed }}

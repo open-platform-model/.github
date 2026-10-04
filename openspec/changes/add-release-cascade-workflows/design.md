@@ -320,23 +320,27 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
 - [`compute` and `publish` read the private sandbox with `GITHUB_TOKEN`] → the header is set
   through `GIT_CONFIG_*` in a subshell around the one git call, never persisted in
   `.git/config`, and every repo-code command runs with all tokens unset (Token hygiene).
-- [During the cycle the sandbox callers run `@feat/add-release-cascade-workflows`, an
-  unprotected branch, inside `cascade` Environments that hold the one App key] → anyone with
-  write access to `.github` can push to that branch and dispatch a sandbox run that mints a
-  token for any of the seven repos. Accepted for the length of the cycle (the org's writers are
-  the owner and the supervisor's agents); recorded under "Shared-key reach"; right after this PR
-  merges the supervisor switches the sandbox callers to `@main` and deletes the branch (Migration
-  Plan step 4).
+- [During the cycle the sandbox callers run code from `feat/add-release-cascade-workflows`, an
+  unprotected branch, inside `cascade` Environments that hold the one App key] → a push to that
+  branch needs no review, so a caller at the branch ref would let whoever can push it (anyone
+  with write access to `.github`) mint a token for any of the seven repos through the next
+  sandbox run. The callers therefore pin a full commit SHA of this branch, for both the `uses:`
+  ref and `org-github-ref` (implementation review finding 3): a later push to the branch changes
+  nothing a sandbox runs until a sandbox PR, merged by PR under the sandbox `main` ruleset, moves
+  the pin. Right after this PR merges the callers move to a SHA on `.github` `main` and the
+  branch is deleted (Migration Plan step 4, task 5.8).
 
 ## Migration Plan
 
 1. Sections 1 to 4 of `tasks.md` land the code and tests, each green and committed.
 2. The supervisor completes the sandbox preconditions (proposal "Depends on").
 3. Section 5 runs the sandbox cycle against this branch and records results here.
-4. The contract §14 workspace PR merges, then this PR. Right after the merge the supervisor
-   switches the sandbox callers to `@main` (dropping `org-github-ref`) in one sandbox PR,
-   deletes `feat/add-release-cascade-workflows` from `origin`, and reruns S1 once (contract
-   §11.3).
+4. The contract §14 workspace PR merges, then this PR. Right after the merge the sandbox
+   callers move to a full commit SHA on `.github` `main` (the `uses:` ref and `org-github-ref`
+   alike, so the scripts come from the same commit as the workflow) in one sandbox PR, `feat/add-release-cascade-workflows` is deleted from
+   `origin`, and S1 is rerun once (contract §11.3, task 5.8). The sandbox keeps a SHA rather
+   than `@main` because its Environments hold the production key (Risks); the product callers
+   use `@main` (owner decision 13).
 5. B1 to B5 merge after this, each receiver behind `CASCADE_DRY_RUN=true`.
 
 Rollback: callers stop at once by stop switches (contract §9.2: `CASCADE_NOTIFY=off`,
@@ -425,9 +429,32 @@ None that change the specs or tasks. E1, E2 and E6 can each force a supervisor o
 ## Plan review (commit c8a038d)
 
 1 blocker, 6 majors, 9 minors and 4 nits; every finding is applied. Finding 17 (the branch-ref
-reach during the cycle) is applied as its second option, record plus a listed supervisor step
-after merge, not by pinning the sandbox callers to a commit SHA per run: fixes found during the
-cycle would otherwise need a sandbox PR each, and the reach is the same set of people who can
-already change `.github`'s workflows by PR. Finding 4 also reports the contract §11.4 (b)
-inconsistency to the supervisor ("Departures").
+reach during the cycle) was first applied as its second option, record plus a listed step after
+merge, on the grounds that the reach was the same set of people who can change `.github`'s
+workflows by PR. That was wrong: a push to the feature branch needs no PR. The implementation
+review (finding 3) corrected it, and the sandbox callers now pin a commit SHA of this branch
+(Risks); a fix found during the cycle costs one sandbox PR to move the pin. Finding 4 also
+reports the contract §11.4 (b) inconsistency to the supervisor ("Departures").
+
+## Implementation review (head 04bc25d)
+
+2 blockers, 1 major, 2 minors, 3 nits. The two blockers are gates, not code: the sandbox cycle
+(run in section 5) and the contract §14 RELEASING.md amendments (a workspace PR the supervisor
+owns). Applied in this change:
+
+- **3 (major).** Sandbox callers pin a full commit SHA of this branch (Risks); task 5.8 moves
+  them to a SHA on `main` after merge and deletes the branch.
+- **4.** `gates-post.sh` posts only on the head of an open same-repo release PR, listed with
+  `GITHUB_TOKEN` exactly as `--missing` lists them; any other entry in `gates.json` (which
+  compute, running repo code, wrote) is skipped with a warning, and a failed listing posts
+  nothing and fails the job.
+- **5.** The proposal commit `c8a038d` is part of this branch; section 5's commits are listed in
+  `tasks.md`.
+- **6.** A `deps-cascade:hold` added between compute and publish is stop switch 1 used as
+  documented: `verify` writes a notice and `publish=false` and exits 0, and the mint and `act`
+  steps are skipped (`if: steps.verify.outputs.publish == 'true'`). No verified plan is written,
+  so `act` alone still refuses.
+- **7.** The breaking check returns 2 when `.tasks/cascade/pins.sh` fails and warns "the
+  breaking check failed: .tasks/cascade/pins.sh failed" instead of naming the release API.
+- **8.** The cleanup PR also removes `probe-env.yml` from `cascade-sandbox-up`.
 

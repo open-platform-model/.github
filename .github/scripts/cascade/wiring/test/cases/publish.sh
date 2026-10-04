@@ -41,7 +41,7 @@ compute "${COMPUTE_STEPS[@]}"
 publish_job
 gh_prs '[]'
 publish verify
-check "push: verify accepts the plan" bash -c '[ "$1" = 0 ] && [[ $2 == "plan verified: push" ]]' _ "$RC" "$OUT"
+check "push: verify accepts the plan" bash -c '[ "$1" = 0 ] && [[ $2 == "plan verified: push" ]] && grep -qx publish=true "$3"' _ "$RC" "$OUT" "$GITHUB_OUTPUT"
 gh_accept "label create * -R $SBX --color * --description * --force"
 gh_fx 0 "https://github.com/$SBX/pull/12" -- pr create -R "$SBX" --head deps/cascade --base main --title "fix(deps): bump up to v0.2.0" --body-file "$PV/body.md"
 gh_accept "pr edit 12 -R $SBX --add-label deps-cascade"
@@ -79,7 +79,15 @@ refusal "a bad tip" "old_tip and new_tip must be commit ids" '.old_tip = "--uplo
 printf 'b\n' >"$FX/b"
 LIVE="[$(pr_json 9 "fix(deps): other" "$FX/b")]" refusal "a PR-number mismatch" "the plan names PR \`\`, the cascade PR is \`9\`"
 HOLD="[$(pr_json 9 "fix(deps): other" "$FX/b" "deps-cascade:hold")]"
-LIVE="$HOLD" refusal "a hold added since compute" "got deps-cascade:hold since compute" '.pr_number = 9'
+publish_job
+edit_plan '.pr_number = 9'
+gh_reset
+gh_prs "$HOLD"
+: >"$GITHUB_OUTPUT"
+publish verify
+check "hold: a hold added since compute stops publish without a red run" bash -c '
+  [ "$1" = 0 ] && [[ $2 == *"::notice::the cascade PR got deps-cascade:hold since compute; nothing is published"* ]] &&
+  [ "$(cat "$3")" = publish=false ] && [ ! -e "$4/plan.json" ]' _ "$RC" "$OUT" "$GITHUB_OUTPUT" "$PV"
 refusal "a forged PR number" "the plan names PR \`3\`, the cascade PR is \`none\`" '.pr_number = 3'
 publish_job
 seed_commit deps/cascade human fixtures/x.txt "racing human" "test: racing"

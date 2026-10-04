@@ -17,6 +17,9 @@
 # the App token for act), CASCADE_READ_TOKEN (verify only),
 # CASCADE_LABELS_MANAGED (act; true: labels must already exist).
 #
+# verify writes publish=true to GITHUB_OUTPUT, or publish=false (exit 0) when
+# the cascade PR got deps-cascade:hold since compute.
+#
 # Exit status: 0 success; 1 a refused plan (verify, before any token is
 # minted), a failed push or API call, or the too_long action (act); 2 usage.
 #
@@ -35,6 +38,7 @@ T="${CASCADE_T:-${RUNNER_TEMP:-}/cascade}"
 check_scratch "$T"
 RD=$(realpath -m -- "${CASCADE_REPO_DIR:-$PWD/repo}")
 P="$T/plan"
+GITHUB_OUTPUT="${GITHUB_OUTPUT:-/dev/null}"
 V="$T/verified"
 g() { git -C "$RD" "$@"; }
 refuse() { die "refusing the plan: $1"; }
@@ -68,8 +72,13 @@ verify() {
   [ -z "$live" ] || live_n=$(jq -r .number <<<"$live")
   n=$(pj '.pr_number // ""')
   [ "$n" = "$live_n" ] || refuse "the plan names PR \`$(safe_text "$n")\`, the cascade PR is \`${live_n:-none}\`"
+  # A hold is stop switch 1, used as documented: not a failed run. No
+  # verified plan is written, the mint and act steps are skipped
+  # (publish=false), and act alone would refuse.
   if [ -n "$live" ] && jq -e 'any(.labels[]; .name == "deps-cascade:hold")' <<<"$live" >/dev/null; then
-    die "the cascade PR got deps-cascade:hold since compute; nothing is published"
+    echo "::notice::the cascade PR got deps-cascade:hold since compute; nothing is published"
+    printf 'publish=false\n' >>"$GITHUB_OUTPUT"
+    exit 0
   fi
 
   # The remote tip must still be the one compute built on.
@@ -158,6 +167,7 @@ verify() {
   done
   jq -c '{action, old_tip, new_tip, labels}' "$P/plan.json" >"$V/plan.json"
   printf '%s' "$live_n" >"$V/pr"
+  printf 'publish=true\n' >>"$GITHUB_OUTPUT"
   echo "plan verified: $action"
 }
 

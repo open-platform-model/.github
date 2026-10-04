@@ -140,30 +140,51 @@ check "gates: a failed evaluation fails a gates-only run" test "$RC" = 1
 new_fx
 SHA=0123456789abcdef0123456789abcdef01234567
 P() { run env CASCADE_REPO=cascade-sandbox-down CASCADE_RUN_URL=https://run/1 bash "$GATES_POST" "$@"; }
+HEADS_LIST=(pr list -R "$SBX" --base main --state open --limit 200 --json "number,headRefName,headRefOid,isCrossRepository"
+  --jq '.[] | select((.headRefName | startswith("release-please--")) and .isCrossRepository == false) | .headRefOid')
+heads() { gh_fx 0 "$1" -- "${HEADS_LIST[@]}"; }
+heads "$SHA"
 jq -n --arg s "$SHA" --arg long "$(printf 'y%.0s' $(seq 1 300))" '[
   {sha: $s, pr: 7, freshness: {state: "problem", msg: "behind: up v0.1.0→v0.2.0"}, settled: {state: "ok", msg: "ok: upstreams settled"}},
   {sha: $s, pr: 8, freshness: {state: "error", msg: "x"}, settled: {state: "problem", msg: $long}}]' >"$FX/gates.json"
 gh_accept "api -X POST repos/$SBX/statuses/$SHA -f state=* -f context=* -f description=* -f target_url=https://run/1"
 P --g2-mode warn --g3-mode enforce "$FX/gates.json"
 LONG140="$(printf 'y%.0s' $(seq 1 139))…"
-check "post: warn problem, ok, warn error, enforce problem cut to 140" bash -c '[ "$1" = 0 ] && [ "$(cut -d" " -f6,8,10- "$2")" = "$3" ]' _ "$RC" "$GHFX/log" \
+check "post: warn problem, ok, warn error, enforce problem cut to 140" bash -c '[ "$1" = 0 ] && [ "$(grep statuses "$2" | cut -d" " -f6,8,10-)" = "$3" ]' _ "$RC" "$GHFX/log" \
   "state=success context=cascade/freshness description=WARN: behind: up v0.1.0→v0.2.0 -f target_url=https://run/1
 state=success context=cascade/settled description=ok: upstreams settled -f target_url=https://run/1
 state=success context=cascade/freshness description=WARN: gate could not run, see the run -f target_url=https://run/1
 state=failure context=cascade/settled description=$LONG140 -f target_url=https://run/1"
 gh_reset
+heads "$SHA"
 gh_accept "api -X POST repos/$SBX/statuses/$SHA -f state=* -f context=* -f description=* -f target_url=https://run/1"
 P --g2-mode enforce --g3-mode warn "$FX/gates.json"
-check "post: enforce problem, warn ok, enforce error, warn problem" bash -c '[ "$(cut -d" " -f6,8,10- "$1" | sed "s/ -f target_url=.*//")" = "$2" ]' _ "$GHFX/log" \
+check "post: enforce problem, warn ok, enforce error, warn problem" bash -c '[ "$(grep statuses "$1" | cut -d" " -f6,8,10- | sed "s/ -f target_url=.*//")" = "$2" ]' _ "$GHFX/log" \
   "state=failure context=cascade/freshness description=behind: up v0.1.0→v0.2.0
 state=success context=cascade/settled description=ok: upstreams settled
 state=error context=cascade/freshness description=could not evaluate, see the run
 state=success context=cascade/settled description=WARN: ${LONG140:6}"
 gh_reset
+heads "$SHA"
 gh_fx_err 1 "HTTP 403" -- api -X POST "repos/$SBX/statuses/$SHA" -f state=success -f context=cascade/settled -f description="ok: upstreams settled" -f target_url=https://run/1
 gh_accept "api -X POST repos/$SBX/statuses/$SHA *"
 P --g2-mode warn --g3-mode warn "$FX/gates.json"
-check "post: a failed post fails the job after posting the rest" bash -c '[ "$1" = 1 ] && [ "$(wc -l <"$2")" = 4 ]' _ "$RC" "$GHFX/log"
+check "post: a failed post fails the job after posting the rest" bash -c '[ "$1" = 1 ] && [ "$(grep -c statuses "$2")" = 4 ]' _ "$RC" "$GHFX/log"
+# gates.json comes from compute, which ran repo code: only live release heads.
+OTHER=fedcba9876543210fedcba9876543210fedcba98
+jq -n --arg s "$SHA" --arg o "$OTHER" '[
+  {sha: $o, pr: 1, freshness: {state: "ok", msg: "ok: forged"}, settled: {state: "ok", msg: "ok: forged"}},
+  {sha: $s, pr: 7, freshness: {state: "ok", msg: "ok: shipped pins current"}, settled: {state: "ok", msg: "ok: upstreams settled"}}]' >"$FX/forged.json"
+gh_reset
+heads "$SHA"
+gh_accept "api -X POST repos/$SBX/statuses/$SHA *"
+P --g2-mode warn --g3-mode warn "$FX/forged.json"
+check "post: an entry that is not an open release head is skipped" bash -c '
+  [ "$1" = 0 ] && [ "$(grep -c statuses "$2")" = 2 ] && ! grep -q "$3" "$2" && [[ $4 == *"skipping ${3:0:12}: not the head of an open release PR"* ]]' _ "$RC" "$GHFX/log" "$OTHER" "$OUT"
+gh_reset
+gh_fx_err 1 "HTTP 502" -- "${HEADS_LIST[@]}"
+P --g2-mode warn --g3-mode warn "$FX/gates.json"
+check "post: no status when the release PRs cannot be listed" bash -c '[ "$1" = 1 ] && ! grep -q statuses "$2"' _ "$RC" "$GHFX/log"
 expect "post: a bad mode" 2 "" "modes must be warn or enforce" -- env CASCADE_REPO=cascade-sandbox-down bash "$GATES_POST" --g2-mode strict --g3-mode warn "$FX/gates.json"
 
 # A missing artifact.
