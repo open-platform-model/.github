@@ -131,9 +131,9 @@ the task's warnings file as `warnings.tsv` in the plan artifact.
 
 ### Requirement: Publish bounds the bot's increment
 
-For `push` and `recreate`, `publish` SHALL take as the bot's increment `origin/main..new` for
-`recreate` or an absent old tip, `old..new` when the old tip is an ancestor of the new one, and
-`origin/main..new` otherwise. It SHALL refuse the plan, before any token exists, when the
+For `push` and `recreate`, `publish` SHALL take as the bot's increment the new tip's commits that
+`origin/main` does not have and, for a `push` whose old tip is an ancestor of the new one, that
+the old tip does not have either. It SHALL refuse the plan, before any token exists, when the
 increment has more than two commits, a root commit or a commit with more than two parents; when a
 commit's author or committer email is not the bot's; when a single-parent commit changes a path
 with a status other than `M`, changes a mode, has a mode other than `100644` or `100755` (a

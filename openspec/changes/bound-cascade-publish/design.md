@@ -38,9 +38,9 @@ range:
 
 | Case | Range |
 | --- | --- |
-| `recreate`, or no old tip | `origin/main..new` |
-| old tip is an ancestor of new (merge mode, an unchanged rebuild) | `old..new` |
-| otherwise (a rebuild replacing a bot-only branch) | `origin/main..new`, after the drop check |
+| `recreate`, or no old tip | `git rev-list new ^origin/main` |
+| old tip is an ancestor of new (merge mode, an unchanged rebuild) | `git rev-list new ^origin/main ^old` (a merge brings `main`'s commits, which are not the bot's) |
+| otherwise (a rebuild replacing a bot-only branch) | `git rev-list new ^origin/main`, after the drop check |
 
 Drop check: when the push does not contain the old tip and the action is `push`, every commit of
 `origin/main..old` MUST have `BOT_EMAIL` as author and committer, else "refusing the plan: the
@@ -203,7 +203,7 @@ Stated in the README and RELEASING (patch handed to the supervisor):
 
 ## Research & Decisions
 
-**Increment versus whole diff.** Checking `origin/main..new` in merge mode would refuse every
+**Increment versus whole diff.** Checking `new ^origin/main` alone in merge mode would refuse every
 human commit on the branch. The bot's own commits are the increment (plan item 1). Considered and
 rejected: trusting `plan.mode`, which `compute` writes; the range is derived from the refs.
 
@@ -232,8 +232,8 @@ resolver already uses. Release branches (`release/*`, none exist before GA) are 
 the release-branch automation must extend `on_main` when it lands.
 
 **Task version.** `3.x` resolved to v3.54.0 (released 2026-10-01). v3.53.1 (2026-08-18) is the
-newest release older than a month; the four receivers' Taskfiles use no newer feature (their
-offline suites ran with v3.53.1 locally).
+newest release older than a month; the four receivers' Taskfiles use no newer feature (their own
+cascade suites, `CASCADE_TEST_SET=all`, passed with v3.53.1 locally on 2026-10-04).
 
 **Allow-list completeness.** Proven by running each receiver's own offline cascade suite
 (`.tasks/cascade/test.sh`) from its `origin/main` in a scratch clone, collecting every path its

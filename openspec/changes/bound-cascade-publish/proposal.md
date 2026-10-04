@@ -26,8 +26,8 @@ SHA-pinned `mention-guard` here.
 ## What Changes
 
 - **Publish bounds the bot's increment.** `receive-publish.sh verify` computes the commits the
-  push adds (fresh, rebuild and recreate: `origin/main..new`; a fast-forward of the old tip, as
-  in merge mode: `old..new`) and refuses the plan unless every commit is authored and committed
+  push adds (the new tip's commits that neither `main` nor, for a fast-forward of the old tip as
+  in merge mode, the old tip has) and refuses the plan unless every commit is authored and committed
   by `BOT_EMAIL`, there are at most two, each non-merge commit changes only paths on a
   per-receiver allow-list held in `wiring/lib.sh` (never in the receiver's tree), with status
   `M`, no mode change and no symlink or gitlink, and each merge commit's tree equals
