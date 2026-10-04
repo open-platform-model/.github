@@ -67,6 +67,9 @@ new_fx() {
   : >"$GITHUB_STEP_SUMMARY"
 }
 
+# gh_reset: forget every fixture answer and the call log.
+gh_reset() { rm -rf "${GHFX:?}"; mkdir -p "$GHFX"; : >"$GHFX/log"; }
+
 # gh_fx <rc> <stdout> -- <argv...>: the next answer to that exact call.
 gh_fx() {
   local rc="$1" out="$2" key dir n
