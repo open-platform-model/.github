@@ -75,11 +75,11 @@ local `commit-msg` hook in `core` covers the laptop side.
 It also does not rescan an edit. A run required by the org ruleset fires only
 on `opened`, `synchronize` and `reopened`: GitHub ignores the `edited` type
 that `mention-guard.yml` lists, so in the other org repos, editing a PR title
-or body after a run starts no new ruleset scan (here in `.github` the workflow
-also runs on its own, where `edited` does fire). "Re-run jobs" does not help either: it reads the title
-and body from the original event (commit messages are listed fresh). For a
-fresh scan of an edited title or body, push a commit, or close and reopen the
-PR.
+or body after a run starts no new ruleset scan (here in `.github` the
+workflow also runs on its own, where `edited` does fire). "Re-run jobs" does
+not help either: it reads the title and body from the original event (commit
+messages are listed fresh). For a fresh scan of an edited title or body, push
+a commit, or close and reopen the PR.
 
 **Break-glass:** org admins are on the ruleset's bypass list. For a false
 positive, prefer rewording; bypass is for emergencies.

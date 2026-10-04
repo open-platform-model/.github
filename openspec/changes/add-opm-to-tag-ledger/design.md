@@ -47,6 +47,8 @@ This change has no ordering constraint with them.
 - Make the README's tag-ledger scope match `REPOS`.
 - Make the README's mention-guard "Limits" paragraph say that a ruleset-required run ignores
   `edited`, and how to get a fresh scan.
+- Make the README's tag-ledger step 4 say that the two planned rulesets now exist but are still
+  checked as pending, so only a missing `tags-immutable` is a finding.
 - Show, by running the real script, that the five existing repos behave byte-identically.
 
 **Non-Goals:**
@@ -101,6 +103,19 @@ in this substance:
 
 The exact sentences are written at apply time. They MUST NOT contain a bare `@word` and MUST
 stay consistent with workspace RELEASING.md, section "Owner settings" (lines 477-478).
+
+In `.github` itself the workflow also runs on its own `pull_request` trigger, where `edited`
+does fire, so the paragraph scopes the "no new scan" claim to the other org repos.
+
+**Tag-ledger step 4, ruleset checks** (`README.md:127-130`). Added in review, after the paragraph
+that says `tags-create-app-only` and `release-branches` are planned. Appends one sentence, in this
+substance:
+
+> All three now exist and apply to every scanned repo, but the script still treats the two
+> planned ones as pending, so a repo dropping out of either is only a warning until they are made
+> required.
+
+It changes no script: making the two rulesets required is a follow-up (`proposal.md`).
 
 ### D4. Verification
 
@@ -174,6 +189,10 @@ Drift section, and no new issue. This step is outside `tasks.md`, because it nee
   and V2. Commit `ci(tag-ledger): scan the opm repo for tag drift`.
 - **Section 2, mention-guard Limits paragraph.** Commit
   `docs(mention-guard): say a ruleset run ignores edited`.
+- **Review corrections.** The spec, proposal and design state that only `tags-immutable` is
+  required, the README gains the step-4 sentence of D3 and scopes the mention-guard note to the
+  other org repos. Commits `docs(tag-ledger): say only tags-immutable is a finding when missing`
+  and `docs(openspec): record the review corrections in add-opm-to-tag-ledger`.
 
 - **Section 3, archive.** `openspec archive add-opm-to-tag-ledger`, committed as
   `docs(openspec): archive add-opm-to-tag-ledger` on this branch. Per the repo config and the

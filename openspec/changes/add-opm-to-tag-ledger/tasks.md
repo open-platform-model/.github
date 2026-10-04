@@ -25,6 +25,7 @@ Never dispatch `tag-ledger.yml` from this branch (`design.md`, D4).
   - for a fresh scan, push a commit, or close and reopen the PR.
   The added lines must contain no bare `@word`, and `mention-guard.yml` must stay unchanged.
 - [x] 2.2 Gates green, then commit `docs(mention-guard): say a ruleset run ignores edited`.
+- [x] 2.3 Apply the review corrections of `design.md` D5: the spec, proposal and design say only `tags-immutable` is required; the README gains the step-4 sentence of `design.md` D3, scopes the mention-guard note to the other org repos, and keeps its wrap. Gates green, then commit.
 
 ## 3. Archive
 
