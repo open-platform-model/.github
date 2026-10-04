@@ -47,8 +47,8 @@ Drop check: when the push does not contain the old tip and the action is `push`,
 push would drop commits on deps/cascade the bot did not make". A `recreate` is refused whenever
 `origin/main..old` holds a non-bot commit ("recreate would drop commits ..."): `close` keeps such a
 branch, and the next run, finding it without a PR, plans `recreate`, which would otherwise delete
-it (review finding after the first push of the PR). `close` deletes the branch only when that holds; otherwise it closes the PR and keeps the
-branch with a notice (`$V/keep-branch`).
+it (review finding after the first push of the PR). `close` deletes the branch only when that
+holds; otherwise it closes the PR and keeps the branch with a notice (`$V/keep-branch`).
 
 Every commit in the range (`git rev-list --parents`):
 
@@ -202,6 +202,11 @@ Stated in the README and RELEASING (patch handed to the supervisor):
 - G2 still runs every open release head's task inside `compute`, a `main`-ref run. That code can
   write `main`'s Actions cache scope; the sink is closed because no publish workflow restores a
   cache (the publish-workflows rule of the wiring check), not because the write is impossible.
+- Merge mode swaps in only `main`'s `.tasks/` and root `Taskfile*`: the branch tip's other code
+  (`hack/` programs and scripts, the `go.mod` toolchain line) still runs in the `main`-ref run.
+  Anyone who can push to `deps/cascade` gets this, the G2 class, with the same closed sink.
+- A receiver's own publisher outside these workflows (opm-operator's `module-deps.yml`) is not
+  bounded by this change.
 - The `.github` mirrors and allow-lists must follow each receiver's `pins.sh`, `classes` and
   task. Drift makes publish refuse (a red run) or, for a pin the mirror lacks, a body that omits
   that pin; the title-mismatch notice is the signal.

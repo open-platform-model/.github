@@ -338,7 +338,8 @@ verify`) bounds the push and writes the PR text itself:
 
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
 receiver's `.tasks/cascade/` on its `main` (read 2026-10-04: catalog_opm `3288406`, library
-`93a892f`, opm-operator `6a14adb`, cli `5f00930`). A receiver change to what its task writes, to
+`93a892f`, opm-operator `6a14adb`, cli `5f00930`; opm-operator's `pins.sh`, `classes` and its
+`deps:cascade` repo scope rechecked unchanged through `05d0396`). A receiver change to what its task writes, to
 its `pins.sh` or to its `classes` needs the matching change here, merged and pinned, before the
 receiver's own change merges: otherwise `publish` refuses its plans (a new path) or renders a
 body without a new pin, and the title-mismatch notice in the publish log is the signal. To
@@ -350,6 +351,14 @@ check a mirror, run the receiver's `pins.sh` and `CASCADE_PINS_REPO=<repo>
 - G2 still runs every open release head's own task inside `compute`, which is a run on
   `main`'s ref: that code can write `main`'s Actions cache scope. The sink is closed, not the
   write: no publish workflow restores a cache (the wiring check's `publish-workflows` rule).
+- Merge mode runs `main`'s `.tasks/` and root `Taskfile*`, but the rest of the branch tip's
+  code still runs in that `main`-ref run: `hack/` programs and scripts the task calls and the
+  `go.mod` toolchain line. Anyone who can push to `deps/cascade` gets this, the same class as
+  G2, and the cache sink is closed the same way.
+- A receiver's own publisher outside `cascade-receive.yml` and `cascade-publish` (opm-operator's
+  `module-deps.yml`, `task deps:cascade:module`, since `4b981c6`) gets none of these bounds:
+  no allow-list, no rendered text, no pinned tools. It needs its own hardening in that repo or
+  a route through these workflows with its own mirror entries.
 - `compute` still chooses the action (push, close, conflict, too long). A hostile `compute` can
   stall or relabel its own receiver's cascade PR as conflicted, but cannot publish anything
   outside the bounds above.
