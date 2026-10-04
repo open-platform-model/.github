@@ -1240,7 +1240,7 @@ None was rejected outright. Where the fix differs:
   modules where a pin moved. Requiring a tidy `main` would be a second gate with no owner.
 - **11 (mention lint on Notes).** Took the neutralize option (zero-width joiner plus a
   warning) rather than plain pass-through, because the Phase 3 workflow re-posts Notes on every
-  update and a pass-through would re-ping on each one.
+  update and a pass-through would re-ping on each one. *Superseded by §11 C1: Notes pass through byte for byte.*
 - **12 (test placement).** S3 moved from the S2 setup to the unmodified copy so it is offline;
   the network job got `timeout-minutes: 20` instead of 10, given cold caches.
 - **14 (semver).** The real resolver must implement precedence by hand and may no longer use
