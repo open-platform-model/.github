@@ -216,6 +216,17 @@ check "body: hostile tag dropped, the valid one kept" bash -c '
 run env CASCADE_SOURCE=evil CASCADE_TAGS=v1.0.0 bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 check "body: unknown source dropped with its tags" bash -c '
   [ "$2" = 0 ] && [[ $1 == *"- None recorded (daily sweep or manual run)."* ]] && [[ $1 == *"dropped triggering source \`evil\`"* ]]' _ "$OUT" "$RC"
+run env CASCADE_EXTRA_SOURCES=cascade-sandbox-up CASCADE_SOURCE=cascade-sandbox-up CASCADE_TAGS=v0.2.0 bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
+check "body: sandbox source accepted when listed" bash -c '
+  [ "$2" = 0 ] && [[ $1 == *$'"'"'## Triggering releases\n\n- `cascade-sandbox-up` `v0.2.0`\n\n'"'"'* ]] && [[ $1 != *"cascade-sandbox-up\`: not"* ]] && [[ $1 == *$'"'"'## Warnings\n\n- None.\n'"'"'* ]]' _ "$OUT" "$RC"
+run env CASCADE_SOURCE=cascade-sandbox-up CASCADE_TAGS=v0.2.0 bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
+check "body: sandbox source dropped when not listed" bash -c '
+  [ "$2" = 0 ] && [[ $1 == *"- None recorded (daily sweep or manual run)."* ]] && [[ $1 == *"dropped triggering source \`cascade-sandbox-up\`"* ]]' _ "$OUT" "$RC"
+run env CASCADE_EXTRA_SOURCES='bad/name cascade-sandbox-up' CASCADE_SOURCE=cascade-sandbox-up CASCADE_TAGS=v0.2.0 bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
+check "body: an extra source that is not a repo name is ignored with a warning" bash -c '
+  [ "$2" = 0 ] && [[ $1 == *"- \`cascade-sandbox-up\` \`v0.2.0\`"* ]] && [[ $1 == *"ignored extra source \`bad/name\`: not a repo name"* ]]' _ "$OUT" "$RC"
+run env CASCADE_EXTRA_SOURCES=bad/name bash -c 'cd "$1" && "$2" title --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
+check "title: CASCADE_EXTRA_SOURCES warns only in body" bash -c '[ "$2" = 0 ] && [[ $1 != *"extra source"* ]]' _ "$ERR" "$RC"
 run env CASCADE_SOURCE='@octocat' CASCADE_TAGS='@octocat' bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 check "body: a payload mention cannot fail the lint" bash -c '[ "$2" = 0 ] && [[ $1 == *"dropped triggering source \`?octocat\`"* ]]' _ "$OUT" "$RC"
 
