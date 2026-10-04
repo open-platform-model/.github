@@ -20,11 +20,6 @@ on:
         type: string
         required: false
         default: warn
-      org-github-ref:
-        description: Checked by the Guard step only; nothing is checked out
-        type: string
-        required: false
-        default: main
 
 permissions: {}
 
@@ -37,12 +32,10 @@ jobs:
       statuses: write
       actions: write
     steps:
-      # Runs before anything is checked out from org-github-ref, so the ref
-      # it guards cannot replace it.
+      # Derives the repo name the later steps use, from GITHUB_REPOSITORY
+      # only, before any script runs.
       - name: Guard
         id: guard
-        env:
-          INPUTS_REF: ${{ inputs.org-github-ref }}
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY%%/*}"
@@ -50,10 +43,6 @@ jobs:
           if [ "$owner/$name" != "$GITHUB_REPOSITORY" ] || [ "$owner" != open-platform-model ] \
             || ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
             echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
-            exit 1
-          fi
-          if [ "$INPUTS_REF" != main ] && [[ ! $GITHUB_REPOSITORY =~ ^open-platform-model/cascade-sandbox- ]]; then
-            echo "::error::org-github-ref may differ from main only in a sandbox repo"
             exit 1
           fi
           echo "::notice::repo $name"

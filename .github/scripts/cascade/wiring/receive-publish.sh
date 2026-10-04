@@ -11,14 +11,17 @@
 #   receive-publish.sh verify   before the App token exists (GITHUB_TOKEN)
 #   receive-publish.sh act      with the App token
 #
-# Environment: CASCADE_REPO (the Guard step's repo name), CASCADE_T (default
+# Environment: CASCADE_PUBLISH_DRY_RUN (the action's required dry-run input:
+# only exactly false publishes; true skips with publish=false; anything else
+# is refused), CASCADE_REPO (the Guard step's repo name), CASCADE_T (default
 # $RUNNER_TEMP/cascade; the plan artifact is in $CASCADE_T/plan),
 # CASCADE_REPO_DIR (default $PWD/repo), GH_TOKEN (GITHUB_TOKEN for verify,
 # the App token for act), CASCADE_READ_TOKEN (verify only),
 # CASCADE_LABELS_MANAGED (act; true: labels must already exist).
 #
 # verify writes publish=true to GITHUB_OUTPUT, or publish=false (exit 0) when
-# the cascade PR got deps-cascade:hold since compute.
+# the dry-run input is true or the cascade PR got deps-cascade:hold since
+# compute.
 #
 # Exit status: 0 success; 1 a refused plan (verify, before any token is
 # minted), a failed push or API call, or the too_long action (act); 2 usage.
@@ -46,7 +49,25 @@ pj() { jq -r "$1" "$P/plan.json"; }
 
 ACTIONS=" push recreate close conflict too_long "
 
+# dry_run_switch: the caller's dry-run input, the receiver's stop switch
+# (CASCADE_DRY_RUN live only at exactly false). Read here, in .github code,
+# so a caller's if: that is wrong cannot make a dry run publish. Prints
+# false (publish) or true (a dry run); refuses any other value.
+dry_run_switch() {
+  case "${CASCADE_PUBLISH_DRY_RUN-}" in
+    false | true) printf '%s' "$CASCADE_PUBLISH_DRY_RUN" ;;
+    *) refuse "the dry-run input must be true or false, not \`$(safe_text "${CASCADE_PUBLISH_DRY_RUN-}")\`" ;;
+  esac
+}
+
 verify() {
+  local switch
+  switch=$(dry_run_switch) || exit 1
+  if [ "$switch" != false ]; then
+    echo "::notice::dry run (the dry-run input is true); nothing is published"
+    printf 'publish=false\n' >>"$GITHUB_OUTPUT"
+    exit 0
+  fi
   need_tools git jq gh
   mask_read_token
   [ -f "$P/plan.json" ] || refuse "no plan.json in the cascade-plan artifact"
@@ -224,6 +245,7 @@ create_pr() {
 comment() { gh_ pr comment "$1" -R "$ORG/$REPO" --body-file "$2" >/dev/null || die "cannot comment on #$1"; }
 
 act() {
+  [ "$(dry_run_switch)" = false ] || die "the dry-run input is not false; act publishes nothing"
   need_tools git jq gh
   [ -f "$V/plan.json" ] || die "verify has not run"
   [ -n "${GH_TOKEN:-}" ] || die "GH_TOKEN (the App token) is not set"

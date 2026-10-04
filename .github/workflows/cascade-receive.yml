@@ -12,7 +12,9 @@ name: Cascade receive
 # cascade` and runs the composite action .github/actions/cascade-publish,
 # because a reusable-workflow job does not see the caller's Environment
 # secrets without `secrets: inherit` (sandbox cycle E1). Its if: reads the
-# outputs below. Callers pass no secrets to this workflow.
+# outputs below. Callers pass no secrets to this workflow. Callers pin this
+# workflow to a .github commit SHA (owner decision 24); every job checks the
+# scripts out at that same commit (job.workflow_sha).
 
 on:
   workflow_call:
@@ -61,11 +63,6 @@ on:
         type: string
         required: false
         default: v0.17.1
-      org-github-ref:
-        description: The .github ref the scripts come from; only a sandbox repo may pass another than main
-        type: string
-        required: false
-        default: main
 
 permissions: {}
 
@@ -83,12 +80,10 @@ jobs:
       mode: ${{ steps.plan.outputs.mode }}
       ok: ${{ steps.done.outputs.ok }}
     steps:
-      # Runs before anything is checked out from org-github-ref, so the ref
-      # it guards cannot replace it.
+      # Derives the repo name the later steps use, from GITHUB_REPOSITORY
+      # only, before any script runs.
       - name: Guard
         id: guard
-        env:
-          INPUTS_REF: ${{ inputs.org-github-ref }}
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY%%/*}"
@@ -98,12 +93,25 @@ jobs:
             echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
             exit 1
           fi
-          if [ "$INPUTS_REF" != main ] && [[ ! $GITHUB_REPOSITORY =~ ^open-platform-model/cascade-sandbox- ]]; then
-            echo "::error::org-github-ref may differ from main only in a sandbox repo"
-            exit 1
-          fi
           echo "::notice::repo $name"
           echo "repo=$name" >>"$GITHUB_OUTPUT"
+
+      # The .github commit this reusable workflow runs at (the caller's
+      # pinned SHA): the scripts are checked out at exactly that commit.
+      # Never empty: an empty ref would check out the default branch.
+      - name: Own commit
+        id: own
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$WF_REPO" != open-platform-model/.github ] || ! [[ $WF_SHA =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::cannot tell the open-platform-model/.github commit this workflow runs at (\`$WF_REPO\` \`$WF_SHA\`)"
+            exit 1
+          fi
+          echo "::notice::scripts from open-platform-model/.github $WF_SHA"
+          echo "sha=$WF_SHA" >>"$GITHUB_OUTPUT"
 
       - name: Check out the repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -116,7 +124,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: open-platform-model/.github
-          ref: ${{ inputs.org-github-ref }}
+          ref: ${{ steps.own.outputs.sha }}
           path: org-github
           persist-credentials: false
 
@@ -269,12 +277,10 @@ jobs:
       statuses: write
       pull-requests: read
     steps:
-      # Runs before anything is checked out from org-github-ref, so the ref
-      # it guards cannot replace it.
+      # Derives the repo name the later steps use, from GITHUB_REPOSITORY
+      # only, before any script runs.
       - name: Guard
         id: guard
-        env:
-          INPUTS_REF: ${{ inputs.org-github-ref }}
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY%%/*}"
@@ -284,18 +290,31 @@ jobs:
             echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
             exit 1
           fi
-          if [ "$INPUTS_REF" != main ] && [[ ! $GITHUB_REPOSITORY =~ ^open-platform-model/cascade-sandbox- ]]; then
-            echo "::error::org-github-ref may differ from main only in a sandbox repo"
-            exit 1
-          fi
           echo "::notice::repo $name"
           echo "repo=$name" >>"$GITHUB_OUTPUT"
+
+      # The .github commit this reusable workflow runs at (the caller's
+      # pinned SHA): the scripts are checked out at exactly that commit.
+      # Never empty: an empty ref would check out the default branch.
+      - name: Own commit
+        id: own
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$WF_REPO" != open-platform-model/.github ] || ! [[ $WF_SHA =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::cannot tell the open-platform-model/.github commit this workflow runs at (\`$WF_REPO\` \`$WF_SHA\`)"
+            exit 1
+          fi
+          echo "::notice::scripts from open-platform-model/.github $WF_SHA"
+          echo "sha=$WF_SHA" >>"$GITHUB_OUTPUT"
 
       - name: Check out org .github
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: open-platform-model/.github
-          ref: ${{ inputs.org-github-ref }}
+          ref: ${{ steps.own.outputs.sha }}
           path: org-github
           persist-credentials: false
 

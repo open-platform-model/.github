@@ -10,13 +10,17 @@ description: >-
 # but not its secrets unless the caller passes `secrets: inherit` (sandbox
 # cycle E1). So the caller owns the publish job: it needs the reusable
 # Deps cascade job, declares `environment: cascade`, and passes the key in
-# as an input. The plan is untrusted: compute ran repo code.
+# as an input. The plan is untrusted: compute ran repo code. The scripts run
+# from this action's own directory, so a caller that pins the action to a
+# .github commit SHA runs exactly that commit's code.
 
 inputs:
-  org-github-ref:
-    description: The .github ref the scripts come from; only a sandbox repo may pass another than main
-    required: false
-    default: main
+  dry-run:
+    description: >-
+      The receiver's stop switch: publish only when this is exactly false; true publishes
+      nothing (exit 0), any other value fails. Callers pass
+      `inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false'`.
+    required: true
   labels-managed:
     description: The repo declares its labels itself (cli); publish only checks they exist
     required: false
@@ -31,13 +35,11 @@ inputs:
 runs:
   using: composite
   steps:
-    # Runs before anything is checked out from org-github-ref, so the ref
-    # it guards cannot replace it.
+    # Derives the repo name the later steps use, from GITHUB_REPOSITORY
+    # only, before any script runs.
     - name: Guard
       id: guard
       shell: bash
-      env:
-        INPUTS_REF: ${{ inputs.org-github-ref }}
       run: |
         set -euo pipefail
         owner="${GITHUB_REPOSITORY%%/*}"
@@ -45,10 +47,6 @@ runs:
         if [ "$owner/$name" != "$GITHUB_REPOSITORY" ] || [ "$owner" != open-platform-model ] \
           || ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
           echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
-          exit 1
-        fi
-        if [ "$INPUTS_REF" != main ] && [[ ! $GITHUB_REPOSITORY =~ ^open-platform-model/cascade-sandbox- ]]; then
-          echo "::error::org-github-ref may differ from main only in a sandbox repo"
           exit 1
         fi
         echo "::notice::repo $name"
@@ -64,14 +62,6 @@ runs:
           echo "::error::publish runs only on refs/heads/main, not $GITHUB_REF"
           exit 1
         fi
-
-    - name: Check out org .github
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        repository: open-platform-model/.github
-        ref: ${{ inputs.org-github-ref }}
-        path: org-github
-        persist-credentials: false
 
     - name: Check out the repo
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,12 +80,14 @@ runs:
       id: verify
       shell: bash
       env:
+        CASCADE_PUBLISH_DRY_RUN: ${{ inputs.dry-run }}
         CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         GH_TOKEN: ${{ github.token }}
         CASCADE_READ_TOKEN: ${{ github.token }}
-      run: bash org-github/.github/scripts/cascade/wiring/receive-publish.sh verify
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/receive-publish.sh" verify
 
-    # publish=false: a deps-cascade:hold appeared since compute.
+    # publish=false: the dry-run input is true, or a deps-cascade:hold
+    # appeared since compute.
     - name: Mint the App token
       id: mint
       if: steps.verify.outputs.publish == 'true'
@@ -113,7 +105,8 @@ runs:
       if: steps.verify.outputs.publish == 'true'
       shell: bash
       env:
+        CASCADE_PUBLISH_DRY_RUN: ${{ inputs.dry-run }}
         CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         CASCADE_LABELS_MANAGED: ${{ inputs.labels-managed }}
         GH_TOKEN: ${{ steps.mint.outputs.token }}
-      run: bash org-github/.github/scripts/cascade/wiring/receive-publish.sh act
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/receive-publish.sh" act

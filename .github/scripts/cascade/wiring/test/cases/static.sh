@@ -3,8 +3,10 @@
 # Static checks of the reusable cascade workflows and the composite cascade
 # actions: no expression inside a run: block, no secrets input and no
 # Environment in a reusable workflow, explicit permissions on every job,
-# every third-party action pinned to a commit SHA, and one identical Guard
-# step first in every job and every action.
+# every third-party action pinned to a commit SHA, one identical Guard step
+# first in every job and every action, scripts only from the pinned .github
+# commit (no org-github-ref), the publish dry-run input, and SHA-pinned
+# cascade references in the README shapes and the sandbox callers.
 
 new_fx
 
@@ -40,7 +42,46 @@ for f in "${REUSABLE[@]}"; do
     if [ -z "$GUARD_TEXT" ]; then GUARD_TEXT="$t"; fi
     check "static: $n job $j has the same Guard text" test "$t" = "$GUARD_TEXT"
   done
+  check "static: $n names no org-github-ref" bash -c '! grep -nE "org-github-ref|INPUTS_REF" "$1"' _ "$f"
+  # Every checkout of this repo is at the workflow's own commit, read by
+  # the Own commit step before it.
+  expect "static: $n checks this repo out only at its own commit" 0 "" -- \
+    yq -r '.jobs | to_entries[] | .key as $j | .value.steps[]? | select(.with.repository == "open-platform-model/.github")
+      | select(.with.ref != "${{ steps.own.outputs.sha }}") | $j + "/" + .name' "$f"
+  for j in $(yq -r '.jobs | keys | .[]' "$f"); do
+    o=$(J="$j" yq -r '.jobs[strenv(J)].steps | to_entries | map(select(.value.id == "own")) | .[0].key // ""' "$f")
+    c=$(J="$j" yq -r '.jobs[strenv(J)].steps | to_entries | map(select(.value.with.repository == "open-platform-model/.github")) | .[0].key // ""' "$f")
+    [ -n "$c" ] || continue
+    check "static: $n job $j has the Own commit step before its checkout of this repo" bash -c '[ -n "$1" ] && [ "$1" -lt "$2" ]' _ "$o" "$c"
+  done
 done
+OWN_TEXT=$(yaml_run "$WORKFLOWS/cascade-receive.yml" compute "Own commit")
+for j in compute gates; do
+  check "static: cascade-receive.yml job $j has the same Own commit text" test "$(yaml_run "$WORKFLOWS/cascade-receive.yml" "$j" "Own commit")" = "$OWN_TEXT"
+  expect "static: cascade-receive.yml job $j reads its own commit from the job context" 0 \
+    $'${{ job.workflow_repository }}\n${{ job.workflow_sha }}' -- \
+    env J="$j" yq -r '.jobs[strenv(J)].steps[] | select(.id == "own") | (.env.WF_REPO, .env.WF_SHA)' "$WORKFLOWS/cascade-receive.yml"
+done
+# own <workflow_repository> <workflow_sha>: runs the inline Own commit step.
+own() {
+  : >"$FX/oout"
+  local rc=0
+  env WF_REPO="$1" WF_SHA="$2" GITHUB_OUTPUT="$FX/oout" bash -e -o pipefail -c "$OWN_TEXT" || rc=$?
+  cat "$FX/oout"
+  return "$rc"
+}
+SHA40=0123456789abcdef0123456789abcdef01234567
+expect "own commit: this repo at a full SHA" 0 $'::notice::scripts from open-platform-model/.github '"$SHA40"$'\nsha='"$SHA40" -- \
+  own open-platform-model/.github "$SHA40"
+own_fails() { # own_fails <name> <workflow_repository> <workflow_sha>
+  run own "$2" "$3"
+  check "own commit: $1" bash -c '[ "$1" = 1 ] && [[ $2 == "::error::cannot tell the open-platform-model/.github commit"* ]]' _ "$RC" "$OUT"
+}
+own_fails "an empty SHA fails (it would check out the default branch)" open-platform-model/.github ""
+own_fails "a short SHA fails" open-platform-model/.github 0123456
+own_fails "a branch name fails" open-platform-model/.github main
+own_fails "another repo fails" someone-else/.github "$SHA40"
+own_fails "an empty repo fails" "" "$SHA40"
 
 # The composite actions the caller's own cascade-Environment job runs.
 for a in cascade-notify cascade-publish; do
@@ -59,7 +100,20 @@ for a in cascade-notify cascade-publish; do
   expect "static: $n takes the key as a required input" 0 "true" -- yq -r '.inputs["private-key"].required' "$f"
   t=$(yq -r '.runs.steps[] | select(.name == "Guard") | .run' "$f")
   check "static: $n has the same Guard text" test "$t" = "$GUARD_TEXT"
+  # M2: the scripts come from the action's own directory, at the SHA the
+  # caller pinned; nothing checks out another .github ref.
+  check "static: $n names no org-github-ref" bash -c '! grep -nE "org-github|INPUTS_REF" "$1"' _ "$f"
+  expect "static: $n checks out no other repository" 0 "" -- \
+    yq -r '.runs.steps[] | select(.with.repository != null) | .name' "$f"
+  expect "static: $n runs its scripts only from GITHUB_ACTION_PATH" 0 "" -- \
+    yq -r '.runs.steps[] | select((.run // "") | test("\\.sh")) | select((.run // "") | test("bash \"\\$GITHUB_ACTION_PATH/\\.\\./\\.\\./scripts/cascade/wiring/[a-z-]+\\.sh\"") | not) | .name' "$f"
 done
+# M1: the stop switch is a required input the action passes to verify and
+# act; the scripts enforce it (publish cases).
+PUB="$ORG_ROOT/.github/actions/cascade-publish/action.yml"
+expect "static: actions/cascade-publish takes a required dry-run input" 0 "true" -- yq -r '.inputs["dry-run"].required' "$PUB"
+expect "static: actions/cascade-publish passes dry-run to verify and act" 0 $'verify ${{ inputs.dry-run }}\nact ${{ inputs.dry-run }}' -- \
+  yq -r '.runs.steps[] | select(.id == "verify" or .name == "Act") | ((.id // "act") + " " + .env.CASCADE_PUBLISH_DRY_RUN)' "$PUB"
 expect "static: actions/cascade-notify mints for the targets only" 0 '${{ steps.validate.outputs.targets }}' -- \
   yq -r '.runs.steps[] | select(.id == "mint") | .with.repositories' "$ORG_ROOT/.github/actions/cascade-notify/action.yml"
 expect "static: actions/cascade-publish mints for the calling repo only, after verify" 0 \
@@ -67,28 +121,25 @@ expect "static: actions/cascade-publish mints for the calling repo only, after v
   yq -r '.runs.steps[] | select(.id == "mint") | (.with.repositories, .if)' "$ORG_ROOT/.github/actions/cascade-publish/action.yml"
 
 if [ -n "$GUARD_TEXT" ]; then
-  # guard <GITHUB_REPOSITORY> <org-github-ref>: runs the inline Guard step.
+  # guard <GITHUB_REPOSITORY>: runs the inline Guard step.
   guard() {
     : >"$FX/gout"
     local rc=0
-    env GITHUB_REPOSITORY="$1" INPUTS_REF="$2" GITHUB_OUTPUT="$FX/gout" bash -e -o pipefail -c "$GUARD_TEXT" || rc=$?
+    env GITHUB_REPOSITORY="$1" GITHUB_OUTPUT="$FX/gout" bash -e -o pipefail -c "$GUARD_TEXT" || rc=$?
     cat "$FX/gout"
     return "$rc"
   }
   NOT_ORG="is not a repo of open-platform-model"
-  expect "guard: a production repo at main" 0 $'::notice::repo library\nrepo=library' -- guard open-platform-model/library main
-  expect "guard: a production repo with a branch ref fails" 1 "::error::org-github-ref may differ from main only in a sandbox repo" -- \
-    guard open-platform-model/library feat/x
-  expect "guard: a production repo with an empty ref fails" 1 "::error::org-github-ref may differ from main only in a sandbox repo" -- \
-    guard open-platform-model/cli ""
-  expect "guard: a sandbox repo with a branch ref" 0 $'::notice::repo cascade-sandbox-down\nrepo=cascade-sandbox-down' -- \
-    guard open-platform-model/cascade-sandbox-down feat/x
-  expect "guard: a foreign owner fails" 1 "::error::\`someone-else/core\` $NOT_ORG" -- guard someone-else/core main
+  check "guard: reads no input" bash -c '! grep -q INPUTS_REF <<<"$1"' _ "$GUARD_TEXT"
+  expect "guard: a production repo" 0 $'::notice::repo library\nrepo=library' -- guard open-platform-model/library
+  expect "guard: a sandbox repo" 0 $'::notice::repo cascade-sandbox-down\nrepo=cascade-sandbox-down' -- \
+    guard open-platform-model/cascade-sandbox-down
+  expect "guard: a foreign owner fails" 1 "::error::\`someone-else/core\` $NOT_ORG" -- guard someone-else/core
   expect "guard: a look-alike owner fails" 1 "::error::\`open-platform-model-x/cascade-sandbox-down\` $NOT_ORG" -- \
-    guard open-platform-model-x/cascade-sandbox-down feat/x
-  expect "guard: an empty name fails" 1 "::error::\`open-platform-model/\` $NOT_ORG" -- guard open-platform-model/ main
-  expect "guard: no repository fails" 1 "::error::\`\` $NOT_ORG" -- guard "" main
-  expect "guard: a name with a newline fails" 1 "::error::\`open-platform-model/a"$'\n'"repo=core\` $NOT_ORG" -- guard "open-platform-model/a"$'\n'"repo=core" main
+    guard open-platform-model-x/cascade-sandbox-down
+  expect "guard: an empty name fails" 1 "::error::\`open-platform-model/\` $NOT_ORG" -- guard open-platform-model/
+  expect "guard: no repository fails" 1 "::error::\`\` $NOT_ORG" -- guard ""
+  expect "guard: a name with a newline fails" 1 "::error::\`open-platform-model/a"$'\n'"repo=core\` $NOT_ORG" -- guard "open-platform-model/a"$'\n'"repo=core"
 fi
 
 # The receiver caller's concurrency group (Phase 3 wiring contract, section
@@ -102,3 +153,26 @@ for seed in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox/d
   expect "static: the sandbox receiver caller uses the contract's concurrency group" 0 "$CONTRACT_GROUP" -- \
     yq -r '.concurrency.group' "$seed"
 done
+
+# --- caller shapes: the README and the sandbox callers ------------------------
+
+# readme_block <heading text>: the yaml block after the README line that
+# starts with that bold heading.
+readme_block() {
+  H="$1" awk 'index($0, ENVIRON["H"]) == 1 { f = 1; next } f && /^```yaml$/ { p = 1; next } p && /^```$/ { exit } p' "$ORG_ROOT/README.md"
+}
+readme_block "**Receiver caller**" >"$FX/readme-receiver.yml"
+readme_block "**Notify caller**" >"$FX/readme-notify.yml"
+readme_block "**Per-PR gates caller**" >"$FX/readme-gates.yml"
+DRY_EXPR="\${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}"
+check "static: the README has the three caller shapes" bash -c '[ -s "$1" ] && [ -s "$2" ] && [ -s "$3" ]' _ \
+  "$FX/readme-receiver.yml" "$FX/readme-notify.yml" "$FX/readme-gates.yml"
+expect "static: the README receiver passes the stop switch to the reusable job" 0 "$DRY_EXPR" -- \
+  yq -r '.jobs.cascade.with["dry-run"]' "$FX/readme-receiver.yml"
+expect "static: the README publish job passes the stop switch to cascade-publish" 0 "$DRY_EXPR" -- \
+  yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["dry-run"]' "$FX/readme-receiver.yml"
+check "static: the README names no cascade reference at main or a branch" bash -c '
+  ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$ORG_ROOT/README.md"
+check "static: the README pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$ORG_ROOT/README.md"
+check "static: the README names no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$ORG_ROOT/README.md"
+

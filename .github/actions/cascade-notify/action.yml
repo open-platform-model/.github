@@ -9,16 +9,14 @@ description: >-
 # its secrets unless the caller passes `secrets: inherit` (sandbox cycle E1).
 # So the caller owns the job: it declares `environment: cascade` and passes
 # the key in as an input. The source is always the calling repo; the targets
-# are the fixed map in .github/scripts/cascade/wiring/lib.sh.
+# are the fixed map in .github/scripts/cascade/wiring/lib.sh. The scripts
+# run from this action's own directory, so a caller that pins the action to
+# a .github commit SHA runs exactly that commit's code.
 
 inputs:
   tag:
     description: The release tag that was just published
     required: true
-  org-github-ref:
-    description: The .github ref the scripts come from; only a sandbox repo may pass another than main
-    required: false
-    default: main
   client-id:
     description: The App's client id, vars.CASCADE_APP_CLIENT_ID of the cascade Environment
     required: true
@@ -29,13 +27,11 @@ inputs:
 runs:
   using: composite
   steps:
-    # Runs before anything is checked out from org-github-ref, so the ref
-    # it guards cannot replace it.
+    # Derives the repo name the later steps use, from GITHUB_REPOSITORY
+    # only, before any script runs.
     - name: Guard
       id: guard
       shell: bash
-      env:
-        INPUTS_REF: ${{ inputs.org-github-ref }}
       run: |
         set -euo pipefail
         owner="${GITHUB_REPOSITORY%%/*}"
@@ -45,20 +41,8 @@ runs:
           echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
           exit 1
         fi
-        if [ "$INPUTS_REF" != main ] && [[ ! $GITHUB_REPOSITORY =~ ^open-platform-model/cascade-sandbox- ]]; then
-          echo "::error::org-github-ref may differ from main only in a sandbox repo"
-          exit 1
-        fi
         echo "::notice::repo $name"
         echo "repo=$name" >>"$GITHUB_OUTPUT"
-
-    - name: Check out org .github
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        repository: open-platform-model/.github
-        ref: ${{ inputs.org-github-ref }}
-        path: org-github
-        persist-credentials: false
 
     - name: Validate
       id: validate
@@ -68,7 +52,7 @@ runs:
         TAG: ${{ inputs.tag }}
       run: |
         set -euo pipefail
-        targets=$(bash org-github/.github/scripts/cascade/wiring/notify.sh validate --tag "$TAG")
+        targets=$(bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/notify.sh" validate --tag "$TAG")
         echo "targets=$targets" >>"$GITHUB_OUTPUT"
 
     - name: Wait for the Go proxy
@@ -77,7 +61,7 @@ runs:
       env:
         CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         TAG: ${{ inputs.tag }}
-      run: bash org-github/.github/scripts/cascade/wiring/notify.sh wait-proxy --tag "$TAG"
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/notify.sh" wait-proxy --tag "$TAG"
 
     # An owner without repositories would mint a token for every repo the
     # App is installed on.
@@ -108,4 +92,4 @@ runs:
         CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         TAG: ${{ inputs.tag }}
         GH_TOKEN: ${{ steps.mint.outputs.token }}
-      run: bash org-github/.github/scripts/cascade/wiring/notify.sh dispatch --tag "$TAG"
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/notify.sh" dispatch --tag "$TAG"

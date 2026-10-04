@@ -7,9 +7,10 @@
 # action table and the gate status mapping. Design: workspace RELEASING.md,
 # section "The cascade". Sourced, never run.
 #
-# The repo-name derivation and the org-github-ref guard are NOT here: they
-# are the inline first step of every job, run before this file is checked
-# out from the ref they guard.
+# The repo-name derivation is NOT here: it is the inline Guard step, first
+# in every job and action. These scripts always run at the .github commit
+# the caller pinned: an action runs them from its own GITHUB_ACTION_PATH,
+# a reusable workflow checks them out at its own job.workflow_sha.
 #
 # Tools: bash, coreutils, git, jq, grep with -P; gh through "${CASCADE_GH:-gh}".
 

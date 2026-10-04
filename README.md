@@ -228,9 +228,8 @@ with the variable `CASCADE_APP_CLIENT_ID`. A reusable-workflow job that declares
 `environment: cascade` sees the caller's Environment variables but not its secrets (unless the
 caller passes `secrets: inherit`, which no caller does), so every job that mints the App token is
 the caller's own: it declares `environment: cascade` and passes the key to a composite action
-as an input. No reusable workflow takes or reads a secret. Callers use `@main` (owner decision
-13); the sandbox repos pin a commit SHA instead, because their Environments hold the production
-key.
+as an input. No reusable workflow takes or reads a secret. Callers pin every cascade workflow
+and action to a full commit SHA (owner decision 24; see "Pinning and bumps" below).
 
 | File | Kind | Jobs or caller job | Does |
 | --- | --- | --- | --- |
@@ -240,8 +239,32 @@ key.
 | [`cascade-gates.yml`](.github/workflows/cascade-gates.yml) | reusable workflow | `Cascade gates` | per PR (`pull_request_target`, nothing checked out): `n/a` on both gate contexts for an ordinary PR; a gates-only receiver run for a release PR |
 
 Every job's and every action's first step, `Guard`, derives the repo name from
-`GITHUB_REPOSITORY` and refuses an `org-github-ref` other than `main` outside the
-`cascade-sandbox-*` repos.
+`GITHUB_REPOSITORY` and refuses a repo outside `open-platform-model`.
+
+**Pinning and bumps.** Owner decision 24 replaces `@main` (decision 13) for every cascade
+reference: each caller names `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and
+`cascade-gates.yml` by the full 40-character SHA of a commit on this repo's `main`, never by a
+branch or tag (opm-operator's `sha_pinning_required` refuses an action named by branch), and a
+repo uses one SHA in all its cascade references. The scripts come from that same commit: the two
+actions run them from their own directory (`GITHUB_ACTION_PATH`), and the receive workflow checks
+them out at its own `job.workflow_sha`, so a pinned reference runs exactly that commit's code and
+there is no input naming another `.github` ref. A merge to `main` here therefore changes nothing in
+a product repo until that repo moves its pin. To roll a change out:
+
+1. Merge the `.github` PR, then take the full SHA of the squash commit it made on `main`
+   (`git rev-parse origin/main` right after fetching, or the PR's merge commit).
+2. Move the sandbox callers (`cascade-sandbox-up` `release.yml`, `cascade-sandbox-down`
+   `deps-cascade.yml` and `cascade-gates.yml`) to that SHA by a sandbox PR and rerun the sandbox
+   scenario that covers the change.
+3. In each of core, catalog_opm, library, opm-operator and cli, open one PR titled
+   `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in every
+   `uses: open-platform-model/.github/.github/` line (`grep -rn 'open-platform-model/.github/.github/' .github/workflows`)
+   and changes nothing else, unless the `.github` change altered an input, in which case the
+   caller edit rides the same PR. All of a repo's cascade references carry the same SHA.
+4. Merge each after its CI is green; order does not matter, because a repo runs only its own pin.
+   To roll back, move the pins back the same way.
+
+`<sha>` in the shapes below stands for that full SHA.
 
 **Notify caller** (in each upstream's release workflow; `needs`, `if` and `tag` per repo):
 
@@ -257,7 +280,7 @@ Every job's and every action's first step, `Guard`, derives the repo name from
       contents: read
     steps:
       - name: Notify downstream
-        uses: open-platform-model/.github/.github/actions/cascade-notify@main
+        uses: open-platform-model/.github/.github/actions/cascade-notify@<sha> # .github main
         with:
           tag: ${{ needs.release-please.outputs.tag_name }}
           client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
@@ -298,7 +321,7 @@ jobs:
       contents: read
       pull-requests: read
       statuses: write
-    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@main
+    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@<sha> # .github main
     with:
       dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
       gates-only: ${{ inputs.gates_only == true }}
@@ -325,8 +348,9 @@ jobs:
       pull-requests: read
     steps:
       - name: Publish
-        uses: open-platform-model/.github/.github/actions/cascade-publish@main
+        uses: open-platform-model/.github/.github/actions/cascade-publish@<sha> # .github main
         with:
+          dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
           labels-managed: false
           client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
           private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
@@ -334,9 +358,13 @@ jobs:
 
 Real runs on `main` share the group `deps-cascade`; gates-only runs use `deps-cascade-gates`
 and runs from any other ref (always dry runs) `deps-cascade-<ref>`, so neither replaces a
-pending real run. The `publish` job reads the dry-run switches itself, not from the reusable
-job that ran repo code, and `cascade-publish` refuses any ref but `main` and a plan marked as a
-dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
+pending real run. The stop switch is the `cascade-publish` input `dry-run`, given the same
+expression as the reusable job's `dry-run`: the action publishes only when it is exactly `false`,
+does nothing on `true` and fails on any other value (an empty or missing input included), so a
+mistyped `if:` cannot make a dry run publish. The `publish` job's `if:` repeats the switches only
+so a dry run does not start a `cascade` Environment job; it reads them itself, not from the
+reusable job that ran repo code. `cascade-publish` also refuses any ref but `main` and a plan
+marked as a dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
 `labels-managed: true` (cli, an input of `cascade-publish`) only checks that the five cascade labels exist instead of
 creating them; `setup-cue` (default true) and `cue-version` (default `v0.17.1`) install CUE.
 
@@ -357,7 +385,7 @@ jobs:
     permissions:
       statuses: write
       actions: write
-    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@main
+    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@<sha> # .github main
     with:
       g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
       g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}

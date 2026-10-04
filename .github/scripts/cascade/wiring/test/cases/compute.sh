@@ -219,6 +219,19 @@ gh_prs '[]'
 compute "${COMPUTE_STEPS[@]}"
 check "noop: exit 3 with no PR and no branch" bash -c '[ "$2" = 0 ] && [ "$(jq -r "[.mode,.action]|join(\"/\")" "$1")" = fresh/noop ] && grep -qx action=noop "$3"' _ "$CASCADE_T/plan.json" "$RC" "$GITHUB_OUTPUT"
 
+# go-task's GitHub Actions annotation: dropped for exit 3 (nothing to do),
+# kept for a real failure.
+new_fx; mk_toy; fresh_checkout
+gh_prs '[]'
+compute init payload state prepare notes
+GITHUB_ACTIONS=true compute run
+check "run: exit 3 under GITHUB_ACTIONS leaves no error annotation" bash -c '[ "$1" = 0 ] && [[ $2 != *"::error"* ]] && [ "$(cat "$3")" = 3 ]' _ "$RC" "$OUT" "$CASCADE_T/state/task_rc"
+new_fx; mk_toy; fresh_checkout
+gh_prs '[]'
+compute init payload state prepare notes
+TOY_EXIT=5 GITHUB_ACTIONS=true compute run
+check "run: a failing task under GITHUB_ACTIONS keeps its annotation" bash -c '[ "$1" = 1 ] && [[ $2 == *"::error title=Task '"'"'deps:cascade'"'"' failed::exit status 5"* ]] && [[ $3 == *"exited 5"* ]]' _ "$RC" "$OUT" "$ERR"
+
 # --- errors -------------------------------------------------------------------
 new_fx; mk_toy; fresh_checkout
 printf 'v0.2.0\n' >"$TOY_TARGET"

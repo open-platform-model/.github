@@ -66,10 +66,16 @@ bot_git() {
 
 # repo_task <task> [VAR=value...]: runs a cascade task in the repo with no
 # token in its environment. Exit status is the task's.
+#
+# Exit 3 is the cascade's "nothing to do", not a failure, so the error
+# annotation go-task prints for it on stdout under GITHUB_ACTIONS is dropped
+# (a red annotation on every green no-change run otherwise). The pipeline's
+# status is still the task's (pipefail; sed exits 0).
 repo_task() {
   local task="$1"
   shift
-  (cd "$RD" && run_repo_code env CASCADE_BASE=origin/main "$@" task -x "$task")
+  (cd "$RD" && run_repo_code env CASCADE_BASE=origin/main "$@" task -x "$task") \
+    | sed -u "/^::error title=Task '[^']*' failed::exit status 3\$/d"
 }
 
 # payload_env: the accepted payload as VAR=value lines (none for a sweep).
