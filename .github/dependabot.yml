@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # The SHA pins of this repo's workflows (static cases in the wiring suite
+  # require a full SHA with a version comment); Dependabot keeps both moving.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # A release must be a week old before Dependabot proposes it, so a
+    # hijacked action release has time to be noticed and pulled.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+    ignore:
+      # This repo's own actions and workflows move by the pin procedure
+      # (README "Pinning and bumps"), never by a Dependabot bump.
+      - dependency-name: "open-platform-model/.github*"

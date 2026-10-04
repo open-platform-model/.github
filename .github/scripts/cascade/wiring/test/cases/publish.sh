@@ -19,7 +19,7 @@ publish_job() {
   mkdir -p "$PWS/t/plan"
   git clone -q "file://$ORIGIN" "$PWS/repo"
   local f
-  for f in plan.json body.md cascade.bundle; do
+  for f in plan.json body.md warnings.tsv cascade.bundle; do
     if [ -f "$CASCADE_T/$f" ]; then cp "$CASCADE_T/$f" "$PWS/t/plan/"; fi
   done
   PV="$PWS/t/verified"
@@ -27,18 +27,22 @@ publish_job() {
 # PUBLISH_DRY_RUN is the action's dry-run input (default false); the value
 # "<unset>" leaves it out of the environment.
 # PUBLISH_GATES_ONLY is the action's gates-only input (default false), with
-# "<unset>" the same way.
+# "<unset>" the same way. git is the wiring shim (test/shim/git), so the
+# tag-on-main check answers from $FX/git.
 publish() {
   # env takes its -u options before any assignment.
   local -a un=() set=()
   if [ "${PUBLISH_DRY_RUN-}" = "<unset>" ]; then un+=(-u CASCADE_PUBLISH_DRY_RUN); else set+=(CASCADE_PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN-false}"); fi
   if [ "${PUBLISH_GATES_ONLY-}" = "<unset>" ]; then un+=(-u CASCADE_PUBLISH_GATES_ONLY); else set+=(CASCADE_PUBLISH_GATES_ONLY="${PUBLISH_GATES_ONLY-false}"); fi
-  run env -C "$PWS" "${un[@]}" "${set[@]}" CASCADE_REPO=cascade-sandbox-down CASCADE_T="$PWS/t" CASCADE_REPO_DIR="$PWS/repo" \
+  run env -C "$PWS" "${un[@]}" "${set[@]}" PATH="$W_HERE/shim:$PATH" CASCADE_REPO=cascade-sandbox-down CASCADE_T="$PWS/t" CASCADE_REPO_DIR="$PWS/repo" \
     GH_TOKEN=ghs_appTokenForTests CASCADE_LABELS_MANAGED="${LABELS_MANAGED:-false}" bash "$PUBLISH" "$1"
 }
 # edit_plan <jq filter>: tampers with the downloaded plan.
 edit_plan() { jq "$1" "$PWS/t/plan/plan.json" >"$FX/p.json" && mv "$FX/p.json" "$PWS/t/plan/plan.json"; }
 mutations() { grep -vE '^(pr list|api --paginate repos/[^ ]+/releases)' "$GHFX/log" || true; }
+# gh_reset_p: gh_reset, still answering the upstream's release list, which
+# verify reads for the breaking check.
+gh_reset_p() { gh_reset; gh_accept "api --paginate repos/open-platform-model/cascade-sandbox-up/releases --jq *"; }
 
 # --- fresh: push and open the PR ----------------------------------------------
 new_fx; mk_toy; fresh_checkout
@@ -73,7 +77,7 @@ compute "${COMPUTE_STEPS[@]}"
 refusal() { # refusal <name> <stderr substring> [<jq edit>]
   publish_job
   [ -z "${3:-}" ] || edit_plan "$3"
-  gh_reset
+  gh_reset_p
   gh_prs "${LIVE:-[]}"
   publish verify
   check "refuse: $1" bash -c '[ "$1" = 1 ] && [[ $2 == *"$3"* ]] && [ ! -e "$4/plan.json" ]' _ "$RC" "$ERR" "$2" "$PV"
@@ -83,21 +87,21 @@ refusal "an effective dry run" "the plan is a dry run" '.effective_dry_run = tru
 # The dry-run input (the receiver's stop switch, enforced here and not only
 # in the caller's if:): only exactly false publishes.
 publish_job
-gh_reset
+gh_reset_p
 : >"$GITHUB_OUTPUT"
 PUBLISH_DRY_RUN=true publish verify
 check "dry-run input true: verify publishes nothing and succeeds" bash -c '[ "$1" = 0 ] && [[ $2 == *"::notice::dry run"* ]] && [ "$(cat "$3")" = publish=false ] && [ ! -e "$4/plan.json" ] && [ ! -s "$5" ]' \
   _ "$RC" "$OUT" "$GITHUB_OUTPUT" "$PV" "$GHFX/log"
 for v in "<unset>" "" False TRUE " false" "false "; do
   publish_job
-  gh_reset
+  gh_reset_p
   : >"$GITHUB_OUTPUT"
   PUBLISH_DRY_RUN="$v" publish verify
   check "dry-run input \`$v\`: verify refuses before reading the plan" bash -c '[ "$1" = 1 ] && [[ $2 == *"the dry-run input must be true or false"* ]] && [ ! -s "$3" ] && [ ! -s "$4" ]' \
     _ "$RC" "$ERR" "$GITHUB_OUTPUT" "$GHFX/log"
 done
 publish_job
-gh_reset
+gh_reset_p
 gh_prs '[]'
 publish verify
 PUBLISH_DRY_RUN=true publish act
@@ -108,21 +112,21 @@ check "dry-run input true: act pushed nothing" test -z "$(origin_tip deps/cascad
 # it next to forged action=push and compute-ok=true outputs; the action's
 # gates-only input, the caller's own dispatch input, still stops it.
 publish_job
-gh_reset
+gh_reset_p
 : >"$GITHUB_OUTPUT"
 PUBLISH_GATES_ONLY=true publish verify
 check "gates-only input true: verify refuses a complete plan before reading it" bash -c '
   [ "$1" = 1 ] && [[ $2 == *"refusing the plan: a gates-only run never publishes"* ]] && [ ! -s "$3" ] && [ ! -e "$4/plan.json" ] && [ ! -s "$5" ]' \
   _ "$RC" "$ERR" "$GITHUB_OUTPUT" "$PV" "$GHFX/log"
 publish_job
-gh_reset
+gh_reset_p
 : >"$GITHUB_OUTPUT"
 PUBLISH_GATES_ONLY=true PUBLISH_DRY_RUN=true publish verify
 check "gates-only input true: refused even with the dry-run input true (checked first)" bash -c '
   [ "$1" = 1 ] && [[ $2 == *"a gates-only run never publishes"* ]] && [ ! -s "$3" ]' _ "$RC" "$ERR" "$GITHUB_OUTPUT"
 for v in "<unset>" "" False TRUE " false" "false " yes; do
   publish_job
-  gh_reset
+  gh_reset_p
   : >"$GITHUB_OUTPUT"
   PUBLISH_GATES_ONLY="$v" publish verify
   check "gates-only input \`$v\`: verify refuses before reading the plan" bash -c '
@@ -130,25 +134,31 @@ for v in "<unset>" "" False TRUE " false" "false " yes; do
     _ "$RC" "$ERR" "$GITHUB_OUTPUT" "$GHFX/log"
 done
 publish_job
-gh_reset
+gh_reset_p
 gh_prs '[]'
 publish verify
 check "gates-only: the same plan verifies when the input is false" bash -c '[ "$1" = 0 ] && grep -qx publish=true "$2"' _ "$RC" "$GITHUB_OUTPUT"
-gh_reset
+gh_reset_p
 PUBLISH_GATES_ONLY=true publish act
 check "gates-only input true: act refuses even after a verified plan" bash -c '[ "$1" = 1 ] && [[ $2 == *"a gates-only run never publishes"* ]] && [ ! -s "$3" ]' _ "$RC" "$ERR" "$GHFX/log"
 check "gates-only input true: act pushed nothing" test -z "$(origin_tip deps/cascade)"
 refusal "an unknown action" "unknown action \`merge-now\`" '.action = "merge-now"'
 refusal "an unknown label" "label \`admin\` is not one of the bot's labels" '.labels += ["admin"]'
-refusal "a title that does not recompute" "the planned title does not recompute" '.title = "feat(deps): x"'
-refusal "a computed title outside the three types" "title_computed is not a cascade title" '.title_computed = "feat: x" | .title = "feat: x"'
+# The title is derived in publish: a forged one is a notice, never used.
+publish_job
+edit_plan '.title = "feat(deps)!: x" | .title_computed = "feat: x"'
+gh_reset_p
+gh_prs '[]'
+publish verify
+check "derived: a forged plan title is ignored for the derived one" bash -c '
+  [ "$1" = 0 ] && [ "$(cat "$3/title")" = "fix(deps): bump up to v0.2.0" ] && [[ $2 == *"::notice::the plan'"'"'s title differs"* ]]' _ "$RC" "$OUT" "$PV"
 refusal "a bad tip" "old_tip and new_tip must be commit ids" '.old_tip = "--upload-pack=x"'
 printf 'b\n' >"$FX/b"
 LIVE="[$(pr_json 9 "fix(deps): other" "$FX/b")]" refusal "a PR-number mismatch" "the plan names PR \`\`, the cascade PR is \`9\`"
 HOLD="[$(pr_json 9 "fix(deps): other" "$FX/b" "deps-cascade:hold")]"
 publish_job
 edit_plan '.pr_number = 9'
-gh_reset
+gh_reset_p
 gh_prs "$HOLD"
 : >"$GITHUB_OUTPUT"
 publish verify
@@ -158,7 +168,7 @@ check "hold: a hold added since compute stops publish without a red run" bash -c
 refusal "a forged PR number" "the plan names PR \`3\`, the cascade PR is \`none\`" '.pr_number = 3'
 publish_job
 seed_commit deps/cascade human fixtures/x.txt "racing human" "test: racing"
-gh_reset
+gh_reset_p
 gh_prs '[]'
 publish verify
 check "refuse: a moved remote tip" bash -c '[ "$1" = 1 ] && [[ $2 == *"deps/cascade moved since compute; the next run retries"* ]]' _ "$RC" "$ERR"

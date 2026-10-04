@@ -78,7 +78,17 @@ expect "payload: a non-string tag" 0 "1||||tags is not an array of 1 to 8 string
 expect "payload: source not a string" 0 "1||||source is not a string" -- pv cli '{"source":["library"],"tags":["v1.0.0"]}'
 expect "payload: not an object" 0 "1||||the payload is not a JSON object" -- pv cli '["library"]'
 expect "payload: empty" 0 "1||||the payload is not a JSON object" -- pv cli ''
-expect "payload: a newline in a tag" 0 "1||||1 tag(s) do not match the library tag shape" -- pv cli '{"source":"library","tags":["v1.0.0\nv2.0.0"]}'
+expect "payload: a tag with a trailing newline drops the whole payload" 0 "1||||the source or a tag holds a control character" -- \
+  pv cli '{"source":"library","tags":["v1.0.0\n","v1.0.1"]}'
+expect "payload: a last tag with a trailing newline" 0 "1||||the source or a tag holds a control character" -- \
+  pv cli '{"source":"library","tags":["v1.0.1\n"]}'
+expect "payload: a source with a trailing newline" 0 "1||||the source or a tag holds a control character" -- \
+  pv cli '{"source":"library\n","tags":["v1.0.1"]}'
+expect "payload: a tab or NUL inside a tag" 0 "1||||the source or a tag holds a control character" -- \
+  pv cli '{"source":"library","tags":["v1.0.0\u0000","v1.0.1\t"]}'
+expect "payload: a trailing space is a bad tag shape" 0 "1||||1 tag(s) do not match the library tag shape" -- \
+  pv cli '{"source":"library","tags":["v1.0.0 "]}'
+expect "payload: a newline in a tag" 0 "1||||the source or a tag holds a control character" -- pv cli '{"source":"library","tags":["v1.0.0\nv2.0.0"]}'
 expect "payload: core is not a receiver" 0 "2||||" -- pv core '{"source":"cli","tags":["v1.0.0"]}'
 
 # --- the cascade-PR filter ----------------------------------------------------

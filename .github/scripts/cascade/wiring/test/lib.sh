@@ -162,6 +162,9 @@ rule_copy() {
   if [ ! -d "$d" ]; then
     mkdir -p "$d"
     cp "$WIRING"/*.sh "$d/"
+    # publish runs the resolver beside the wiring scripts.
+    cp "$WIRING/../cascade-resolve.sh" "$d/.."
+    cp -r "$WIRING/../lib" "$d/.."
     sed -i "s/^WF_GUARD_RULE=.*/WF_GUARD_RULE=$1/" "$d/lib.sh"
   fi
   printf '%s' "$d"
@@ -221,7 +224,8 @@ done
 for v in GITHUB_OUTPUT GITHUB_ENV GITHUB_PATH GITHUB_STEP_SUMMARY GITHUB_STATE; do
   if [ -n "${!v:-}" ]; then printf 'action=push\nok=true\nforged=%s\n' "$v" >>"${!v}"; fi
 done
-[ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "toy: dirty tree" >&2; exit 1; }
+[ "${CASCADE_ALLOW_DIRTY:-}" = 1 ] || [ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "toy: dirty tree" >&2; exit 1; }
+printf 'task=main allow_dirty=%s\n' "${CASCADE_ALLOW_DIRTY:-}" >>"${TOY_TASK_LOG:-/dev/null}"
 state="$(git rev-parse --git-dir)/cascade"
 mkdir -p "$state"
 : >"$state/warnings"
@@ -250,7 +254,7 @@ mk_toy() {
   git -C "$SEED" commit -q -m "toy repo"
   git -C "$SEED" remote add origin "file://$ORIGIN"
   git -C "$SEED" push -q origin main
-  export TOY_TARGET="$FX/target" TOY_LOG="$FX/toy.log"
+  export TOY_TARGET="$FX/target" TOY_LOG="$FX/toy.log" TOY_TASK_LOG="$FX/task.log"
   printf 'v0.1.0\n' >"$TOY_TARGET"
   : >"$TOY_LOG"
   export CASCADE_T="$FX/t" CASCADE_REPO_DIR="$WS/repo"

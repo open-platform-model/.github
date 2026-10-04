@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# git stand-in for the publish cases (test/cases/publish.sh puts this
+# directory first on publish's PATH). The resolver's tag-on-main check, a
+# `clone` of https://github.com/open-platform-model/<repo> and the tag
+# `fetch` inside that clone, goes to the resolver's own git shim
+# (../../../test/shim/git), which answers from $CASCADE_FIXTURE_DIR/git
+# (<repo>.offmain, <repo>.missing, ...). Every other call, the toy origin's
+# file:// fetches, ls-remote and pushes among them, runs the real git.
+set -uo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+resolver_shim="$(cd "$here/../../../test/shim" && pwd)"
+IFS=: read -r -a parts <<<"$PATH"
+rest=""
+for p in "${parts[@]}"; do
+  [ "$p" = "$here" ] || rest="${rest:+$rest:}$p"
+done
+cdir="" i=1
+while [ "$i" -le $# ]; do
+  case "${!i}" in
+    -C) j=$((i + 1)); cdir="${!j:-}"; i=$((i + 2)) ;;
+    -c) i=$((i + 2)) ;;
+    *) break ;;
+  esac
+done
+sub="${!i:-}"
+if [ "$sub" = clone ] || { [ "$sub" = fetch ] && [ -n "$cdir" ] && [ -f "$cdir/cascade-shim-repo" ]; }; then
+  PATH="$resolver_shim:$rest" exec "$resolver_shim/git" "$@"
+fi
+PATH="$rest" exec git "$@"

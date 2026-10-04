@@ -35,9 +35,6 @@ jobs:
       # one developers run; pin it so local and CI agree.
       SHELLCHECK_VERSION: 0.11.0
       SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
-      # The runner image has no go-task; the wiring tests run task.
-      TASK_VERSION: 3.52.0
-      TASK_SHA256: 02c679ffae53dca791804847d78b31731615894e292948397c971c87ac9e95bd
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,7 +68,8 @@ jobs:
             | xargs -0 "$sc" -x \
                 .github/scripts/cascade/test/shim/curl \
                 .github/scripts/cascade/test/shim/git \
-                .github/scripts/cascade/wiring/test/shim/gh
+                .github/scripts/cascade/wiring/test/shim/gh \
+                .github/scripts/cascade/wiring/test/shim/git
 
       - name: actionlint
         run: |
@@ -83,9 +81,19 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -color .github/workflows/*.yml
 
+      # The runner image has no go-task; the wiring tests run task. The
+      # version and checksum are the ones compute installs (install-tools.sh),
+      # so CI tests the Task that ships.
       - name: Install task
         run: |
           set -euo pipefail
+          inst=.github/scripts/cascade/wiring/install-tools.sh
+          TASK_VERSION=$(sed -n 's/^TASK_VERSION=v\([0-9][0-9.]*\)$/\1/p' "$inst")
+          TASK_SHA256=$(sed -n 's/^TASK_SHA256=\([0-9a-f]\{64\}\)$/\1/p' "$inst")
+          if [ -z "$TASK_VERSION" ] || [ -z "$TASK_SHA256" ]; then
+            echo "::error::no Task version or checksum in $inst"
+            exit 1
+          fi
           tgz=task_linux_amd64.tar.gz
           curl -q -sSfL --retry 3 -o "$RUNNER_TEMP/$tgz" \
             "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/$tgz"

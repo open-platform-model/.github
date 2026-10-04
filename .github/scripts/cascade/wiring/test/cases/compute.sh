@@ -200,6 +200,35 @@ gh_rels "$NO_BREAK"
 compute init payload state
 check "merge: a bot commit a human amended is a human commit" test "$(st mode)" = merge
 
+# A human commit on the branch that changes the task: compute runs main's.
+new_fx; mk_toy
+seed_commit deps/cascade bot UPSTREAM_VERSION v0.2.0 "fix(deps): bump up to v0.2.0"
+git -C "$SEED" checkout -q deps/cascade
+cat >"$SEED/.tasks/cascade/cascade.sh" <<'SH'
+#!/usr/bin/env bash
+echo "the branch's task ran" >>"${TOY_TASK_LOG:-/dev/null}"
+exit 9
+SH
+printf 'branch-only\n' >"$SEED/.tasks/cascade/extra.txt"
+git -C "$SEED" add -A
+git -C "$SEED" commit -q -m "chore: a human edit of the task"
+git -C "$SEED" push -q origin deps/cascade
+seed_commit main human fixtures/main.txt "main moved" "test: main"
+BR_TASK=$(git -C "$SEED" rev-parse "origin/deps/cascade:.tasks/cascade/cascade.sh")
+body_with_c() { printf '<!-- cascade-title: %s -->\n<!-- cascade-notes: the bot keeps everything below this line -->\n' "$1" >"$FX/body.in"; }
+body_with_c "fix(deps): bump up to v0.2.0"
+PR=$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/body.in" deps-cascade)
+fresh_checkout
+printf 'v0.3.0\n' >"$TOY_TARGET"
+gh_prs "[$PR]"
+compute "${COMPUTE_STEPS[@]}"
+check "overlay: the merged branch still pushes" test "$RC/$(plan .mode)/$(plan .action)" = "0/merge/push"
+check "overlay: main's task ran, with CASCADE_ALLOW_DIRTY=1, never the branch's" bash -c '
+  grep -qx "task=main allow_dirty=1" "$1" && ! grep -q "the branch.s task ran" "$1"' _ "$TOY_TASK_LOG"
+check "overlay: the bot's commit leaves the task tree as the branch has it" bash -c '
+  [ "$(git -C "$1" rev-parse "HEAD:.tasks/cascade/cascade.sh")" = "$2" ] && git -C "$1" cat-file -e "HEAD:.tasks/cascade/extra.txt" &&
+  [ -z "$(git -C "$1" diff --name-only HEAD^ HEAD -- .tasks Taskfile.yml)" ] && [ "$(git -C "$1" show HEAD:UPSTREAM_VERSION)" = v0.3.0 ]' _ "$WS/repo" "$BR_TASK"
+
 # Derived-file conflict: main's side wins, the merge commits.
 new_fx; mk_toy
 seed_commit main human go.mod "module x // main 1" "build: go.mod"

@@ -79,7 +79,7 @@ on:
         required: false
         default: true
       cue-version:
-        description: The CUE version setup-cue installs
+        description: The CUE version to install; only a version whose sha256 is in wiring/install-tools.sh
         type: string
         required: false
         default: v0.17.1
@@ -160,16 +160,13 @@ jobs:
           go-version-file: repo/go.mod
           cache: false
 
-      - name: Set up CUE
-        if: inputs.setup-cue
-        uses: cue-lang/setup-cue@a93fa358375740cd8b0078f76355512b9208acb1 # v1.0.1
-        with:
-          version: ${{ inputs.cue-version }}
-
-      - name: Set up Task
-        uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
-        with:
-          version: 3.x
+      # Task, and CUE unless setup-cue is false, at fixed versions whose
+      # sha256 .github holds (wiring/install-tools.sh); a cue-version without
+      # a checksum there fails here, before any repo code runs.
+      - name: Set up Task and CUE
+        env:
+          CUE_INPUT: ${{ inputs.setup-cue && inputs.cue-version || 'none' }}
+        run: bash org-github/.github/scripts/cascade/wiring/install-tools.sh "$CUE_INPUT"
 
       - name: Init
         id: init
@@ -293,6 +290,7 @@ jobs:
           path: |
             ${{ runner.temp }}/cascade/plan.json
             ${{ runner.temp }}/cascade/body.md
+            ${{ runner.temp }}/cascade/warnings.tsv
             ${{ runner.temp }}/cascade/cascade.bundle
             ${{ runner.temp }}/cascade/diff.patch
           if-no-files-found: error

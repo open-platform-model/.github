@@ -319,13 +319,25 @@ step_run() {
   [ -z "$(g status --porcelain --untracked-files=all)" ] || die "the repo tree is dirty before the task runs"
   local -a penv=()
   mapfile -t penv < <(payload_env)
+  # A merged branch runs main's task, never the branch tip's: when the
+  # branch changed .tasks/ or a root Taskfile, main's versions go into the
+  # work tree (git restore also removes branch-only files there), the task
+  # runs with CASCADE_ALLOW_DIRTY=1, and the commit leaves those paths out.
+  # They stay in the work tree for text, so pins.sh and the body task are
+  # main's too; every later step reads commits.
+  local -a task_paths=(.tasks ':(glob)Taskfile*')
+  if [ "$mode" = merge ] && ! g diff --quiet origin/main HEAD -- "${task_paths[@]}"; then
+    g restore --source=origin/main --worktree -- "${task_paths[@]}"
+    penv+=(CASCADE_ALLOW_DIRTY=1)
+    echo "the branch changes the cascade task; running main's"
+  fi
   repo_task deps:cascade "${penv[@]}" || rc=$?
   case "$rc" in
     0)
       dirty=$(title_of)
       [ -n "$dirty" ] || die "the task changed the tree but the title sees no diff"
       lint_text "commit subject" "$dirty" || die "the commit subject fails the mention lint"
-      g add -A
+      g add -A -- . ':(exclude).tasks' ':(exclude,glob)Taskfile*'
       bot_git commit -q -m "$dirty"
       computed=$(title_of)
       [ "$computed" = "$dirty" ] || die "the title after the commit (\`$computed\`) differs from the title before it (\`$dirty\`)"
@@ -391,6 +403,11 @@ step_text() {
   [ -z "$(st_get extra)" ] || benv+=("CASCADE_EXTRA_SOURCES=$(st_get extra)")
   [ ! -f "$T/notes.md" ] || benv+=("CASCADE_NOTES_FILE=$T/notes.md")
   repo_task deps:cascade:body "${benv[@]}" >"$T/body.md" || die "task -x deps:cascade:body failed"
+  # The task's warnings travel with the plan: publish renders the body
+  # itself and filters them line by line.
+  local wf
+  wf="$(g rev-parse --absolute-git-dir)/cascade/warnings"
+  if [ -f "$wf" ]; then cp -- "$wf" "$T/warnings.tsv"; else : >"$T/warnings.tsv"; fi
   if [ "$(wc -c <"$T/body.md")" -gt "$BODY_MAX" ]; then st_set too_long 1; else st_set too_long 0; fi
 
   local has_pr=0 old_title=""

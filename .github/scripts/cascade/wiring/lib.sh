@@ -238,6 +238,210 @@ is_derived_path() {
   return 1
 }
 
+# --- what publish accepts from compute ----------------------------------------
+# The bot's own commits may change only the files the receiver's task writes.
+# The lists are read from each receiver's .tasks/cascade/cascade.sh on main
+# (catalog_opm 3288406, library 93a892f, opm-operator 6a14adb, cli 5f00930,
+# 2026-10-04) and live here, never in the receiver's tree, because publish
+# trusts only this SHA-pinned code. A receiver whose task starts writing
+# another file needs this list changed, and its pin moved, first.
+
+# publish_paths <receiver>: the anchored EREs of the paths its task writes.
+# cue.mod/module.cue at any depth: only module versions live there, which is
+# what the cascade moves, and the receivers' module lists change often.
+publish_paths() {
+  case "$1" in
+    catalog_opm) printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^\.opm-cli-version$' ;;
+    library)
+      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^opm/schema/loader\.go$' '^docs/getting-started\.md$' '^AGENTS\.md$'
+      ;;
+    opm-operator)
+      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^\.opm-cli-version$' \
+        '^config/samples/opmodel\.dev_v1alpha1_(platform|moduleinstance)\.yaml$' '^test/fixtures/catalog\.go$' \
+        '^test/fixtures/(modules/[^/]+|catalogs/provider)/identity/identity\.cue$' \
+        '^test/fixtures/modules/[^/]+/moduleinstance\.yaml$'
+      ;;
+    cli)
+      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/operator/(manifest\.go|dist/install\.yaml)$' \
+        '^hack/kind-platform\.yaml$' '^(templates/[^/]+|tests/fixtures/modules/podinfo)/identity/identity\.cue$'
+      ;;
+    cascade-sandbox-down) printf '%s\n' '^UPSTREAM_VERSION$' '^fixtures/' ;;
+    *) return 1 ;;
+  esac
+}
+
+# publish_denied <receiver> <path>: exit 0 for a path no bot commit may ever
+# change, whatever publish_paths says: workflow and action code, the task
+# code, scripts, code owners, the release configs and the steering files.
+# cli's two hack/ data files (the kind Platform and its catalog pins) are the
+# only exception; hack/ holds Go programs and scripts otherwise.
+publish_denied() {
+  case "$1:$2" in cli:hack/kind-platform.yaml | cli:hack/platform/cue.mod/module.cue) return 1 ;; esac
+  case "$2" in .github/* | .tasks/* | hack/* | *.sh | release-please-config.json | .release-please-manifest.json) return 0 ;; esac
+  case "${2##*/}" in Taskfile* | CODEOWNERS | .cascade-frozen | .cascade-hold) return 0 ;; esac
+  return 1
+}
+
+# publish_path_ok <receiver> <path>: exit 0 when a bot commit may change it.
+publish_path_ok() {
+  local re
+  ! publish_denied "$1" "$2" || return 1
+  while IFS= read -r re; do
+    [[ $2 =~ $re ]] && return 0
+  done < <(publish_paths "$1")
+  return 1
+}
+
+# receiver_classes <receiver>: the receiver's .tasks/cascade/classes, as on
+# main (same commits as above), for the title and body publish renders.
+receiver_classes() {
+  case "$1" in
+    catalog_opm) printf '%s\n' 'release-tool .opm-cli-version' 'shipped src/' ;;
+    library) printf '%s\n' 'test testdata/' 'test modules/' 'test *_test.go' ;;
+    opm-operator)
+      printf '%s\n' 'release-tool .opm-cli-version' 'test config/samples/' 'test test/' 'test **/testdata/' 'test *_test.go'
+      ;;
+    cli)
+      printf '%s\n' 'test hack/platform/' 'test hack/kind-platform.yaml' 'test examples/' 'test tests/' \
+        'test **/testdata/' 'test *_test.go'
+      ;;
+    cascade-sandbox-down) printf '%s\n' 'shipped UPSTREAM_VERSION' 'test fixtures/' ;;
+    *) return 1 ;;
+  esac
+}
+
+# The pin report of each receiver's .tasks/cascade/pins.sh, as on main (same
+# commits as above), reading only `git show <ref>:<path>`: one TSV row per pin,
+# <pin-key> <display> <class> <version> <labels>. Each parser copies the
+# receiver's own, quirks included, so publish names the same pins as compute.
+
+# pin_blob <ref> <path>: prints the file at the ref; exit 1 when it is not a
+# file there.
+pin_blob() {
+  [ "$(git cat-file -t "$1:$2" 2>/dev/null)" = blob ] || return 1
+  git show "$1:$2"
+}
+
+PIN_SEMVER_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+pins_catalog_opm() {
+  local ref="$1" mod v cli key=opmodel.dev/core@v2
+  if mod=$(pin_blob "$ref" src/cue.mod/module.cue) && grep -qF "\"$key\"" <<<"$mod"; then
+    v=$(grep -FA5 "\"$key\"" <<<"$mod" | grep -m1 -oP 'v:\s*"\K[^"]+') || die "src/cue.mod/module.cue at $ref: no v: under \"$key\""
+    [[ $v =~ $PIN_SEMVER_RE ]] || die "src/cue.mod/module.cue at $ref: \"$key\" pins a malformed version: $v"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$key" core shipped "$v" ""
+  fi
+  if cli=$(pin_blob "$ref" .opm-cli-version); then
+    [[ $cli =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || die ".opm-cli-version at $ref is not one line holding a CLI tag"
+    printf '%s\t%s\t%s\t%s\t%s\n' github.com/open-platform-model/cli "opm CLI" release-tool "$cli" ""
+  fi
+}
+
+pins_library() {
+  local ref="$1" f core="" catalog=""
+  if f=$(pin_blob "$ref" opm/schema/loader.go); then
+    core=$({ grep -oP 'DefaultSchemaModule = "opmodel\.dev/core@\K[^"]+' <<<"$f" || [ $? -eq 1 ]; } | head -n1)
+  fi
+  if f=$(pin_blob "$ref" testdata/parity/cue.mod/module.cue); then
+    catalog=$(awk -v key='"opmodel.dev/catalogs/opm@v4": {' '
+      { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t]+$/, "", t) }
+      done { next }
+      t == key { inb = 1; next }
+      inb && t ~ /^v:[ \t]*"/ { v = t; sub(/^v:[ \t]*"/, "", v); sub(/".*$/, "", v); print v; done = 1; next }
+      inb && t ~ /^}/ { done = 1 }' <<<"$f")
+  fi
+  if [ -n "$core" ]; then
+    [[ $core =~ $PIN_SEMVER_RE ]] || die "opmodel.dev/core@v2 at $ref reads '$core', not a v-prefixed version"
+    printf '%s\t%s\t%s\t%s\t%s\n' opmodel.dev/core@v2 core shipped "$core" need-human-review
+  fi
+  if [ -n "$catalog" ]; then
+    [[ $catalog =~ $PIN_SEMVER_RE ]] || die "opmodel.dev/catalogs/opm@v4 at $ref reads '$catalog', not a v-prefixed version"
+    printf '%s\t%s\t%s\t%s\t%s\n' opmodel.dev/catalogs/opm@v4 "opm catalog" test "$catalog" ""
+  fi
+}
+
+pins_opm_operator() {
+  local ref="$1" f v
+  # op_row KEY DISPLAY CLASS FILE VERSION: as the operator's row(), an
+  # invalid or empty version is an error.
+  op_row() {
+    [[ $5 =~ $PIN_SEMVER_RE ]] || die "$4: no valid version for $1 (read '$5')"
+    printf '%s\t%s\t%s\t%s\t\n' "$1" "$2" "$3" "$5"
+  }
+  if f=$(pin_blob "$ref" go.mod); then
+    v=$(awk -v m=github.com/open-platform-model/library '
+      $1 == "replace" || $2 == "=>" { next }
+      $1 == "require" && $2 == m { print $3; exit }
+      $1 == m { print $2; exit }' <<<"$f")
+    op_row github.com/open-platform-model/library library shipped go.mod "$v"
+  fi
+  if f=$(pin_blob "$ref" config/samples/opmodel.dev_v1alpha1_platform.yaml); then
+    v=$(awk -v k=opmodel.dev/catalogs/opm@v4: '
+      index($0, k) { f = 1; next }
+      f && /^[[:space:]]*version:/ { v = $0; sub(/^[[:space:]]*version:[[:space:]]*/, "", v); gsub(/"/, "", v); print v; exit }' <<<"$f")
+    op_row opmodel.dev/catalogs/opm@v4 "opm catalog" test config/samples/opmodel.dev_v1alpha1_platform.yaml "v$v"
+  fi
+  if f=$(pin_blob "$ref" test/fixtures/modules/hello/cue.mod/module.cue); then
+    v=$(awk -v k='"opmodel.dev/core@v2": {' '
+      index($0, k) { f = 1; next }
+      f && /^[[:space:]]*v:/ { if (match($0, /"[^"]+"/)) print substr($0, RSTART + 1, RLENGTH - 2); exit }
+      f && /}/ { exit }' <<<"$f")
+    op_row opmodel.dev/core@v2 core test test/fixtures/modules/hello/cue.mod/module.cue "$v"
+  fi
+  if f=$(pin_blob "$ref" .opm-cli-version); then
+    v=$(tr -d '[:space:]' <<<"$f")
+    op_row github.com/open-platform-model/cli "opm CLI" release-tool .opm-cli-version "$v"
+  fi
+}
+
+pins_cli() {
+  local ref="$1" f
+  # cli_row KEY DISPLAY VERSION: as the cli's row(), empty is no row.
+  cli_row() {
+    [ -n "$3" ] || return 0
+    [[ $3 =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || die "$1: not a v-prefixed version: $3"
+    printf '%s\t%s\tshipped\t%s\t\n' "$1" "$2" "$3"
+  }
+  # cli_dep KEY: the v: of KEY's block in the module.cue on stdin.
+  cli_dep() {
+    awk -v k="\"$1\": {" '
+      index($0, k) { f = 1; next }
+      f && /^[[:space:]]*v:/ { match($0, /"[^"]*"/); print substr($0, RSTART + 1, RLENGTH - 2); exit }
+      f && /^[[:space:]]*}/ { exit }'
+  }
+  if f=$(pin_blob "$ref" go.mod); then
+    cli_row github.com/open-platform-model/library library \
+      "$(awk -v m=github.com/open-platform-model/library '$1 == m {print $2; exit}' <<<"$f")"
+  fi
+  if f=$(pin_blob "$ref" internal/operator/manifest.go); then
+    cli_row github.com/open-platform-model/opm-operator opm-operator \
+      "$(sed -n 's/^const PinnedOperatorVersion = "\(.*\)"$/\1/p' <<<"$f")"
+  fi
+  if f=$(pin_blob "$ref" templates/minimal/cue.mod/module.cue); then
+    cli_row opmodel.dev/catalogs/opm@v4 "opm catalog" "$(cli_dep opmodel.dev/catalogs/opm@v4 <<<"$f")"
+    cli_row opmodel.dev/core@v2 core "$(cli_dep opmodel.dev/core@v2 <<<"$f")"
+  fi
+}
+
+pins_sandbox() {
+  local v
+  v=$(pin_blob "$1" UPSTREAM_VERSION) || return 0
+  printf '%s\t%s\t%s\t%s\t%s\n' github.com/open-platform-model/cascade-sandbox-up up shipped "$v" ""
+}
+
+# receiver_pins <receiver> <commit>: the receiver's pin report at the commit,
+# run from inside its checkout.
+receiver_pins() {
+  case "$1" in
+    catalog_opm) pins_catalog_opm "$2" ;;
+    library) pins_library "$2" ;;
+    opm-operator) pins_opm_operator "$2" ;;
+    cli) pins_cli "$2" ;;
+    cascade-sandbox-down) pins_sandbox "$2" ;;
+    *) return 1 ;;
+  esac
+}
+
 # --- tokens and repo code -----------------------------------------------------
 
 # run_repo_code <command...>: runs code from the calling repo (its tasks, its
@@ -291,7 +495,7 @@ git_read() {
 # joined) and P_EXPECT set, or exit 1 with P_REASON. Unknown keys are
 # ignored. Exit 2 when the receiver is not a cascade receiver.
 validate_payload() {
-  local recv="$1" json="$2" allowed src re n last
+  local recv="$1" json="$2" allowed src n last
   P_SOURCE="" P_TAGS="" P_EXPECT="" P_REASON=""
   allowed=$(receiver_sources "$recv") || return 2
   if ! jq -e 'type == "object"' <<<"$json" >/dev/null 2>&1; then
@@ -311,9 +515,19 @@ validate_payload() {
     P_REASON="tags is not an array of 1 to 8 strings"
     return 1
   fi
-  re=$(tag_re "$src")
-  n=$(jq --arg re "$re" --arg rre "$RESOLVER_TAG_RE" '[.tags[] | select((test($re) and test($rre)) | not)] | length' <<<"$json") \
-    || { P_REASON="tags cannot be checked"; return 1; }
+  # A control character anywhere (a newline above all) refuses the payload:
+  # jq's regex $ matches before a final newline, and command substitution
+  # drops trailing ones, so "v1.0.0\n" would otherwise pass as v1.0.0.
+  if ! jq -e '[.source, .tags[]] | all(explode | all(. >= 32 and . != 127))' <<<"$json" >/dev/null 2>&1; then
+    P_REASON="the source or a tag holds a control character"
+    return 1
+  fi
+  # Each tag whole, NUL-delimited, through valid_tag's anchored bash match.
+  local t
+  n=0
+  while IFS= read -r -d '' t; do
+    valid_tag "$src" "$t" || n=$((n + 1))
+  done < <(jq -j '.tags[] | ., "\u0000"' <<<"$json")
   if [ "$n" != 0 ]; then
     P_REASON="$n tag(s) do not match the $(safe_text "$src") tag shape"
     return 1

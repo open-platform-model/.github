@@ -45,16 +45,30 @@ newest_in_major() {
 }
 
 # probe_first <limit> <version>...: sets FOUND to the first published one of
-# at most <limit> versions, and PROBED to how many were checked.
+# at most <limit> versions, and PROBED to how many were checked. For a pin
+# whose versions are tags of an org repo (tag_source), a published version
+# counts only when its tag is on that repo's main; any other is skipped with
+# a warning.
 probe_first() {
-  local limit="$1" v
+  local limit="$1" v src="" prefix=""
   shift
   FOUND="" PROBED=0
+  if tag_source "$PIN_KEY" >/dev/null; then read -r src prefix <<<"$(tag_source "$PIN_KEY")"; fi
   for v in "$@"; do
     [ "$PROBED" -lt "$limit" ] || return 0
     PROBED=$((PROBED + 1))
     check_published "$v" || die "\`$PIN_KEY\` is unknown on GHCR or private; a pinned package must exist"
-    if [ "$PUB" = 1 ]; then FOUND="$v"; return 0; fi
+    if [ "$PUB" = 1 ]; then
+      if [ -n "$src" ]; then
+        on_main "$src" "$prefix$v"
+        if [ "$ONMAIN" != 1 ]; then
+          warn "$PIN_KEY" "\`$v\` is published but its tag is not on \`$src\` main; skipped"
+          continue
+        fi
+      fi
+      FOUND="$v"
+      return 0
+    fi
     note "skip \`$v\`: not published yet"
   done
 }

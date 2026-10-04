@@ -26,6 +26,72 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
+# The tag-on-main check (lib/release.sh on_main): `clone --bare ... <url>
+# <dir>` makes a local bare repo with one commit on main; `fetch ... origin
+# +refs/tags/<t>:refs/tags/<t>` in it creates the tag on main, or on a commit
+# main never had when <t> is a line of $CASCADE_FIXTURE_DIR/git/<repo>.offmain,
+# or fails like a missing remote ref when <t> is a line of <repo>.missing.
+# <repo>.clone.fail and <repo>.fetch.fail fail like an unreachable remote,
+# with the counting of <repo>.refs.fail. Both log to git.log, and clone logs
+# its options, environment and the config real git would see like ls-remote.
+shim_fail() { # shim_fail <marker file>: exit 0 when this call must fail
+  local m="$1" n used=0
+  [ -e "$m" ] || return 1
+  n=$(cat "$m")
+  [ ! -f "$m.used" ] || used=$(cat "$m.used")
+  echo $((used + 1)) >"$m.used"
+  [ -z "$n" ] || [ "$used" -lt "$n" ]
+}
+cdir=""
+for ((i = 0; i < ${#opts[@]}; i += 2)); do
+  if [ "${opts[i]}" = -C ]; then cdir="${opts[i + 1]}"; fi
+done
+if [ "${1:-}" = clone ] || { [ "${1:-}" = fetch ] && [ -n "$cdir" ] && [ -f "$cdir/cascade-shim-repo" ]; }; then
+  dir="${CASCADE_FIXTURE_DIR:?CASCADE_FIXTURE_DIR is not set}"
+  printf 'git %s\n' "$*" >>"$dir/git.log"
+  sub="$1"
+  shift
+  args=()
+  for x in "$@"; do case "$x" in -*) ;; *) args+=("$x") ;; esac; done
+  export GIT_AUTHOR_NAME=shim GIT_AUTHOR_EMAIL=shim@example.invalid GIT_COMMITTER_NAME=shim GIT_COMMITTER_EMAIL=shim@example.invalid
+  if [ "$sub" = clone ]; then
+    printf 'opts=%s\n' "${opts[*]}" >>"$dir/git-clone.opts"
+    printf 'GIT_TERMINAL_PROMPT=%s GIT_CONFIG_NOSYSTEM=%s GIT_CONFIG_GLOBAL=%s GIT_CONFIG_PARAMETERS=%s GIT_CONFIG_COUNT=%s GIT_ASKPASS=%s GIT_DIR=%s\n' \
+      "${GIT_TERMINAL_PROMPT-unset}" "${GIT_CONFIG_NOSYSTEM-unset}" "${GIT_CONFIG_GLOBAL-unset}" \
+      "${GIT_CONFIG_PARAMETERS-unset}" "${GIT_CONFIG_COUNT-unset}" "${GIT_ASKPASS-unset}" "${GIT_DIR-unset}" >>"$dir/git-clone.env"
+    "$real" "${opts[@]}" config --get-regexp '^(credential\.helper|http\..*extraheader)$' >>"$dir/git-clone.config" 2>/dev/null || true
+    url="" dest="${args[${#args[@]} - 1]:-}"
+    for x in "${args[@]}"; do case "$x" in https://*) url="$x" ;; esac; done
+    repo="${url##*/}"
+    case "$url" in https://github.com/open-platform-model/*) ;; *) echo "git shim: clone of $url" >&2; exit 128 ;; esac
+    if shim_fail "$dir/git/$repo.clone.fail"; then echo "fatal: unable to access '$url'" >&2; exit 128; fi
+    case "$dest" in /*) ;; *) dest="$cdir/$dest" ;; esac
+    "$real" init -q --bare "$dest" && printf '%s\n' "$repo" >"$dest/cascade-shim-repo" || exit 128
+    tree=$("$real" -C "$dest" mktree </dev/null)
+    c=$("$real" -C "$dest" commit-tree "$tree" -m main </dev/null)
+    "$real" -C "$dest" update-ref refs/heads/main "$c"
+    "$real" -C "$dest" symbolic-ref HEAD refs/heads/main
+    exit 0
+  fi
+  d="$cdir"
+  repo=$(cat "$d/cascade-shim-repo")
+  if shim_fail "$dir/git/$repo.fetch.fail"; then echo "fatal: unable to access 'https://github.com/open-platform-model/$repo'" >&2; exit 128; fi
+  spec="${args[${#args[@]} - 1]:-}"
+  tag="${spec#+refs/tags/}"
+  tag="${tag%%:*}"
+  if [ -f "$dir/git/$repo.missing" ] && grep -qxF -- "$tag" "$dir/git/$repo.missing"; then
+    echo "fatal: couldn't find remote ref refs/tags/$tag" >&2
+    exit 128
+  fi
+  if [ -f "$dir/git/$repo.offmain" ] && grep -qxF -- "$tag" "$dir/git/$repo.offmain"; then
+    tree=$("$real" -C "$d" mktree </dev/null)
+    c=$("$real" -C "$d" commit-tree "$tree" -m "forged $tag" </dev/null)
+  else
+    c=$("$real" -C "$d" rev-parse refs/heads/main)
+  fi
+  "$real" -C "$d" update-ref "refs/tags/$tag" "$c"
+  exit 0
+fi
 if [ "${1:-}" = ls-remote ]; then
   dir="${CASCADE_FIXTURE_DIR:?CASCADE_FIXTURE_DIR is not set}"
   printf 'git %s\n' "$*" >>"$dir/git.log"

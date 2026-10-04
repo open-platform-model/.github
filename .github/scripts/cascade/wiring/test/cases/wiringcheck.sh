@@ -223,6 +223,32 @@ wc_mut "the Environment as a map" ci.yml '.jobs.ci.environment = {"name": "CASCA
 wc_mut "the Environment as an expression" ci.yml '.jobs.ci.environment = "${{ vars.E }}"' "cascade Environment jobs"
 wc_mut "secrets: inherit into .github" cascade-gates.yml '.jobs.gates.secrets = "inherit"' "calls into .github that pass secrets"
 
+# --- the release key ----------------------------------------------------------
+RP_KEY='.jobs.release-please.steps += [{"uses": "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1", "with": {"client-id": "${{ vars.RELEASE_APP_CLIENT_ID }}", "private-key": "${{ secrets.RELEASE_APP_PRIVATE_KEY }}"}}]'
+wc_fresh
+yq -i "$RP_KEY | .jobs.release-please.environment = \"release\"" "$WCD/.github/workflows/release.yml"
+wc_ok "the release-please job reads the release key under environment: release"
+wc_fresh
+yq -i '.jobs.release-please.environment = "release" | .jobs.release-please.steps[0].env.K = "${{ secrets . release_app_private_key }}"' "$WCD/.github/workflows/release.yml"
+wc_ok "the key in lower case with spaces under environment: release"
+wc_mut "the release key without environment: release" release.yml "$RP_KEY" \
+  "release key readers without environment: release: expected [], got [release.yml:release-please]"
+wc_mut "the release key under environment: Release" release.yml "$RP_KEY | .jobs.release-please.environment = \"Release\"" \
+  "release key readers without environment: release"
+wc_mut "the release key under a map Environment" release.yml "$RP_KEY | .jobs.release-please.environment = {\"name\": \"release\"}" \
+  "release key readers without environment: release"
+wc_mut "the release key in an if:" ci.yml '.jobs.ci.steps[0].if = "secrets.RELEASE_APP_PRIVATE_KEY != '"''"'"' \
+  "release key readers without environment: release: expected [], got [ci.yml:ci]"
+wc_mut "the release key in the workflow env" release.yml '.env.K = "${{ secrets.RELEASE_APP_PRIVATE_KEY }}"' \
+  "got [release.yml:<outside a job: env.K>]"
+wc_mut "environment: Release on a job that does not read the key" ci.yml '.jobs.ci.environment = "Release"' \
+  "environment: release on jobs that do not read the release key: expected [], got [ci.yml:ci]"
+wc_mut "a map Environment named release on a job that does not read the key" ci.yml '.jobs.ci.environment = {"name": "RELEASE"}' \
+  "environment: release on jobs that do not read the release key"
+wc_mut "secrets: inherit to another reusable workflow" ci.yml \
+  '.jobs.docs = {"uses": "open-platform-model/docs-kit/.github/workflows/publish.yml@v0.7.0", "secrets": "inherit"}' \
+  "release key readers without environment: release: expected [], got [ci.yml:docs]"
+
 # --- the pin ------------------------------------------------------------------
 wc_sed "two .github SHAs" cascade-gates.yml "s/@$WC_SHA/@$WC_SHA2/" "one .github SHA"
 wc_sed "a resolver checkout at a branch" cascade-task.yml "s/ref: $WC_SHA/ref: main/" "one .github SHA"

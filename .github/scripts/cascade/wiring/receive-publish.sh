@@ -22,7 +22,18 @@
 # $RUNNER_TEMP/cascade; the plan artifact is in $CASCADE_T/plan),
 # CASCADE_REPO_DIR (default $PWD/repo), GH_TOKEN (GITHUB_TOKEN for verify,
 # the App token for act), CASCADE_READ_TOKEN (verify only),
+# CASCADE_EVENT and CASCADE_PAYLOAD (verify: the run's event name and its
+# client_payload as JSON, read from the event, never from compute),
 # CASCADE_LABELS_MANAGED (act; true: labels must already exist).
+#
+# verify bounds what a push may carry: the bot's own commits (at most a merge
+# of main and one task commit, authored and committed by the bot) may change
+# only the receiver's allow-listed paths (publish_paths in lib.sh), and a push
+# never drops a commit the bot did not make. It renders the PR title, body
+# and labels itself, with the resolver and the .github mirror of the
+# receiver's pins.sh and classes (pins.sh here, lib.sh), in a scratch
+# worktree of the new tip under CASCADE_T: compute's body.md and titles are
+# hints only. Every moved pin's release tag must be on its repo's main.
 #
 # verify writes publish=true to GITHUB_OUTPUT, or publish=false (exit 0) when
 # the dry-run input is true or the cascade PR got deps-cascade:hold since
@@ -31,8 +42,8 @@
 # Exit status: 0 success; 1 a refused plan (verify, before any token is
 # minted), a failed push or API call, or the too_long action (act); 2 usage.
 #
-# Tools: bash, coreutils, git, jq, grep -P, base64; gh through
-# "${CASCADE_GH:-gh}".
+# Tools: bash, coreutils, git (2.38 or later, for merge-tree --write-tree),
+# jq, grep -P, base64; gh through "${CASCADE_GH:-gh}".
 set -euo pipefail
 export LC_ALL=C
 CASCADE_SCRIPT=receive-publish.sh
@@ -53,6 +64,246 @@ refuse() { die "refusing the plan: $1"; }
 pj() { jq -r "$1" "$P/plan.json"; }
 
 ACTIONS=" push recreate close conflict too_long "
+RESOLVER="$(cd "$WIRING_DIR/.." && pwd)/cascade-resolve.sh"
+TREE="$T/tree"
+
+# bot_only <range>: exit 0 when every commit in the range has the bot as
+# author and committer.
+bot_only() {
+  local out
+  out=$(g log --format='%ae%x09%ce' "$1") || die "git log $1 failed"
+  ! grep -vxF -- "$BOT_EMAIL"$'\t'"$BOT_EMAIL" <<<"$out" | grep -q .
+}
+
+# check_paths <commit> <parent>: a bot commit changes only allow-listed
+# files, in place: status M, the same mode before and after, a regular file
+# (no symlink 120000, no gitlink 160000).
+check_paths() {
+  local c="$1" p="$2" meta path om nm st
+  while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+    read -r om nm _ _ st <<<"${meta#:}"
+    [ "$st" = M ] || refuse "commit ${c:0:12} adds, deletes or retypes \`$(safe_text "$path")\` (status $(safe_text "$st")); the cascade task only edits files"
+    [ "$om" = "$nm" ] || refuse "commit ${c:0:12} changes the mode of \`$(safe_text "$path")\`"
+    case "$nm" in
+      100644 | 100755) ;;
+      *) refuse "commit ${c:0:12} writes \`$(safe_text "$path")\` as mode $(safe_text "$nm") (a symlink or gitlink)" ;;
+    esac
+    publish_path_ok "$REPO" "$path" || refuse "commit ${c:0:12} changes \`$(safe_text "$path")\`, which the cascade task of $REPO never writes"
+  done < <(g diff-tree -r -z --raw --no-renames "$p" "$c")
+}
+
+# check_merge <commit> <first parent> <second parent>: a bot merge brings
+# main in and nothing else: its tree is git's own merge of its parents, but
+# for derived files, which carry main's content.
+check_merge() {
+  local c="$1" p1="$2" p2="$3" out rc=0 mt path a b
+  g merge-base --is-ancestor "$p2" origin/main || refuse "merge commit ${c:0:12} does not merge main"
+  out=$(g merge-tree --write-tree --no-messages "$p1" "$p2") || rc=$?
+  case "$rc" in 0 | 1) ;; *) refuse "cannot recompute merge commit ${c:0:12} (git merge-tree exited $rc)" ;; esac
+  mt="${out%%$'\n'*}"
+  [[ $mt =~ ^[0-9a-f]{40}$ ]] || refuse "cannot recompute merge commit ${c:0:12}"
+  while IFS= read -r -d '' path; do
+    is_derived_path "$path" || refuse "merge commit ${c:0:12} differs from the merge of its parents in \`$(safe_text "$path")\`"
+    a=$(g rev-parse -q --verify "$c:$path" || true)
+    b=$(g rev-parse -q --verify "$p2:$path" || true)
+    [ "$a" = "$b" ] || refuse "merge commit ${c:0:12} does not take main's \`$(safe_text "$path")\`"
+  done < <(g diff-tree -r -z --name-only --no-renames "$mt" "$c")
+}
+
+# check_increment <action> <old tip>: the bot's own commits in the push (the
+# new tip's commits that neither main nor, for a fast-forward, the old tip
+# has) are at most two, and each passes check_paths or check_merge. A push
+# that replaces the old tip may drop only bot commits. recreate rebuilds the
+# branch on main, so it is refused outright when the old tip holds a commit
+# the bot did not make (close keeps such a branch, and the next run, finding
+# it without a PR, plans recreate).
+check_increment() {
+  local action="$1" old="$2" n c p1 p2 extra ae ce
+  local -a range=(refs/cascade/new ^origin/main)
+  if [ "$action" = recreate ] && [ -n "$old" ]; then
+    bot_only "origin/main..$old" \
+      || refuse "recreate would drop commits on $BRANCH the bot did not make; delete the branch or open a PR from it"
+  elif [ -n "$old" ]; then
+    if g merge-base --is-ancestor "$old" refs/cascade/new; then
+      range+=("^$old")
+    else
+      bot_only "origin/main..$old" || refuse "the push would drop commits on $BRANCH the bot did not make"
+    fi
+  fi
+  n=$(g rev-list --count "${range[@]}")
+  [ "$n" -le 2 ] || refuse "the push adds $n commits; the bot makes at most a merge of main and one task commit"
+  while read -r c p1 p2 extra; do
+    [ -n "$p1" ] || refuse "commit ${c:0:12} is a root commit"
+    [ -z "$extra" ] || refuse "commit ${c:0:12} has more than two parents"
+    IFS=$'\t' read -r ae ce < <(g log -1 --format='%ae%x09%ce' "$c")
+    if [ "$ae" != "$BOT_EMAIL" ] || [ "$ce" != "$BOT_EMAIL" ]; then
+      refuse "commit ${c:0:12} is not the bot's (author $(safe_text "$ae"), committer $(safe_text "$ce"))"
+    fi
+    if [ -n "$p2" ]; then check_merge "$c" "$p1" "$p2"; else check_paths "$c" "$p1"; fi
+  done < <(g rev-list --parents "${range[@]}")
+}
+
+# filter_warnings <in> <out>: the task's warning lines publish lets into the
+# body above the Notes marker: at most 100, each at most 500 printable ASCII
+# bytes or tabs, with no HTML, no Markdown link or image, no URL, no issue
+# reference and no bare mention. A line without a tab gets the key -. One
+# added line counts the dropped ones.
+filter_warnings() {
+  local line n=0 dropped=0 markup='[][<>]'
+  : >"$2"
+  if [ -f "$1" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line%$'\r'}"
+      [ -n "$line" ] || continue
+      if [ "$n" -ge 100 ] || [ "${#line}" -gt 500 ] || [[ $line =~ [^[:print:]$'\t'] ]] || [[ $line =~ $markup ]] \
+        || [[ $line == *://* ]] || [[ $line =~ \#[0-9] ]] || ! lint_text "warning" "$line" 2>/dev/null; then
+        dropped=$((dropped + 1))
+        continue
+      fi
+      [[ $line == *$'\t'* ]] || line="-"$'\t'"$line"
+      printf '%s\n' "$line" >>"$2"
+      n=$((n + 1))
+    done <"$1"
+  fi
+  if [ "$dropped" -gt 0 ]; then
+    printf -- '-\t%s warning line(s) from the task were dropped by the publish filter\n' "$dropped" >>"$2"
+  fi
+}
+
+# resolver_text <title|body> [<flag>...]: the resolver's title or body of the
+# new tip's worktree, with the .github mirrors; stdout is the text.
+resolver_text() {
+  local what="$1"
+  shift
+  env -u CASCADE_WARNINGS -u CASCADE_SOURCE -u CASCADE_TAGS -u CASCADE_NOTES_FILE -u CASCADE_EXTRA_SOURCES \
+    CASCADE_PINS_REPO="$REPO" "${TEXT_ENV[@]}" \
+    "$RESOLVER" "$what" --classes "$V/classes" --pins "$WIRING_DIR/pins.sh" --base origin/main --repo-root "$TREE" "$@"
+}
+
+# mirror_pins: sets FROM and TO (pin key to version) from the mirrored pins
+# at the merge base and at the new tip.
+declare -A FROM=() TO=()
+mirror_pins() {
+  local m pm pw k v
+  FROM=() TO=()
+  m=$(g merge-base origin/main refs/cascade/new) || refuse "no merge base between main and the new tip"
+  pm=$(cd "$TREE" && CASCADE_PINS_REPO="$REPO" "$WIRING_DIR/pins.sh" "$m") || refuse "the pin mirror failed at the merge base"
+  pw=$(cd "$TREE" && CASCADE_PINS_REPO="$REPO" "$WIRING_DIR/pins.sh" HEAD) || refuse "the pin mirror failed at the new tip"
+  while IFS=$'\t' read -r k _ _ v _; do [ -z "$k" ] || FROM[$k]="$v"; done <<<"$pm"
+  while IFS=$'\t' read -r k _ _ v _; do [ -z "$k" ] || TO[$k]="$v"; done <<<"$pw"
+}
+
+# check_tags_on_main: every pin the new tip moves (or adds) to a version that
+# is a release tag of an org repo has that tag on the repo's main, checked
+# here with the resolver's tag-on-main (an anonymous, tree-less clone), not
+# taken from compute, which ran repo code.
+check_tags_on_main() {
+  local k rc
+  for k in "${!TO[@]}"; do
+    [ "${FROM[$k]:-}" != "${TO[$k]}" ] || continue
+    rc=0
+    "$RESOLVER" tag-on-main "$k" "${TO[$k]}" >/dev/null 2>"$V/onmain.err" || rc=$?
+    case "$rc" in
+      0) ;;
+      3) refuse "\`$(safe_text "$k")\` moves to \`$(safe_text "${TO[$k]}")\`, whose tag is not on its repo's main" ;;
+      *) refuse "cannot check the tag of \`$(safe_text "$k")\` \`$(safe_text "${TO[$k]}")\` against main (resolver exit $rc): $(head -c 300 "$V/onmain.err")" ;;
+    esac
+  done
+}
+
+# derive_breaking: sets BRK to yes or no from the mirrored pins (FROM, TO)
+# and the upstream releases (read here, with the job's token), or to unknown
+# when a release list could not be read.
+derive_breaking() {
+  local k from to repo prefix tag brk v c1 c2 unknown=0
+  BRK=no
+  mkdir -p "$V/releases"
+  for k in "${!TO[@]}"; do
+    from="${FROM[$k]:-}" to="${TO[$k]}"
+    [ -n "$from" ] && [ "$from" != "$to" ] || continue
+    read -r repo prefix <<<"$(changelog_source "$k")" || continue
+    [ -n "$repo" ] || continue
+    if [ ! -f "$V/releases/$repo.tsv" ] && [ ! -f "$V/releases/$repo.failed" ]; then
+      if ! gh_ api --paginate "repos/$ORG/$repo/releases" --jq '.[] | select(.draft | not) | [.tag_name, ((.body // "") | test("BREAKING CHANGES"))] | @tsv' \
+        >"$V/releases/$repo.tsv"; then
+        rm -f "$V/releases/$repo.tsv"
+        : >"$V/releases/$repo.failed"
+      fi
+    fi
+    if [ -f "$V/releases/$repo.failed" ]; then unknown=1; continue; fi
+    while IFS=$'\t' read -r tag brk; do
+      [ -n "$tag" ] && [[ $tag == "$prefix"* ]] || continue
+      v="${tag#"$prefix"}"
+      c1=$("$RESOLVER" semver-cmp "$from" "$v" 2>/dev/null) || continue
+      c2=$("$RESOLVER" semver-cmp "$v" "$to" 2>/dev/null) || continue
+      if [ "$c1" = -1 ] && [ "$c2" != 1 ] && [ "$brk" = true ]; then BRK=yes; return 0; fi
+    done <"$V/releases/$repo.tsv"
+  done
+  [ "$unknown" = 0 ] || BRK=unknown
+}
+
+# drop_tree: removes the scratch worktree of the new tip.
+drop_tree() {
+  rm -rf "$TREE"
+  g worktree prune
+}
+
+# derive_text <live PR JSON>: renders the title, body and labels of a push or
+# recreate from .github code into $V; sets COMPUTED_TITLE and LABELS.
+derive_text() {
+  local live="$1" computed planned rc=0 marker_labels l
+  drop_tree
+  g -c core.hooksPath=/dev/null worktree add -q --detach "$TREE" refs/cascade/new >/dev/null 2>&1 \
+    || refuse "cannot check the new tip out"
+  receiver_classes "$REPO" >"$V/classes" || refuse "no classes mirror for $REPO"
+  filter_warnings "$P/warnings.tsv" "$V/warnings.tsv"
+  TEXT_ENV=()
+  if [ "${CASCADE_EVENT:-}" = repository_dispatch ] && validate_payload "$REPO" "${CASCADE_PAYLOAD:-}"; then
+    TEXT_ENV+=("CASCADE_SOURCE=$P_SOURCE" "CASCADE_TAGS=$P_TAGS")
+  fi
+  [ -z "$(extra_sources "$REPO")" ] || TEXT_ENV+=("CASCADE_EXTRA_SOURCES=$(extra_sources "$REPO")")
+  if [ -n "$live" ]; then
+    extract_notes "$V/live-body.md" "$V/notes.md"
+    TEXT_ENV+=("CASCADE_NOTES_FILE=$V/notes.md")
+  fi
+  computed=$(resolver_text title) || rc=$?
+  case "$rc" in
+    0) ;;
+    3) refuse "the new tip has no diff against main" ;;
+    *) refuse "the title of the new tip cannot be computed (resolver exit $rc)" ;;
+  esac
+  resolver_text body --warnings "$V/warnings.tsv" >"$V/body.md" 2>"$V/body.err" \
+    || refuse "the body of the new tip cannot be computed: $(head -c 300 "$V/body.err")"
+  [ "$(wc -c <"$V/body.md")" -le "$BODY_MAX" ] || refuse "the body is over $BODY_MAX bytes; compute should have planned too_long"
+  lint_text "body" "$(body_above_notes "$V/body.md")" || refuse "the body fails the mention lint"
+  planned=$(pj '.title_computed')
+  [ "$planned" = "$computed" ] || echo "::notice::the plan's computed title differs from the one publish derived; publish uses its own"
+  COMPUTED_TITLE="$computed"
+
+  # Labels: deps-cascade, the body's labels marker, and the breaking check.
+  LABELS="deps-cascade"
+  marker_labels=$(sed -n '2s/^<!-- cascade-labels: \(.*\) -->$/\1/p' "$V/body.md")
+  local -a parts=()
+  IFS=, read -r -a parts <<<"$marker_labels" || true
+  for l in "${parts[@]}"; do
+    [ -n "$l" ] || continue
+    is_bot_label "$l" || refuse "the labels marker names \`$(safe_text "$l")\`"
+    [[ ",$LABELS," == *",$l,"* ]] || LABELS="$LABELS,$l"
+  done
+  mirror_pins
+  check_tags_on_main
+  derive_breaking
+  case "$BRK" in
+    yes) LABELS="$LABELS,deps-cascade:breaking" ;;
+    unknown)
+      if jq -e '.labels | index("deps-cascade:breaking")' "$P/plan.json" >/dev/null; then
+        LABELS="$LABELS,deps-cascade:breaking"
+      fi
+      echo "::notice::the breaking check could not read an upstream's releases; the plan's own claim is kept"
+      ;;
+  esac
+  drop_tree
+}
 
 # dry_run_switch: the caller's dry-run input, the receiver's stop switch
 # (CASCADE_DRY_RUN live only at exactly false). Read here, in .github code,
@@ -150,30 +401,33 @@ verify() {
         d2=$(g diff --name-only "$old" refs/cascade/new -- .github/workflows/)
         [ -z "$d2" ] || refuse "the in-place update changes workflow files: ${d2//$'\n'/ }"
       fi
-      # The title, recomputed from the live PR.
-      computed=$(pj '.title_computed')
-      title=$(pj '.title')
-      [[ $computed =~ $COMPUTED_TITLE_RE ]] || refuse "title_computed is not a cascade title"
-      lint_text "computed title" "$computed" || refuse "title_computed fails the mention lint"
+      # What the bot's own commits change, and who made them.
+      check_increment "$action" "$old"
+      # Title, body and labels from .github code; the plan's are hints.
       local has_pr=0 old_title="" marker=""
+      : >"$V/live-body.md"
       if [ -n "$live" ]; then
         has_pr=1
         old_title=$(jq -j .title <<<"$live")
         jq -j '.body // ""' <<<"$live" >"$V/live-body.md"
         marker=$(title_marker "$V/live-body.md")
       fi
+      derive_text "$live"
+      computed="$COMPUTED_TITLE"
       final_title "$has_pr" "$old_title" "$marker" "$computed"
-      [ "$FINAL_TITLE" = "$title" ] || refuse "the planned title does not recompute"
+      title=$(pj '.title')
+      [ "$FINAL_TITLE" = "$title" ] || echo "::notice::the plan's title differs from the one publish derived; publish uses its own"
       printf '%s' "$FINAL_TITLE" >"$V/title"
       printf '%s' "$TITLE_RISE" >"$V/rise"
-      # The body above the Notes marker is the bot's text.
-      [ -f "$P/body.md" ] || refuse "no body.md"
-      [ "$(wc -c <"$P/body.md")" -le "$BODY_MAX" ] || refuse "body.md is over $BODY_MAX bytes"
-      lint_text "body" "$(body_above_notes "$P/body.md")" || refuse "the body fails the mention lint"
-      cp "$P/body.md" "$V/body.md"
       if [ "$TITLE_RISE" = 1 ]; then comment_text title-rise "$(type_scope "$computed")" >"$V/c-title-rise.md"; fi
       ;;
   esac
+
+  # A branch holding a commit the bot did not make is never deleted.
+  : >"$V/keep-branch"
+  if [ "$action" = close ] && [ -n "$old" ] && ! bot_only "origin/main..$old"; then
+    printf 'keep' >"$V/keep-branch"
+  fi
 
   # Labels carried by recreate come from the live PR, not the plan.
   : >"$V/carry"
@@ -202,7 +456,12 @@ verify() {
     [ -f "$c" ] || continue
     lint_text "comment ${c##*/}" "$(cat "$c")" || refuse "a comment fails the mention lint"
   done
-  jq -c '{action, old_tip, new_tip, labels}' "$P/plan.json" >"$V/plan.json"
+  # Labels: derived for a push or recreate; the plan's are only checked above.
+  if [ "$action" = push ] || [ "$action" = recreate ]; then
+    jq -c --arg l "$LABELS" '{action, old_tip, new_tip, labels: ($l | split(","))}' "$P/plan.json" >"$V/plan.json"
+  else
+    jq -c '{action, old_tip, new_tip, labels}' "$P/plan.json" >"$V/plan.json"
+  fi
   printf '%s' "$live_n" >"$V/pr"
   printf 'publish=true\n' >>"$GITHUB_OUTPUT"
   echo "plan verified: $action"
@@ -327,7 +586,9 @@ act() {
         comment "$pr" "$V/c-close.md"
         gh_ pr close "$pr" -R "$ORG/$REPO" >/dev/null || die "cannot close #$pr"
       fi
-      if [ -n "$old" ] && ! push_lease "$old" ":refs/heads/$BRANCH"; then
+      if [ -n "$old" ] && [ -s "$V/keep-branch" ]; then
+        echo "::notice::$BRANCH holds a commit the bot did not make; the branch stays"
+      elif [ -n "$old" ] && ! push_lease "$old" ":refs/heads/$BRANCH"; then
         echo "::warning::the lease delete of $BRANCH was rejected; the branch stays and the next run decides"
       fi
       ;;

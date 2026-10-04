@@ -203,6 +203,83 @@ check "release: ls-remote runs outside the caller's checkout with no credential 
   bash -c 'o=$(cat "$1/git.opts"); [[ $o == "opts=-C "* && $o != *"$2"* && $o == *" -c credential.helper= "* ]]' _ "$FX" "$CK"
 check "release: ls-remote aborts a transfer stalled for 60 seconds" \
   bash -c 'o=$(cat "$1/git.opts"); [[ $o == *" -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60" ]]' _ "$FX"
+check "tag on main: the clone sees no extraheader and no credential helper" \
+  bash -c 'test -f "$1/git-clone.config" && ! grep -v -x "credential.helper " "$1/git-clone.config"' _ "$FX"
+check "tag on main: the clone never prompts and reads no caller config" grep -qxF \
+  "GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_PARAMETERS=unset GIT_CONFIG_COUNT=unset GIT_ASKPASS=unset GIT_DIR=unset" "$FX/git-clone.env"
+check "tag on main: the clone runs outside the caller's checkout, tree-less, main only" \
+  bash -c 'o=$(cat "$1/git-clone.opts"); [[ $o == "opts=-C "* && $o == *" -c credential.helper= "* && $o != *"$2"* ]] &&
+    grep -qF "git clone --bare --quiet --filter=tree:0 --no-tags --single-branch --branch main https://github.com/open-platform-model/opm-operator " "$1/git.log"' _ "$FX" "$CK"
+
+# --- tags on main -------------------------------------------------------------------
+# A tag made with the release App on a commit main never had is still listed
+# by the Go proxy and git; newest skips it for the next published candidate.
+new_fx
+fx_golist "$LIB" v1.0.0 v1.1.0 v1.2.0
+fx_goinfo "$LIB" v1.1.0 v1.2.0
+fx_status "$PROXY/$LIB/v2/@v/list" 404
+echo v1.2.0 >"$FX/git/library.offmain"
+: >"$FX/warnings"
+expect "tag on main: a forged go tag is skipped for the older one" 0 v1.1.0 \
+  "\`v1.2.0\` is published but its tag is not on \`library\` main; skipped" -- \
+  env CASCADE_WARNINGS="$FX/warnings" "$R" newest go "$LIB" --current v1.0.0
+check "tag on main: the warning is keyed by the pin" \
+  grep -qxF $'github.com/open-platform-model/library\t`v1.2.0` is published but its tag is not on `library` main; skipped' "$FX/warnings"
+check "tag on main: one clone, one fetch per probed tag" bash -c '
+  [ "$(grep -c "^git clone " "$1")" = 1 ] && grep -q "^git fetch .*+refs/tags/v1.2.0:refs/tags/v1.2.0$" "$1" && grep -q "^git fetch .*+refs/tags/v1.1.0:refs/tags/v1.1.0$" "$1"' _ "$FX/git.log"
+new_fx
+fx_golist "$LIB" v1.0.0 v1.1.0
+fx_goinfo "$LIB" v1.1.0
+fx_status "$PROXY/$LIB/v2/@v/list" 404
+echo v1.1.0 >"$FX/git/library.missing"
+expect "tag on main: a version with no tag is skipped" 3 "" "\`v1.1.0\` is published but its tag is not on \`library\` main" -- \
+  "$R" newest go "$LIB" --current v1.0.0
+new_fx
+fx_ghcr_file "$OPM_REPO" "$OPM_TAGS"
+fx_published_cue "$OPM_REPO" v4.5.1
+expect "tag on main: the opm catalog is checked as catalog_opm opm-v tags" 0 v4.5.1 -- \
+  "$R" newest cue opmodel.dev/catalogs/opm@v4 --current v4.5.0
+check "tag on main: catalog_opm and its opm- prefix" bash -c '
+  grep -qF "https://github.com/open-platform-model/catalog_opm " "$1" && grep -q "^git fetch .*+refs/tags/opm-v4.5.1:refs/tags/opm-v4.5.1$" "$1"' _ "$FX/git.log"
+new_fx
+fx_ghcr_file "$OPM_REPO" "$OPM_TAGS"
+fx_published_cue "$OPM_REPO" v4.5.1
+touch "$FX/git/catalog_opm.clone.fail"
+expect "tag on main: a clone failing four times is exit 1" 1 "" "failed after 4 attempts" -- \
+  "$R" newest cue opmodel.dev/catalogs/opm@v4 --current v4.5.0
+check "tag on main: the clone was tried 4 times, sleeping 2, 4 and 8" \
+  bash -c '[ "$(grep -c "^git clone" "$1/git.log")" = 4 ] && [ "$(cat "$1/sleep.log")" = $'"'"'2\n4\n8'"'"' ]' _ "$FX"
+new_fx
+fx_golist "$LIB" v1.0.0 v1.1.0
+fx_goinfo "$LIB" v1.1.0
+fx_status "$PROXY/$LIB/v2/@v/list" 404
+echo 1 >"$FX/git/library.fetch.fail"
+expect "tag on main: one failed tag fetch is retried" 0 v1.1.0 "retrying in 2s" -- "$R" newest go "$LIB" --current v1.0.0
+new_fx
+X=example.com/mod
+fx_golist "$X" v0.1.0 v0.2.0
+fx_goinfo "$X" v0.2.0
+fx_status "$PROXY/$X/v2/@v/list" 404
+expect "tag on main: a module outside the org is not checked" 0 v0.2.0 -- "$R" newest go "$X" --current v0.1.0
+check "tag on main: no clone for it" bash -c '! grep -q "^git clone" "$1/git.log" 2>/dev/null' _ "$FX"
+
+# tag-on-main: the same check for one version, which publish repeats.
+new_fx
+expect "tag-on-main: a tag on main" 0 "" -- "$R" tag-on-main "$LIB" v1.1.0
+check "tag-on-main: it fetched that tag" grep -q "^git fetch .*+refs/tags/v1.1.0:refs/tags/v1.1.0$" "$FX/git.log"
+echo v1.2.0 >"$FX/git/library.offmain"
+expect "tag-on-main: a forged tag" 3 "" -- "$R" tag-on-main "$LIB" v1.2.0
+echo v1.3.0 >"$FX/git/library.missing"
+expect "tag-on-main: a missing tag" 3 "" -- "$R" tag-on-main "$LIB" v1.3.0
+new_fx
+expect "tag-on-main: the opm catalog's opm- prefix" 0 "" -- "$R" tag-on-main opmodel.dev/catalogs/opm@v4 v4.6.0
+check "tag-on-main: catalog_opm, opm-v4.6.0" bash -c '
+  grep -qF "https://github.com/open-platform-model/catalog_opm " "$1" && grep -q "^git fetch .*+refs/tags/opm-v4.6.0:refs/tags/opm-v4.6.0$" "$1"' _ "$FX/git.log"
+new_fx
+expect "tag-on-main: a pin with no tag source" 0 "" -- "$R" tag-on-main example.com/mod v0.2.0
+check "tag-on-main: no clone for it" bash -c '! grep -q "^git clone" "$1/git.log" 2>/dev/null' _ "$FX"
+expect "tag-on-main: a malformed version is usage" 2 "" "is not a v-prefixed SemVer version" -- "$R" tag-on-main "$LIB" 1.2
+expect "tag-on-main: one argument is usage" 2 "" -- "$R" tag-on-main "$LIB"
 
 # --- holds --------------------------------------------------------------------------
 new_fx
