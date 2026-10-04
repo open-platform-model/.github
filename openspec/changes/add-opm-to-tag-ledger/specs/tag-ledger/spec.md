@@ -17,7 +17,9 @@ scanned repo SHALL get the same treatment, with no per-repo exceptions:
 
 - every tag is recorded in the ledger;
 - a recorded tag that is deleted or changed is a finding;
-- the org rulesets `tags-immutable`, `tags-create-app-only` and `release-branches` are asserted.
+- the org ruleset `tags-immutable` is asserted, and a missing one is a finding;
+- the org rulesets `tags-create-app-only` and `release-branches` are asserted when they apply to
+  the repo, and a missing one is reported only as a pending warning, not a finding.
 
 The job summary's `Repos:` line SHALL name all six repos. The README's tag-ledger scope SHALL
 list the same six repos as the workflow.

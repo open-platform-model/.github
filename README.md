@@ -74,8 +74,9 @@ local `commit-msg` hook in `core` covers the laptop side.
 
 It also does not rescan an edit. A run required by the org ruleset fires only
 on `opened`, `synchronize` and `reopened`: GitHub ignores the `edited` type
-that `mention-guard.yml` lists, so editing a PR title or body after a run
-starts no new scan. "Re-run jobs" does not help either: it reads the title
+that `mention-guard.yml` lists, so in the other org repos, editing a PR title
+or body after a run starts no new ruleset scan (here in `.github` the workflow
+also runs on its own, where `edited` does fire). "Re-run jobs" does not help either: it reads the title
 and body from the original event (commit messages are listed fresh). For a
 fresh scan of an edited title or body, push a commit, or close and reopen the
 PR.
@@ -125,7 +126,10 @@ It runs daily at 04:17 UTC and on manual dispatch. Each run:
    `tags-immutable` is required now. `tags-create-app-only` and
    `release-branches` are planned: while one does not exist, the run reports
    it as a pending warning in the job summary; once it exists, every
-   assertion below applies to it.
+   assertion below applies to it. All three now exist and apply to every
+   scanned repo, but the script still treats the two planned ones as pending,
+   so a repo dropping out of either is only a warning until they are made
+   required.
 
    | Ruleset | Target | Refs | Rules | Bypass |
    | --- | --- | --- | --- | --- |

@@ -15,7 +15,7 @@ rulesets prevent tag changes, and this workflow notices if prevention fails or i
     (`:73`).
   - It compares against `ledger.tsv`, but only for repos scanned in the run (`:92-98`, `:114`).
   - It appends new rows.
-  - It asserts three org rulesets per repo through `api_get` (`:158-166`), which uses
+  - It checks three org rulesets per repo through `api_get` (`:158-166`), which uses
     `GH_TOKEN` and falls back to an anonymous request on 401/403.
   - Every per-repo step is a plain `for repo in $REPOS` loop (`:69`, `:248`) with no per-repo
     branch.

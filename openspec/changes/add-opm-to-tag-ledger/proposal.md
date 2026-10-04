@@ -13,8 +13,8 @@ missing.
 - The ledger's scan list predates that. `.github/workflows/tag-ledger.yml:47` reads
   `REPOS: core library catalog_opm cli opm-operator`, and `README.md:90-91` repeats the five
   names as the scope.
-- As a result, a moved or deleted `opm` tag, or an `opm` repo that drops out of an org tag
-  ruleset, is never detected. Today `opm` has one tag (`refs/tags/v1.0.0-beta.1`, commit
+- As a result, a moved or deleted `opm` tag, or an `opm` repo that drops out of the org
+  `tags-immutable` ruleset, is never detected. Today `opm` has one tag (`refs/tags/v1.0.0-beta.1`, commit
   `83a4756d`) and the same three org rulesets as `core`: `tags-immutable` (24307318),
   `tags-create-app-only` (24306688) and `release-branches` (24306642), all active. Checked with
   `gh api repos/open-platform-model/opm/rulesets?includes_parents=true` on 2026-10-04.
@@ -45,9 +45,15 @@ in a file this change already edits.
   `.github/scripts/tag-ledger.sh` changes: the script loops over `$REPOS` with no per-repo logic
   (`tag-ledger.sh:69`, `:248`).
   - `opm`'s tags are appended on the next trusted run.
-  - Its three org rulesets are asserted exactly as for the other five.
+  - Its three org rulesets are checked exactly as for the other five: `tags-immutable` is
+    required, so a missing one is a finding; `tags-create-app-only` and `release-branches` are
+    still `pending` in `tag-ledger.sh:250-251`, so a missing one is only a warning and the run
+    stays green.
   - Existing ledger rows are untouched.
 - **README, tag-ledger.** `README.md:90-91` gains `opm` in the scope list.
+- **README, tag-ledger rulesets.** Step 4 of the tag-ledger list gains one sentence: all three
+  rulesets now exist on every scanned repo, but the two planned ones stay pending in the script
+  until a follow-up makes them required.
 - **README, mention-guard Limits.** The paragraph at `README.md:70-73` states that:
   - a ruleset-required run does not re-fire on `edited`;
   - a re-run reads the title and body from the original event, while commit messages are listed
@@ -88,6 +94,11 @@ Not in this change:
     (`tag-ledger.yml:183`). `README.md:116-119` and the header comment at `tag-ledger.yml:14-16`
     still call `tags-create-app-only` and `release-branches` planned, although all three
     rulesets exist.
+  - Make `tags-create-app-only` and `release-branches` required: change `pending` to `required`
+    in `tag-ledger.sh:250-251`, and add an offline case for a missing `tags-create-app-only`.
+    All three rulesets now apply to all six repos (V2 saw 18/18), so the pending state is over;
+    until that change, a repo dropping out of either ruleset is only a warning. It goes with the
+    stale-docs item above, since both come down to the end of the pending state.
   - A committed offline test suite for `tag-ledger.sh` (see above).
 
 ## Capabilities
@@ -104,7 +115,7 @@ None.
 
 ## Impact
 
-- **Files:** `.github/workflows/tag-ledger.yml` (one line), `README.md` (two paragraphs) and this
+- **Files:** `.github/workflows/tag-ledger.yml` (one line), `README.md` (three paragraphs) and this
   change's artifacts.
 - **Affected workflows and scripts:** `tag-ledger.yml` (job `tag-ledger`, scheduled daily at
   04:17 UTC and `workflow_dispatch`) and `tag-ledger.sh`, unchanged.
