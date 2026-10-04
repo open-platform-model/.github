@@ -1,7 +1,7 @@
 ## Context
 
-The interface is already fixed. The Phase 2 cascade contract (version 1, committed verbatim
-with this change as `contract.md` so it archives with it, cited below as "contract §N") defines the resolver's subcommands,
+The interface is already fixed. The Phase 2 cascade contract (version 1 committed verbatim,
+then version 1.1 adding the supervisor's §11 clarifications, with this change as `contract.md` so it archives with it, cited below as "contract §N") defines the resolver's subcommands,
 exit codes, query kinds, file schemas, title and body format, the stub and the test cases, and
 four repo changes are being written against it in parallel. This design does not reopen any of
 that. It records how the code is laid out, which existing code it borrows from, and where it
@@ -295,16 +295,18 @@ Two clarifications of contract §2.9, reported to the supervisor:
 
 ### Notes pass through
 
-**Context**: contract §4.4 and §9.13 neutralize a mention in Notes by inserting U+200D after the
-`@`. Workspace RELEASING.md, section "Title from diff class", says the body has "a `## Notes`
-section the bot never edits". §9.13 is a supervisor choice not confirmed by the owner, and the
-contract preamble says RELEASING.md wins.
-**Decision**: Notes are copied byte for byte, not edited and not linted. The lint covers the
-title and every body line above the `cascade-notes` marker.
-**Rationale**: it follows RELEASING.md. A human mention in Notes is human text that
-mention-guard reports on the PR body (advisory for a bot-authored PR) and that never reaches
-`main` under the `BLANK` squash message. Reported to the supervisor as a contract conflict; if
-the owner wants neutralization, RELEASING.md changes first and the body gains it in a follow-up.
+**Context**: contract version 1 §4.4 and §9.13 neutralize a mention in Notes by inserting
+U+200D after the `@`. Workspace RELEASING.md, section "Title from diff class", says the body has
+"a `## Notes` section the bot never edits", and also that the bot lints the body for a bare
+`@word`.
+**Decision**: the supervisor settled it as contract §11 C1: Notes are copied byte for byte, not
+edited and not linted. The lint covers the title and every body line above the `cascade-notes`
+marker, and RELEASING.md is amended (workspace branch) to say "lints the title and the body
+above the Notes marker".
+**Rationale**: the bot never rewrites human text. mention-guard still checks the whole PR body
+on `opened` and `synchronize`, so a bare mention a human types in Notes fails mention-guard on
+the bot's next push; C1 accepts that. The body never reaches `main` under the `BLANK` squash
+message.
 
 ### Contract §9 choices recorded
 
@@ -316,7 +318,7 @@ the owner wants neutralization, RELEASING.md changes first and the body gains it
 - §9.5: `published oci` exists for the cli's docs-bundle check, which warns and never holds; the
   tag is used exactly as given (`docs/library:1.0.0-beta.3`).
 - §9.8: `deps-cascade:breaking` is not computed here.
-- §9.13: not followed; see "Notes pass through".
+- §9.13: superseded by contract §11 C1; see "Notes pass through".
 
 ### Unknown or private GHCR packages
 
@@ -340,9 +342,10 @@ mode `templates.sh` already documents.
   codes or output needs a contract revision and the stub checksum in every copy.
 - **Title and body in one place** (contract §9.1) means repo S5 tests need this resolver
   merged first; the merge order in contract §10 puts `.github` first.
-- **Notes pass through** unchanged, so a human mention there stays a live mention each time the
-  bot re-posts the body. Whether GitHub notifies again on an edit that keeps the same mention was
-  not verified here; the body never reaches `main` either way.
+- **Notes pass through** unchanged (contract §11 C1), so a human mention there stays a live
+  mention each time the bot re-posts the body, and mention-guard fails on the bot's next push
+  until a human removes it. Whether GitHub notifies again on an edit that keeps the same mention
+  was not verified here; the body never reaches `main` either way.
 - **README edits overlap** the sibling branch `docs/mention-guard-blank-squash`, which rewrites
   the mention-guard part of `README.md` and `mention-guard.yml`. The cascade section is appended
   after the `tag-ledger` section so the two merge cleanly; whichever merges second reruns

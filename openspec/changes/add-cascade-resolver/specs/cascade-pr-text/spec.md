@@ -144,7 +144,7 @@ Changed files: <s> shipped, <t> test, <r> release-tool.
 - `<notes>` SHALL be the content of `CASCADE_NOTES_FILE`, byte for byte, when it is set and
   non-empty (a final newline added if missing); otherwise the body SHALL end with the marker
   line. Notes SHALL NOT be edited or linted (workspace RELEASING.md, section "Title from diff
-  class": a `## Notes` section the bot never edits).
+  class": a `## Notes` section the bot never edits; Phase 2 cascade contract §11 C1).
 
 #### Scenario: Labels from moved pins
 

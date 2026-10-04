@@ -1,8 +1,8 @@
 Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.sh` under
 `.github/scripts/` and on `test/shim/{curl,git}`; `actionlint`; `bash
 .github/scripts/cascade/test/run.sh`; `openspec validate --all --strict`. All run offline.
-Interface source: Phase 2 cascade contract, version 1, committed with this change as
-`contract.md` and cited as "contract §N". Departures from it are listed in `design.md`.
+Interface source: Phase 2 cascade contract, version 1.1 (version 1 plus the §11
+clarifications), committed with this change as `contract.md` and cited as "contract §N". Departures from it are listed in `design.md`.
 
 ## 1. Resolver core, steering files, stub and the CI check
 
@@ -34,8 +34,8 @@ Interface source: Phase 2 cascade contract, version 1, committed with this chang
 ## 4. Cascade PR title and body
 
 - [x] 4.1 Add `lib/classify.sh` and wire `classify --classes FILE`: the five pattern forms of contract §4.1, first match wins, unmatched is `shipped`, unknown class or a pattern of no known form exit 1
-- [x] 4.2 Add `lib/title.sh`: base ref from `--base`, `CASCADE_BASE` or `origin/main`; merge-base; changed paths (diff plus untracked, not ignored); moved pins from `pins.sh <merge-base>` against `pins.sh WORKTREE`; type and subject per contract §4.3; exit 3 on an empty diff
-- [x] 4.3 Add `lib/body.sh`: the exact layout in the `cascade-pr-text` spec, labels union in first-seen order, triggering releases from a validated `CASCADE_SOURCE` and validated `CASCADE_TAGS`, warnings file de-duplicated, Notes from `CASCADE_NOTES_FILE` copied unchanged, the full layout with an empty title marker on an empty diff; the mention lint on the title and the generated part of the body with `grep -P '(?<![\w@])@[A-Za-z0-9]'`
+- [x] 4.2 Add the title to `lib/prtext.sh`: base ref from `--base`, `CASCADE_BASE` or `origin/main`; merge-base; changed paths (diff plus untracked, not ignored); moved pins from `pins.sh <merge-base>` against `pins.sh WORKTREE`; type and subject per contract §4.3; exit 3 on an empty diff
+- [x] 4.3 Add the body to `lib/prtext.sh`: the exact layout in the `cascade-pr-text` spec, labels union in first-seen order, triggering releases from a validated `CASCADE_SOURCE` and validated `CASCADE_TAGS`, warnings file de-duplicated, Notes from `CASCADE_NOTES_FILE` copied unchanged, the full layout with an empty title marker on an empty diff; the mention lint on the title and the generated part of the body with `grep -P '(?<![\w@])@[A-Za-z0-9]'`
 - [x] 4.4 Add cases against throwaway git repos built in the test with a fake `pins.sh`: each classes pattern form and an invalid one; each title type and the one, two, three and four-pin subjects; `refresh cascade-managed files`; empty diff (title exit 3, body empty marker); untracked file counted; body byte-identical across two runs; `| none | - | - | - |`; labels order; hostile tag dropped; unknown source dropped; the lint failing on a planted bare `@word` in a warning; a `@user` in Notes passing through unchanged
 - [x] 4.5 Gates green, then commit `feat(cascade): compute the cascade PR title and body`
 

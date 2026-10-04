@@ -49,9 +49,9 @@ change as `contract.md`), so the four repo changes are written in parallel again
 - **An offline test suite** `.github/scripts/cascade/test/run.sh` with PATH shims for `curl`
   and `git` answering from captured fixtures, covering every case in contract §2.10 and the
   plan review's additions, plus a stub-agreement test.
-- **Departures from the contract**, each reported to the supervisor: Notes pass through
-  unchanged (workspace RELEASING.md wins over contract §9.13); an `--expect` version confirmed
-  published joins the candidates and the wait is timed from requested sleeps (§2.9); `pin-of`
+- **Departures from contract version 1**, each reported to the supervisor: Notes pass through
+  unchanged and an `--expect` version confirmed published joins the candidates, the wait timed
+  from requested sleeps (both since settled as contract §11 C1 and C2); `pin-of`
   never shells out to `cue` (§2.6); `next-patch` refuses a prerelease; `CASCADE_SOURCE` is
   validated; a hold `reason` may not hold a bare mention (§2.8); `shellcheck` in CI covers
   every script under `.github/scripts`.

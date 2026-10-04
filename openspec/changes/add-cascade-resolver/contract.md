@@ -1,4 +1,8 @@
-# Phase 2 cascade contract (version 1)
+# Phase 2 cascade contract (version 1.1)
+
+Version 1.1 is version 1 plus the supervisor's clarifications C1 to C10 in §11 (2026-10-04).
+Where §11 and an earlier section differ, §11 wins; the superseded passages are marked in place.
+The stub (§7) and its checksum are unchanged and still say "contract version 1".
 
 This contract binds five changes that are built in parallel:
 
@@ -349,7 +353,8 @@ See §4.
   - warnings for `release` and `opm-cli` queries are keyed `github.com/open-platform-model/<repo>`;
   - `title`, `body` and `classify` against a throwaway git repo built in the test, covering
     every rule in §4, including the mention lint failing on a planted bare `@word` in the
-    generated part, and a `@user` in Notes passing through neutralized with a warning;
+    generated part, and a `@user` in Notes passing through neutralized with a warning
+    (superseded by §11 C1: the `@user` passes through byte for byte, with no warning);
   - the stub: `sha256sum stub-resolve.sh` equals the §7 checksum, and for every stub-supported
     case the stub and the real resolver in fixture mode agree on exit code and stdout. Excluded
     from the agreement: prerelease identifiers mixing numeric and alphanumeric forms (the stub's
@@ -506,7 +511,7 @@ Changed files: <n> shipped, <n> test, <n> release-tool.
 ## Notes
 
 <!-- cascade-notes: the bot keeps everything below this line -->
-<contents of CASCADE_NOTES_FILE, neutralized as below, if set and non-empty>
+<contents of CASCADE_NOTES_FILE, byte for byte (§11 C1), if set and non-empty>
 ```
 
 - **Moved pins.** With no moved pin, the table has one row:
@@ -525,7 +530,9 @@ Changed files: <n> shipped, <n> test, <n> release-tool.
   - A pin key of `-` renders without the key prefix.
   - With none, the section is `- None.`.
 - **`## Notes`** is always the last section. The Phase 3 workflow carries over the existing
-  PR's Notes content through `CASCADE_NOTES_FILE`. Notes are human text, so they are not linted:
+  PR's Notes content through `CASCADE_NOTES_FILE`. *Superseded by §11 C1: Notes are copied byte
+  for byte, neither linted nor neutralized, and no warning is added; the rest of this bullet is
+  version 1 text.* Notes are human text, so they are not linted:
   every `@` that matches the mention pattern below gets a zero-width joiner (U+200D) inserted
   right after it, and the body adds the warning "`-`: neutralized <n> mention(s) in Notes". The
   insertion is idempotent, because a neutralized `@` no longer matches.
@@ -1078,7 +1085,8 @@ passes and 1 otherwise, printing `PASS <scenario>` / `FAIL <scenario>: <reason>`
 no GHCR or proxy access. `CASCADE_TEST_SET=all` (the default, for local runs) runs everything.
 
 - **Required job, offline set.** One step, `task -x deps:cascade:test` with
-  `CASCADE_TEST_SET=offline`, added to an existing required job:
+  `CASCADE_TEST_SET=offline`, added to an existing required job. *The job column is corrected by
+  §11 C6: catalog_opm `Validate catalog`, library `Go tests`, opm-operator `Lint`, cli `Lint`.*
 
   | Repo | Workflow | Job | Note |
   | --- | --- | --- | --- |
@@ -1153,7 +1161,7 @@ These are not in RELEASING.md or the owner's selections. Each one is recorded in
 12. **The task's tests are split**: an offline set in an existing required job, and a network
     set in a new, non-required job (§8). RELEASING.md names no placement.
 13. **Notes are neutralized, not linted** (§4.4), so a human `@mention` in Notes never stops the
-    cascade.
+    cascade. *Superseded by §11 C1: Notes pass through byte for byte.*
 
 ---
 
@@ -1171,6 +1179,49 @@ These are not in RELEASING.md or the owner's selections. Each one is recorded in
   stay as they are; the Phase 5 rewire replaces them.
 - **Merge order** for the supervisor: `.github` first. The four repo PRs can merge once the
   offline set and S2 and S4 pass with the stub, and S5 passes against the merged resolver.
+
+---
+
+## 11. Version 1.1 clarifications (supervisor, 2026-10-04)
+
+Binding for every Phase 2 branch. They come from the Phase 2 implementation reviews; each repo
+change cites them as "Phase 2 cascade contract §11 Cn".
+
+- **C1 Notes.** The bot never edits the `## Notes` section: everything below the
+  `cascade-notes` marker is passed through byte for byte, with no neutralization and no
+  warning. The mention lint covers the title and the body above the Notes marker. mention-guard
+  still checks the whole PR body on `opened` and `synchronize`, so a bare `@mention` a human
+  types in Notes fails mention-guard on the bot's next push; that is accepted. Workspace
+  RELEASING.md "Title from diff class" is amended to say the bot "lints the title and the body
+  above the Notes marker". Supersedes §4.4 (neutralization), the §2.10 Notes case and §9.13.
+- **C2 `--expect`.** An `--expect` version confirmed published (before or during the wait)
+  joins the candidates of the normal pass, even when the upstream list does not hold it yet; it
+  stays subject to the major, prerelease and hold rules. Time waited for `--max-wait` is the sum
+  of the sleeps the resolver requested, never the wall clock. Clarifies §2.9.
+- **C3 `is-frozen` order.** `is-frozen` is read-only and may be called before `newest` (in
+  phase A of §5.2 rule 5) as well as before an edit.
+- **C4 CI layout.** Every repo's `cascade-task.yml` checks the repo out at `path: repo` and
+  `open-platform-model/.github` at `path: org-github` beside it (catalog_opm's layout), so the
+  org checkout is never inside the repo's tree. Applies to §8 "Network job" as §3 already says
+  for Phase 3.
+- **C5 Stub table.** `test.sh` passes `CASCADE_STUB_TABLE` to every stub call, `semver-cmp`
+  included.
+- **C6 Required job.** The offline task-test step runs inside each repo's required job as
+  workspace RELEASING.md "Rulesets on main" names it: catalog_opm `Validate catalog`, library
+  `Go tests`, opm-operator `Lint`, cli `Lint`. Corrects the §8 job column.
+- **C7 Offline test needs no resolver.** `deps:cascade:test` does not require
+  `CASCADE_RESOLVER` (nor the §3 default path) to exist; the offline set runs entirely on the
+  stub. Only S5 uses the real resolver, through `CASCADE_RESOLVER_REAL`.
+- **C8 Never lower.** Pins never move backwards, and a consumer's catalog or core is never
+  lowered, the cli's podinfo consumers included. The cli rule for those consumers (§6.4 step 5):
+  for `cue mod get` and `tidy`, the consumer's podinfo pin is first set to the podinfo version
+  published at the merge base, and after `tidy` it is rewritten as text to the step 4 target.
+- **C9 `language.version`.** The warning in §5.2 rule 10 compares against the single pinned CUE
+  version file each repo names in its `design.md` (no change now). Comparing against the lower
+  of the `setup-cue` version and `go.mod`'s `cuelang.org/go` is a follow-up.
+- **C10 Version advance.** A version advance keeps `main`'s declared version when that version
+  is not yet published, and otherwise takes `main`'s version plus one patch (§5.2 rule 11, as
+  written). Workspace RELEASING.md "The receiver" is amended to say so.
 
 ---
 
