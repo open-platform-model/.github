@@ -19,12 +19,12 @@ Never dispatch `tag-ledger.yml` from this branch (`design.md`, D4).
 
 ## 2. Mention-guard Limits paragraph
 
-- [ ] 2.1 In `README.md`, extend the mention-guard "Limits" paragraph per `design.md` D3:
+- [x] 2.1 In `README.md`, extend the mention-guard "Limits" paragraph per `design.md` D3:
   - a ruleset-required run fires only on `opened`, `synchronize` and `reopened`, and ignores `edited`;
   - a re-run reads the title and body from the original event, while commit messages are listed fresh;
   - for a fresh scan, push a commit, or close and reopen the PR.
   The added lines must contain no bare `@word`, and `mention-guard.yml` must stay unchanged.
-- [ ] 2.2 Gates green, then commit `docs(mention-guard): say a ruleset run ignores edited`.
+- [x] 2.2 Gates green, then commit `docs(mention-guard): say a ruleset run ignores edited`.
 
 ## 3. Archive
 

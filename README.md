@@ -72,6 +72,14 @@ title/body (that fires on submit — the gate keeps it out of *permanent*
 history), and it cannot see a squash message retyped in the merge box. The
 local `commit-msg` hook in `core` covers the laptop side.
 
+It also does not rescan an edit. A run required by the org ruleset fires only
+on `opened`, `synchronize` and `reopened`: GitHub ignores the `edited` type
+that `mention-guard.yml` lists, so editing a PR title or body after a run
+starts no new scan. "Re-run jobs" does not help either: it reads the title
+and body from the original event (commit messages are listed fresh). For a
+fresh scan of an edited title or body, push a commit, or close and reopen the
+PR.
+
 **Break-glass:** org admins are on the ruleset's bypass list. For a false
 positive, prefer rewording; bypass is for emergencies.
 
