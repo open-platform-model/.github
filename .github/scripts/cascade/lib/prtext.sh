@@ -38,7 +38,7 @@ read_pins() {
     [ "${#FIELDS[@]}" -eq 5 ] || [ "${#FIELDS[@]}" -eq 4 ] \
       || die "\`$PINS\` $ref line $n: want <pin-key>, <display>, <class>, <version> and <labels> separated by tabs"
     local k="${FIELDS[0]}" d="${FIELDS[1]}" c="${FIELDS[2]}" v="${FIELDS[3]}" l="${FIELDS[4]:-}"
-    [ -n "$k" ] && [ -n "$d" ] || die "\`$PINS\` $ref line $n: empty pin key or display name"
+    if ! { [ -n "$k" ] && [ -n "$d" ]; }; then die "\`$PINS\` $ref line $n: empty pin key or display name"; fi
     case "$c" in release-tool | test | shipped) ;; *) die "\`$PINS\` $ref line $n: unknown class \`$c\`" ;; esac
     is_version "$v" || die "\`$PINS\` $ref line $n: \`$v\` is not a v-prefixed SemVer version"
     [ -z "${ver[$k]:-}" ] || die "\`$PINS\` $ref lists \`$k\` twice"
@@ -67,7 +67,7 @@ pr_compute() {
   local top
   top=$(git rev-parse --show-toplevel 2>/dev/null) || die "\`$REPO_ROOT\` is not inside a git work tree"
   cd "$top" || die "cannot enter \`$top\`"
-  [ -f "$PINS_ABS" ] && [ -x "$PINS_ABS" ] || die "pins script \`$PINS\` is not an executable file"
+  if ! { [ -f "$PINS_ABS" ] && [ -x "$PINS_ABS" ]; }; then die "pins script \`$PINS\` is not an executable file"; fi
   load_classes "$CLASSES_ABS"
 
   M=$(git merge-base "$base" HEAD 2>/dev/null) || die "no merge-base between \`$base\` and HEAD"

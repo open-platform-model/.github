@@ -190,7 +190,7 @@ new checksum in every copy.
 answering from `test/fixtures/` (captured from the real services), sleep and
 the date are faked, and nothing touches the network.
 [`cascade-resolver.yml`](.github/workflows/cascade-resolver.yml) runs
-`shellcheck`, `actionlint` and the suite on every PR and push to `main`, with
+pinned `shellcheck` and `actionlint` releases and the suite on every PR and push to `main`, with
 no path filter, as the job **`Resolver tests`**.
 [`cascade-resolver-live.yml`](.github/workflows/cascade-resolver-live.yml)
 checks read-only invariants against GHCR and GitHub weekly and on dispatch;

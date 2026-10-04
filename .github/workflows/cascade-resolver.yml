@@ -30,6 +30,10 @@ jobs:
     env:
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+      # The runner image's own shellcheck (0.9.0 on ubuntu-24.04) lags the
+      # one developers run; pin it so local and CI agree.
+      SHELLCHECK_VERSION: 0.11.0
+      SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,7 +49,6 @@ jobs:
             *mikefarah*" v4."*) ;;
             *) echo "::error::the resolver needs mikefarah yq v4, found: $v"; exit 1 ;;
           esac
-          shellcheck --version
           jq --version
           git --version
           bash --version | head -n 1
@@ -53,8 +56,15 @@ jobs:
       - name: shellcheck
         run: |
           set -euo pipefail
+          txz="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -q -sSfL --retry 3 -o "$RUNNER_TEMP/$txz" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/$txz"
+          echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/$txz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$txz" -C "$RUNNER_TEMP"
+          sc="$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          "$sc" --version
           find .github/scripts -name '*.sh' -print0 \
-            | xargs -0 shellcheck -x \
+            | xargs -0 "$sc" -x \
                 .github/scripts/cascade/test/shim/curl \
                 .github/scripts/cascade/test/shim/git
 

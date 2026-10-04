@@ -157,7 +157,7 @@ case "$CMD" in
     parse_args "--repo-root" "$@"
     npos 2
     repo_root
-    [ -n "${POS[0]}" ] && [ -n "${POS[1]}" ] || usage "is-frozen needs a path and a pin key"
+    if ! { [ -n "${POS[0]}" ] && [ -n "${POS[1]}" ]; }; then usage "is-frozen needs a path and a pin key"; fi
     if is_frozen "${POS[0]}" "${POS[1]}"; then exit 0; fi
     exit 3
     ;;

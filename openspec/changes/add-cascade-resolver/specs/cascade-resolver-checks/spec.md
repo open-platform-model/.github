@@ -91,8 +91,8 @@ suite SHALL put a `cue` that refuses to run first on `PATH`, so no case can depe
 `.github/workflows/cascade-resolver.yml` SHALL run on every `pull_request` and on `push` to
 `main` with no path filter, with `permissions: contents: read`, as one job named
 `Resolver tests` with `timeout-minutes: 10`. It SHALL check out the repo with a SHA-pinned
-`actions/checkout` and `persist-credentials: false`, confirm mikefarah `yq` v4, run `shellcheck`
-on every `*.sh` under `.github/scripts` and on the two shims, run `actionlint` from a
+`actions/checkout` and `persist-credentials: false`, confirm mikefarah `yq` v4, run a pinned,
+checksum-verified `shellcheck` release (not the runner image's own) on every `*.sh` under `.github/scripts` and on the two shims, run `actionlint` from a
 pinned, checksum-verified release on `.github/workflows/*.yml`, and run the offline suite. It
 MUST NOT change `mention-guard.yml` or `tag-ledger.yml`.
 

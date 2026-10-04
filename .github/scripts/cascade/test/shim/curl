@@ -22,11 +22,11 @@ for w in "${want[@]}"; do
   [ "${a[i]:-}" = "$w" ] || bad "argument $((i + 1)) is '${a[i]:-}', want '$w'"
   i=$((i + 1))
 done
-[ "${a[i]:-}" = -o ] && [ -n "${a[i + 1]:-}" ] || bad "want -o <body> at argument $((i + 1))"
+if ! { [ "${a[i]:-}" = -o ] && [ -n "${a[i + 1]:-}" ]; }; then bad "want -o <body> at argument $((i + 1))"; fi
 body_out="${a[i + 1]}"; i=$((i + 2))
-[ "${a[i]:-}" = -D ] && [ -n "${a[i + 1]:-}" ] || bad "want -D <headers> at argument $((i + 1))"
+if ! { [ "${a[i]:-}" = -D ] && [ -n "${a[i + 1]:-}" ]; }; then bad "want -D <headers> at argument $((i + 1))"; fi
 head_out="${a[i + 1]}"; i=$((i + 2))
-[ "${a[i]:-}" = -w ] && [ "${a[i + 1]:-}" = '%{http_code}' ] || bad "want -w '%{http_code}' at argument $((i + 1))"
+if ! { [ "${a[i]:-}" = -w ] && [ "${a[i + 1]:-}" = '%{http_code}' ]; }; then bad "want -w '%{http_code}' at argument $((i + 1))"; fi
 i=$((i + 2))
 method=GET
 if [ "${a[i]:-}" = -I ]; then method=HEAD; i=$((i + 1)); fi

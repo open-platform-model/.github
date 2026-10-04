@@ -21,7 +21,7 @@ load_classes() {
     cls="" pat="" extra=""
     read -r cls pat extra <<<"$line" || true
     [ -n "$cls" ] || continue
-    [ -n "$pat" ] && [ -z "$extra" ] || die "classes line $n: want \"<class> <pattern>\""
+    if ! { [ -n "$pat" ] && [ -z "$extra" ]; }; then die "classes line $n: want \"<class> <pattern>\""; fi
     case "$cls" in
       release-tool | test | shipped) ;;
       *) die "classes line $n: unknown class \`$cls\`" ;;
