@@ -90,7 +90,10 @@ jobs:
           inst=.github/scripts/cascade/wiring/install-tools.sh
           TASK_VERSION=$(sed -n 's/^TASK_VERSION=v\([0-9][0-9.]*\)$/\1/p' "$inst")
           TASK_SHA256=$(sed -n 's/^TASK_SHA256=\([0-9a-f]\{64\}\)$/\1/p' "$inst")
-          [ -n "$TASK_VERSION" ] && [ -n "$TASK_SHA256" ] || { echo "::error::no Task version or checksum in $inst"; exit 1; }
+          if [ -z "$TASK_VERSION" ] || [ -z "$TASK_SHA256" ]; then
+            echo "::error::no Task version or checksum in $inst"
+            exit 1
+          fi
           tgz=task_linux_amd64.tar.gz
           curl -q -sSfL --retry 3 -o "$RUNNER_TEMP/$tgz" \
             "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/$tgz"
