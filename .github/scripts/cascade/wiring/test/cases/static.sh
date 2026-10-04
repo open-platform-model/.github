@@ -26,7 +26,7 @@ for f in "${REUSABLE[@]}"; do
   expect "static: $n declares no secrets input" 0 "null" -- yq -r '.on.workflow_call.secrets' "$f"
   expect "static: $n gives every job explicit permissions" 0 "" -- yq -r '.jobs | to_entries[] | select(.value.permissions == null) | .key' "$f"
   check "static: $n pins every action to a SHA with a version comment" bash -c '
-    ! grep -nE "uses:" "$1" | grep -vE "uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]"' _ "$f"
+    ! grep -nE "^ *(- )?uses:" "$1" | grep -vE "uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]"' _ "$f"
   expect "static: $n has the Guard step first in every job" 0 "" -- \
     yq -r '.jobs | to_entries[] | select(.value.steps[0].name != "Guard" or .value.steps[0].id != "guard") | .key' "$f"
   check "static: $n reads the repo name only from the Guard step" bash -c '! grep -n "event.repository.name" "$1"' _ "$f"
@@ -61,3 +61,8 @@ if [ -n "$GUARD_TEXT" ]; then
   expect "guard: no repository fails" 1 "::error::\`\` $NOT_ORG" -- guard "" main
   expect "guard: a name with a newline fails" 1 "::error::\`open-platform-model/a"$'\n'"repo=core\` $NOT_ORG" -- guard "open-platform-model/a"$'\n'"repo=core" main
 fi
+
+# The receiver caller's concurrency group (Phase 3 wiring contract, section
+# 5), byte for byte, in the README's caller shape.
+CONTRACT_GROUP="\${{ github.ref != 'refs/heads/main' && format('deps-cascade-{0}', github.ref) || (inputs.gates_only && 'deps-cascade-gates' || 'deps-cascade') }}"
+check "static: the README's receiver caller uses the contract's concurrency group" grep -qxF "  group: $CONTRACT_GROUP" "$ORG_ROOT/README.md"

@@ -73,7 +73,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      action: ${{ steps.plan.outputs.action }}
+      action: ${{ steps.plan.outputs.action || steps.gates.outputs.action }}
       dry_run: ${{ steps.init.outputs.dry_run }}
       mode: ${{ steps.plan.outputs.mode }}
     steps:
@@ -152,6 +152,26 @@ jobs:
           CASCADE_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
         run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh payload
 
+      # Before any pin work, so a later failure still leaves gate results.
+      # Runs the release heads' own task: no token reaches that task.
+      - name: Gates
+        id: gates
+        env:
+          CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+          CASCADE_GATES_ONLY: ${{ inputs.gates-only }}
+          GH_TOKEN: ${{ github.token }}
+          CASCADE_READ_TOKEN: ${{ github.token }}
+        run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh gates
+
+      - name: Upload the gate results
+        if: always() && steps.init.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cascade-gates
+          path: ${{ runner.temp }}/cascade/gates.json
+          if-no-files-found: ignore
+          retention-days: 1
+
       - name: PR state
         id: state
         if: '!inputs.gates-only'
@@ -225,6 +245,73 @@ jobs:
             ${{ runner.temp }}/cascade/diff.patch
           if-no-files-found: error
           retention-days: 1
+
+  gates:
+    name: Post gates
+    needs: compute
+    # Also in dry runs and gates-only runs: statuses are not pushes.
+    if: always() && needs.compute.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: read
+    steps:
+      # Runs before anything is checked out from org-github-ref, so the ref
+      # it guards cannot replace it.
+      - name: Guard
+        id: guard
+        env:
+          INPUTS_REF: ${{ inputs.org-github-ref }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          name="${GITHUB_REPOSITORY#*/}"
+          if [ "$owner/$name" != "$GITHUB_REPOSITORY" ] || [ "$owner" != open-platform-model ] \
+            || ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
+            exit 1
+          fi
+          if [ "$INPUTS_REF" != main ] && [[ ! $GITHUB_REPOSITORY =~ ^open-platform-model/cascade-sandbox- ]]; then
+            echo "::error::org-github-ref may differ from main only in a sandbox repo"
+            exit 1
+          fi
+          echo "::notice::repo $name"
+          echo "repo=$name" >>"$GITHUB_OUTPUT"
+
+      - name: Check out org .github
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: open-platform-model/.github
+          ref: ${{ inputs.org-github-ref }}
+          path: org-github
+          persist-credentials: false
+
+      - name: Download the gate results
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cascade-gates
+          path: ${{ runner.temp }}/cascade/gates
+
+      - name: Post the statuses
+        env:
+          CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+          CASCADE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          G2_MODE: ${{ inputs.g2-mode }}
+          G3_MODE: ${{ inputs.g3-mode }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          post=org-github/.github/scripts/cascade/wiring/gates-post.sh
+          f="$RUNNER_TEMP/cascade/gates/gates.json"
+          if [ -f "$f" ]; then
+            bash "$post" --g2-mode "$G2_MODE" --g3-mode "$G3_MODE" "$f"
+          else
+            bash "$post" --g2-mode "$G2_MODE" --g3-mode "$G3_MODE" --missing
+          fi
 
   publish:
     name: Publish

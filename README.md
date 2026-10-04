@@ -163,8 +163,8 @@ one with `bootstrap: true`.
 ## `cascade` (release-cascade resolver)
 
 [`.github/scripts/cascade/cascade-resolve.sh`](.github/scripts/cascade/cascade-resolve.sh)
-is the one implementation every repo's `task deps:cascade` (and, later, the
-cascade receive workflow) asks which upstream version a pin moves to, whether
+is the one implementation every repo's `task deps:cascade` (and the cascade
+receive workflow) asks which upstream version a pin moves to, whether
 a pin is held or frozen, and what the cascade PR is called. The design is the
 workspace `RELEASING.md`, section "The cascade"; the interface is fixed by the
 Phase 2 cascade contract, kept with the OpenSpec change `add-cascade-resolver`.
@@ -202,15 +202,139 @@ every case the stub supports. Changing it means a new contract version and a
 new checksum in every copy.
 
 **Tests.** Run them locally with
-`bash .github/scripts/cascade/test/run.sh`. `curl` and `git` are PATH shims
+`bash .github/scripts/cascade/test/run.sh` (the resolver) and
+`bash .github/scripts/cascade/wiring/test/run.sh` (the workflows' scripts,
+below; it also needs go-task). `curl` and `git` are PATH shims
 answering from `test/fixtures/` (captured from the real services), sleep and
 the date are faked, and nothing touches the network.
 [`cascade-resolver.yml`](.github/workflows/cascade-resolver.yml) runs
-pinned `shellcheck` and `actionlint` releases and the suite on every PR and push to `main`, with
-no path filter, as the job **`Resolver tests`**.
+pinned `shellcheck`, `actionlint` and go-task releases and both suites on every PR and push to
+`main`, with no path filter, as the job **`Resolver tests`**.
 [`cascade-resolver-live.yml`](.github/workflows/cascade-resolver-live.yml)
 checks read-only invariants against GHCR and GitHub weekly and on dispatch;
 it is never required.
 
 **Owner step after merge:** add `Resolver tests` to the ruleset on `main` of
 this repo (workspace `RELEASING.md`, section "Rulesets on main").
+
+### Cascade workflows
+
+Three reusable workflows run the cascade in the five product repos (workspace
+`RELEASING.md`, sections "The cascade" and "Gates"). Their scripts live in
+[`.github/scripts/cascade/wiring/`](.github/scripts/cascade/wiring/), with every fixed map
+(who notifies whom, which sources a receiver accepts, tag shapes) in `lib.sh`.
+Callers pass no secrets: the `opm-cascade` App key is each repo's `cascade` Environment secret
+`CASCADE_APP_PRIVATE_KEY`, with the variable `CASCADE_APP_CLIENT_ID`, and only a job that
+declares `environment: cascade` reads it. Callers use `@main` (owner decision 13).
+
+| Workflow | Jobs | Does |
+| --- | --- | --- |
+| [`cascade-notify.yml`](.github/workflows/cascade-notify.yml) | `Notify downstream` (`cascade` Environment) | after a release is published: checks the tag, waits up to 10 minutes for the Go proxy (library only), and sends `repository_dispatch` `upstream-released` with `{source, tags}` to each downstream repo |
+| [`cascade-receive.yml`](.github/workflows/cascade-receive.yml) | `Compute`, `Post gates`, `Publish` (`cascade` Environment) | runs the repo's `task -x deps:cascade` on the rolling `deps/cascade` branch with no secret in reach, posts G2 and G3 on open release PRs, then verifies the plan and pushes, opens, edits, recreates, closes or labels the cascade PR |
+| [`cascade-gates.yml`](.github/workflows/cascade-gates.yml) | `Cascade gates` | per PR (`pull_request_target`, nothing checked out): `n/a` on both gate contexts for an ordinary PR; a gates-only receiver run for a release PR |
+
+Every job's first step, `Guard`, derives the repo name from `GITHUB_REPOSITORY` and refuses an
+`org-github-ref` other than `main` outside the `cascade-sandbox-*` repos.
+
+**Notify caller** (in each upstream's release workflow; `needs`, `if` and `tag` per repo):
+
+```yaml
+  notify-downstream:
+    name: Notify downstream
+    needs: [release-please, publish]
+    if: needs.release-please.outputs.release_created == 'true' && vars.CASCADE_NOTIFY != 'off'
+    permissions:
+      contents: read
+    uses: open-platform-model/.github/.github/workflows/cascade-notify.yml@main
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+```
+
+**Receiver caller** (`deps-cascade.yml` in catalog_opm, library, opm-operator and cli):
+
+```yaml
+name: Deps cascade
+
+on:
+  repository_dispatch:
+    types: [upstream-released]
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Compute and show the diff in the job summary; push nothing
+        type: boolean
+        default: false
+      gates_only:
+        description: Evaluate and post the release-PR gates only (sent by Cascade gates)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.ref != 'refs/heads/main' && format('deps-cascade-{0}', github.ref) || (inputs.gates_only && 'deps-cascade-gates' || 'deps-cascade') }}
+  cancel-in-progress: false
+
+jobs:
+  cascade:
+    name: Deps cascade
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@main
+    with:
+      dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
+      gates-only: ${{ inputs.gates_only == true }}
+      g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
+      g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
+      setup-go: false
+      labels-managed: false
+```
+
+Real runs on `main` share the group `deps-cascade`; gates-only runs use `deps-cascade-gates`
+and runs from any other ref (always dry runs) `deps-cascade-<ref>`, so neither replaces a
+pending real run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
+`labels-managed: true` (cli) only checks that the five cascade labels exist instead of
+creating them; `setup-cue` (default true) and `cue-version` (default `v0.17.1`) install CUE.
+
+**Per-PR gates caller** (`cascade-gates.yml` in the same four repos):
+
+```yaml
+name: Cascade gates
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+permissions: {}
+concurrency:
+  group: cascade-gates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  gates:
+    name: Cascade gates
+    permissions:
+      statuses: write
+      actions: write
+    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@main
+    with:
+      g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
+      g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
+```
+
+**Repo variables.**
+
+| Variable | Repo | Meaning |
+| --- | --- | --- |
+| `CASCADE_DRY_RUN` | receivers | the receiver pushes only when it is exactly `false`; unset, deleted or anything else is a dry run (compute, summary and artifact; no push, PR, label or comment) |
+| `CASCADE_NOTIFY` | upstreams | `off` skips notify, so that repo's releases stop dispatching |
+| `CASCADE_G2_MODE`, `CASCADE_G3_MODE` | receivers | `warn` (default: a problem posts `success` with `WARN:`) or `enforce` (a problem posts `failure`) |
+
+A run from any ref other than `main` is always a dry run, and `workflow_dispatch` with
+`dry_run: true` dry-runs one run.
+
+**Stop switches**, smallest first: the `deps-cascade:hold` label on the cascade PR (the bot
+skips it); a `.cascade-hold` entry (one pin); `CASCADE_DRY_RUN` set to anything but `false`;
+`CASCADE_NOTIFY=off` in an upstream; disabling `deps-cascade.yml`; suspending the
+`opm-cascade` App (notify and publish then fail at minting, compute and gates keep running).

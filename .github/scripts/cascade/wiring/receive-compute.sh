@@ -140,7 +140,12 @@ step_gates() {
       gates_table
     } >>"$GITHUB_STEP_SUMMARY"
   fi
-  [ "$rc" = 0 ] || die "gate evaluation failed"
+  if [ "$rc" != 0 ]; then
+    # No gates.json: the gates job posts error in enforce mode. A real run
+    # still moves pins; a gates-only run has nothing else to do.
+    [ "$(st_get gates_only)" != true ] || die "gate evaluation failed"
+    echo "::warning::gate evaluation failed; the gates job reports it"
+  fi
 }
 
 # gates_table: the gate results as Markdown lines (for the summary).

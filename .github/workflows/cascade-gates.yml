@@ -1,0 +1,102 @@
+name: Cascade gates
+
+# Reusable: each receiving repo's cascade-gates.yml calls this on
+# pull_request_target (workspace RELEASING.md, section "Gates"). It keeps
+# cascade/freshness and cascade/settled present on every PR: `n/a` success
+# on a PR that is not a same-repo release PR; on a release PR it starts a
+# gates-only Deps cascade run on main, which evaluates and posts both
+# contexts on the new head. It checks nothing out, so no PR code runs.
+
+on:
+  workflow_call:
+    inputs:
+      g2-mode:
+        description: cascade/freshness mode, warn or enforce
+        type: string
+        required: false
+        default: warn
+      g3-mode:
+        description: cascade/settled mode, warn or enforce
+        type: string
+        required: false
+        default: warn
+      org-github-ref:
+        description: Checked by the Guard step only; nothing is checked out
+        type: string
+        required: false
+        default: main
+
+permissions: {}
+
+jobs:
+  gates:
+    name: Cascade gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+      actions: write
+    steps:
+      # Runs before anything is checked out from org-github-ref, so the ref
+      # it guards cannot replace it.
+      - name: Guard
+        id: guard
+        env:
+          INPUTS_REF: ${{ inputs.org-github-ref }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          name="${GITHUB_REPOSITORY#*/}"
+          if [ "$owner/$name" != "$GITHUB_REPOSITORY" ] || [ "$owner" != open-platform-model ] \
+            || ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
+            exit 1
+          fi
+          if [ "$INPUTS_REF" != main ] && [[ ! $GITHUB_REPOSITORY =~ ^open-platform-model/cascade-sandbox- ]]; then
+            echo "::error::org-github-ref may differ from main only in a sandbox repo"
+            exit 1
+          fi
+          echo "::notice::repo $name"
+          echo "repo=$name" >>"$GITHUB_OUTPUT"
+
+      - name: Post or dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          G2_MODE: ${{ inputs.g2-mode }}
+          G3_MODE: ${{ inputs.g3-mode }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          for m in "$G2_MODE" "$G3_MODE"; do
+            case "$m" in warn | enforce) ;; *) echo "::error::gate modes must be warn or enforce"; exit 1 ;; esac
+          done
+          [[ $HEAD_SHA =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no pull request head"; exit 1; }
+          post() { # post <context> <state> <description>
+            gh api -X POST "repos/$GH_REPO/statuses/$HEAD_SHA" -f state="$2" -f context="$1" \
+              -f description="$3" -f target_url="$RUN_URL" >/dev/null
+            echo "$1: $2 ($3)"
+          }
+          if [[ $HEAD_REF != release-please--* ]] || [ "$HEAD_REPO" != "$GH_REPO" ]; then
+            post cascade/freshness success "n/a: not a release PR"
+            post cascade/settled success "n/a: not a release PR"
+            exit 0
+          fi
+          if [ "$G2_MODE" = enforce ]; then post cascade/freshness pending "evaluating in Deps cascade"; fi
+          if [ "$G3_MODE" = enforce ]; then post cascade/settled pending "evaluating in Deps cascade"; fi
+          if gh workflow run deps-cascade.yml --ref main -f gates_only=true; then
+            echo "started a gates-only Deps cascade run on main"
+            exit 0
+          fi
+          for c in "cascade/freshness:$G2_MODE" "cascade/settled:$G3_MODE"; do
+            if [ "${c#*:}" = enforce ]; then
+              post "${c%%:*}" error "could not dispatch Deps cascade, see the run"
+            else
+              post "${c%%:*}" success "WARN: gate could not run, see the run"
+            fi
+          done
+          echo "::error::could not start deps-cascade.yml"
+          exit 1

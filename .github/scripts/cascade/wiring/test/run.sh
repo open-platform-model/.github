@@ -12,7 +12,7 @@ set -euo pipefail
 # shellcheck source=lib.sh disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-files=(lib static notify compute publish)
+files=(lib static notify compute publish gates)
 [ $# -eq 0 ] || files=("$@")
 for f in "${files[@]}"; do
   [ -f "$W_HERE/cases/$f.sh" ] || { fail "case file $f" "test/cases/$f.sh not found"; continue; }

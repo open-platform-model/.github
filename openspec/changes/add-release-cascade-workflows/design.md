@@ -177,6 +177,13 @@ Exactly contract §7.1 to §7.6 and §8. Two implementation points the contract 
 - **Merge-mode derived files.** A conflicted path counts as derived when its basename is
   `go.mod`, `go.sum` or `manifest.go`, it ends in `cue.mod/module.cue`, or it equals
   `internal/operator/dist/install.yaml` (contract §7.2, RELEASING.md "One rolling PR per repo").
+- **A failed gate evaluation does not stop pin work.** When `gates-eval.sh` cannot read the
+  release-PR list (exit 1, no `gates.json`), the `gates` step of a real run warns and continues;
+  the `gates` job then handles the missing artifact (contract §6.3). Only a gates-only run fails.
+- **A rebuild with nothing new keeps the old commit.** When the rebuilt tree equals `OLD`'s
+  tree and `OLD` is one commit on the current `origin/main`, `compute` resets to `OLD`, so a
+  sweep with nothing new pushes nothing (`new_tip == old_tip`, only edits).
+- **A hold that appears after `compute`** stops `publish` in `verify`, before the mint.
 - **The commit-identity test** for `rebuild` compares both `%ae` and `%ce` of every commit in
   `origin/main..origin/deps/cascade` to the bot's noreply email (contract §7.1). A merge commit
   the bot made counts as a bot commit.
