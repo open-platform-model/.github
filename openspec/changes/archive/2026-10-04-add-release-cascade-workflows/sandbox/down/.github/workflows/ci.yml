@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Deliberately an old release, so Dependabot opens a workflow PR (E7).
+      - name: Check out
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        with:
+          persist-credentials: false
+
+      - name: UPSTREAM_VERSION is vX.Y.Z
+        run: |
+          set -euo pipefail
+          v=$(cat UPSTREAM_VERSION)
+          [[ $v =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::UPSTREAM_VERSION is not vX.Y.Z: $v"; exit 1; }
+          echo "UPSTREAM_VERSION $v"

@@ -1,0 +1,95 @@
+name: Cascade notify
+description: >-
+  Sends repository_dispatch `upstream-released` to each downstream receiver of
+  the calling repo, after its release is published (workspace RELEASING.md,
+  section "Notify after publish").
+
+# A composite action, not a reusable workflow: a reusable-workflow job that
+# declares `environment: cascade` sees the Environment's variables but not
+# its secrets unless the caller passes `secrets: inherit` (sandbox cycle E1).
+# So the caller owns the job: it declares `environment: cascade` and passes
+# the key in as an input. The source is always the calling repo; the targets
+# are the fixed map in .github/scripts/cascade/wiring/lib.sh. The scripts
+# run from this action's own directory, so a caller that pins the action to
+# a .github commit SHA runs exactly that commit's code.
+
+inputs:
+  tag:
+    description: The release tag that was just published
+    required: true
+  client-id:
+    description: The App's client id, vars.CASCADE_APP_CLIENT_ID of the cascade Environment
+    required: true
+  private-key:
+    description: The App key, secrets.CASCADE_APP_PRIVATE_KEY of the cascade Environment
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Derives the repo name the later steps use, from GITHUB_REPOSITORY
+    # only, before any script runs.
+    - name: Guard
+      id: guard
+      shell: bash
+      run: |
+        set -euo pipefail
+        owner="${GITHUB_REPOSITORY%%/*}"
+        name="${GITHUB_REPOSITORY#*/}"
+        if [ "$owner/$name" != "$GITHUB_REPOSITORY" ] || [ "$owner" != open-platform-model ] \
+          || ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
+          exit 1
+        fi
+        echo "::notice::repo $name"
+        echo "repo=$name" >>"$GITHUB_OUTPUT"
+
+    - name: Validate
+      id: validate
+      shell: bash
+      env:
+        CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        targets=$(bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/notify.sh" validate --tag "$TAG")
+        echo "targets=$targets" >>"$GITHUB_OUTPUT"
+
+    - name: Wait for the Go proxy
+      if: steps.guard.outputs.repo == 'library'
+      shell: bash
+      env:
+        CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+        TAG: ${{ inputs.tag }}
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/notify.sh" wait-proxy --tag "$TAG"
+
+    # An owner without repositories would mint a token for every repo the
+    # App is installed on.
+    - name: Check the token scope
+      shell: bash
+      env:
+        TARGETS: ${{ steps.validate.outputs.targets }}
+      run: |
+        set -euo pipefail
+        if [ -z "$TARGETS" ]; then
+          echo "::error::the repository list is empty; refusing to mint"
+          exit 1
+        fi
+
+    - name: Mint the App token
+      id: mint
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: open-platform-model
+        repositories: ${{ steps.validate.outputs.targets }}
+        permission-contents: write
+
+    - name: Dispatch
+      shell: bash
+      env:
+        CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+        TAG: ${{ inputs.tag }}
+        GH_TOKEN: ${{ steps.mint.outputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/notify.sh" dispatch --tag "$TAG"

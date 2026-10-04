@@ -8,6 +8,8 @@
 # The prefix of mention-guard's own pattern: an @ that no word character or
 # @ precedes, followed by a letter or digit, is a GitHub mention.
 MENTION_RE='(?<![\w@])@[A-Za-z0-9]'
+# The triggering sources body accepts. cmd_body adds the names in
+# CASCADE_EXTRA_SOURCES, which only the sandbox receiver sets.
 CASCADE_SOURCES=" core catalog_opm library opm-operator cli "
 TAG_RE='^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$'
 
@@ -160,10 +162,21 @@ cmd_body() {
   # Triggering releases: CASCADE_SOURCE and CASCADE_TAGS come from the
   # untrusted dispatch payload, so anything off-pattern is dropped and named
   # only in its safe form.
-  local src="${CASCADE_SOURCE:-}" tags="${CASCADE_TAGS:-}"
-  local -a trig=() raw=()
+  local src="${CASCADE_SOURCE:-}" tags="${CASCADE_TAGS:-}" sources="$CASCADE_SOURCES" x
+  local -a trig=() raw=() extra=()
   read -r -a raw <<<"$tags" || true
-  if [ -n "$src" ] && [[ $CASCADE_SOURCES != *" $src "* ]]; then
+  # CASCADE_EXTRA_SOURCES: space-separated repo names the sandbox receiver
+  # adds; a name that is not a repo name is ignored.
+  read -r -a extra <<<"${CASCADE_EXTRA_SOURCES:-}" || true
+  for x in "${extra[@]}"; do
+    if [[ $x =~ $REPO_RE ]]; then
+      sources="$sources$x "
+    else
+      warn - "ignored extra source \`$(safe_text "$x")\`: not a repo name"
+      wlines+=("-"$'\t'"ignored extra source \`$(safe_text "$x")\`: not a repo name")
+    fi
+  done
+  if [ -n "$src" ] && [[ $sources != *" $src "* ]]; then
     warn - "dropped triggering source \`$(safe_text "$src")\`: not a cascade repo"
     wlines+=("-"$'\t'"dropped triggering source \`$(safe_text "$src")\`: not a cascade repo")
   elif [ -z "$src" ] && [ "${#raw[@]}" -gt 0 ]; then

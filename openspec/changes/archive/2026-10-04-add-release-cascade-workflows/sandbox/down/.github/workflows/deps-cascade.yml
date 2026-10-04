@@ -1,0 +1,73 @@
+name: Deps cascade
+
+# The receiver caller (Phase 3 wiring contract section 5), at the .github
+# branch under test, pinned to a commit SHA because this repo's cascade
+# Environment holds the production App key. No schedule: the sandbox runs by dispatch only.
+
+on:
+  repository_dispatch:
+    types: [upstream-released]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Compute and show the diff in the job summary; push nothing
+        type: boolean
+        default: false
+      gates_only:
+        description: Evaluate and post the release-PR gates only (sent by Cascade gates)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.ref != 'refs/heads/main' && format('deps-cascade-{0}', github.ref) || (inputs.gates_only && 'deps-cascade-gates' || 'deps-cascade') }}
+  cancel-in-progress: false
+
+jobs:
+  cascade:
+    name: Deps cascade
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@a2950ce6d314618c108cfdf2e978133c2ab09f4a # feat/add-release-cascade-workflows
+    with:
+      dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
+      gates-only: ${{ inputs.gates_only == true }}
+      g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
+      g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
+      setup-go: false
+      setup-cue: false
+
+  # The caller owns the cascade-Environment job and passes the key to the
+  # composite action (a reusable workflow would not see the Environment
+  # secret; sandbox cycle E1). The stop switch is the action's dry-run
+  # input, enforced inside the action; the if: repeats it so a dry run
+  # starts no cascade-Environment job. Neither reads the reusable job that
+  # ran repo code.
+  publish:
+    name: Publish
+    needs: cascade
+    if: >-
+      !cancelled()
+      && needs.cascade.outputs.compute-ok == 'true'
+      && needs.cascade.outputs.dry-run == 'false'
+      && inputs.dry_run != true
+      && vars.CASCADE_DRY_RUN == 'false'
+      && github.ref == 'refs/heads/main'
+      && contains(fromJSON('["push","recreate","close","conflict","too_long"]'), needs.cascade.outputs.action)
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Publish
+        uses: open-platform-model/.github/.github/actions/cascade-publish@a2950ce6d314618c108cfdf2e978133c2ab09f4a # feat/add-release-cascade-workflows
+        with:
+          dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
+          labels-managed: false
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}

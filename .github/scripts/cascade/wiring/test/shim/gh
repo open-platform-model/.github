@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# gh shim for the wiring tests. Answers every call from the fixture
+# directory $CASCADE_GH_FIXTURES:
+#   <key>/argv      the expected argument vector, one argument per line
+#   <key>/<n>.rc    exit status of the n-th matching call (the last repeats)
+#   <key>/<n>.out   its stdout (optional), <key>/<n>.err its stderr (optional)
+#   accept          glob patterns, one per line: a call whose arguments,
+#                   joined by spaces, match one exits 0 with no output
+# where <key> is the sha256 of the argument vector. Every call is appended
+# to log (arguments joined by spaces); with `--input -` stdin goes to
+# stdin.<seq>. A call nothing answers is written to `unexpected` and exits 99.
+set -euo pipefail
+fx="${CASCADE_GH_FIXTURES:?CASCADE_GH_FIXTURES is not set}"
+mkdir -p "$fx"
+joined="$*"
+printf '%s\n' "$joined" >>"$fx/log"
+seq=$(wc -l <"$fx/log")
+prev=""
+for a in "$@"; do
+  if [ "$prev" = --input ] && [ "$a" = - ]; then cat >"$fx/stdin.$seq"; fi
+  prev="$a"
+done
+key=$(printf '%s\n' "$@" | sha256sum | cut -c1-32)
+if [ -d "$fx/$key" ]; then
+  n=$(($(cat "$fx/$key/count" 2>/dev/null || echo 0) + 1))
+  printf '%s\n' "$n" >"$fx/$key/count"
+  while [ "$n" -gt 1 ] && [ ! -f "$fx/$key/$n.rc" ]; do n=$((n - 1)); done
+  [ ! -f "$fx/$key/$n.out" ] || cat "$fx/$key/$n.out"
+  [ ! -f "$fx/$key/$n.err" ] || cat "$fx/$key/$n.err" >&2
+  exit "$(cat "$fx/$key/$n.rc")"
+fi
+if [ -f "$fx/accept" ]; then
+  while IFS= read -r pat; do
+    [ -n "$pat" ] || continue
+    # shellcheck disable=SC2053 # the fixture line is a glob pattern
+    if [[ $joined == $pat ]]; then exit 0; fi
+  done <"$fx/accept"
+fi
+printf '%s\n' "$joined" >>"$fx/unexpected"
+echo "gh shim: unexpected call: $joined" >&2
+exit 99

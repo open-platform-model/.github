@@ -1,0 +1,32 @@
+name: Probe env
+
+# E1b: dispatched with --ref probe-env, the cascade Environment (main only)
+# must refuse the notify job before any step runs. On main the job is
+# skipped, so this file never notifies from main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: A published release tag
+        type: string
+        default: v0.1.0
+
+permissions: {}
+
+jobs:
+  notify:
+    name: Notify downstream
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Notify downstream
+        uses: open-platform-model/.github/.github/actions/cascade-notify@a2950ce6d314618c108cfdf2e978133c2ab09f4a # feat/add-release-cascade-workflows
+        with:
+          tag: ${{ inputs.tag }}
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}

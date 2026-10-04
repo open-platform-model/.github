@@ -1,0 +1,46 @@
+version: '3'
+
+# The four cascade tasks (Phase 2 cascade contract, section 5.1). The
+# resolver comes from CASCADE_RESOLVER (CI) or the .github checkout beside
+# this repo.
+
+tasks:
+  deps:cascade:
+    desc: Move UPSTREAM_VERSION to the newest cascade-sandbox-up release (working tree only; exit 0 moved, 3 nothing to do)
+    vars: &cascade_resolver
+      CASCADE_RESOLVER_PATH:
+        sh: |
+          if [ -n "${CASCADE_RESOLVER:-}" ]; then
+            case "$CASCADE_RESOLVER" in /*) ;; *) echo "CASCADE_RESOLVER must be absolute" >&2; exit 1 ;; esac
+            printf '%s\n' "$CASCADE_RESOLVER"; exit 0
+          fi
+          common=$(git rev-parse --path-format=absolute --git-common-dir) || exit 1
+          printf '%s\n' "$(dirname "$common")/../.github/.github/scripts/cascade/cascade-resolve.sh"
+    env: &cascade_env
+      CASCADE_RESOLVER: '{{.CASCADE_RESOLVER_PATH}}'
+    preconditions: &cascade_pre
+      - sh: test -x '{{.CASCADE_RESOLVER_PATH}}'
+        msg: "cascade resolver not found: check out open-platform-model/.github beside this repo, or set CASCADE_RESOLVER"
+    cmds:
+      - bash .tasks/cascade/cascade.sh
+
+  deps:cascade:title:
+    desc: Print the cascade PR title computed from the diff against the base (exit 3 when there is no diff)
+    vars: *cascade_resolver
+    env: *cascade_env
+    preconditions: *cascade_pre
+    cmds:
+      - '"$CASCADE_RESOLVER" title --classes .tasks/cascade/classes --pins .tasks/cascade/pins.sh'
+
+  deps:cascade:body:
+    desc: Print the cascade PR body (moved pins, triggering releases, warnings, Notes)
+    vars: *cascade_resolver
+    env: *cascade_env
+    preconditions: *cascade_pre
+    cmds:
+      - '"$CASCADE_RESOLVER" body --classes .tasks/cascade/classes --pins .tasks/cascade/pins.sh'
+
+  deps:cascade:test:
+    desc: The sandbox has no task tests; the .github wiring suite covers the receiver
+    cmds:
+      - echo "no task tests in the sandbox"

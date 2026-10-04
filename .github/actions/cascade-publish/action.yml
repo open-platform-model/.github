@@ -1,0 +1,112 @@
+name: Cascade publish
+description: >-
+  Verifies the plan the receiver's compute job uploaded, then mints the App
+  token and pushes deps/cascade under a lease and opens, edits, recreates,
+  closes or labels the cascade PR (workspace RELEASING.md, sections
+  "Two-job split" and "One rolling PR per repo"). It never runs repo code.
+
+# A composite action, not a job of cascade-receive.yml: a reusable-workflow
+# job that declares `environment: cascade` sees the Environment's variables
+# but not its secrets unless the caller passes `secrets: inherit` (sandbox
+# cycle E1). So the caller owns the publish job: it needs the reusable
+# Deps cascade job, declares `environment: cascade`, and passes the key in
+# as an input. The plan is untrusted: compute ran repo code. The scripts run
+# from this action's own directory, so a caller that pins the action to a
+# .github commit SHA runs exactly that commit's code.
+
+inputs:
+  dry-run:
+    description: >-
+      The receiver's stop switch: publish only when this is exactly false; true publishes
+      nothing (exit 0), any other value fails. Callers pass
+      `inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false'`.
+    required: true
+  labels-managed:
+    description: The repo declares its labels itself (cli); publish only checks they exist
+    required: false
+    default: 'false'
+  client-id:
+    description: The App's client id, vars.CASCADE_APP_CLIENT_ID of the cascade Environment
+    required: true
+  private-key:
+    description: The App key, secrets.CASCADE_APP_PRIVATE_KEY of the cascade Environment
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Derives the repo name the later steps use, from GITHUB_REPOSITORY
+    # only, before any script runs.
+    - name: Guard
+      id: guard
+      shell: bash
+      run: |
+        set -euo pipefail
+        owner="${GITHUB_REPOSITORY%%/*}"
+        name="${GITHUB_REPOSITORY#*/}"
+        if [ "$owner/$name" != "$GITHUB_REPOSITORY" ] || [ "$owner" != open-platform-model ] \
+          || ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          echo "::error::\`$GITHUB_REPOSITORY\` is not a repo of open-platform-model"
+          exit 1
+        fi
+        echo "::notice::repo $name"
+        echo "repo=$name" >>"$GITHUB_OUTPUT"
+
+    # The caller's if: already requires main; this holds even if a caller
+    # forgets it. The cascade Environment refuses other refs as well.
+    - name: Main only
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "$GITHUB_REF" != refs/heads/main ]; then
+          echo "::error::publish runs only on refs/heads/main, not $GITHUB_REF"
+          exit 1
+        fi
+
+    - name: Check out the repo
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: repo
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Download the plan
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        name: cascade-plan
+        path: ${{ runner.temp }}/cascade/plan
+
+    - name: Verify the plan
+      id: verify
+      shell: bash
+      env:
+        CASCADE_PUBLISH_DRY_RUN: ${{ inputs.dry-run }}
+        CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+        GH_TOKEN: ${{ github.token }}
+        CASCADE_READ_TOKEN: ${{ github.token }}
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/receive-publish.sh" verify
+
+    # publish=false: the dry-run input is true, or a deps-cascade:hold
+    # appeared since compute.
+    - name: Mint the App token
+      id: mint
+      if: steps.verify.outputs.publish == 'true'
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: open-platform-model
+        repositories: ${{ steps.guard.outputs.repo }}
+        permission-contents: write
+        permission-pull-requests: write
+        permission-issues: write
+
+    - name: Act
+      if: steps.verify.outputs.publish == 'true'
+      shell: bash
+      env:
+        CASCADE_PUBLISH_DRY_RUN: ${{ inputs.dry-run }}
+        CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+        CASCADE_LABELS_MANAGED: ${{ inputs.labels-managed }}
+        GH_TOKEN: ${{ steps.mint.outputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/receive-publish.sh" act

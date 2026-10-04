@@ -133,7 +133,11 @@ Changed files: <s> shipped, <t> test, <r> release-tool.
 - `<s>`, `<t>` and `<r>` SHALL count the changed paths per class.
 - Triggering releases SHALL list one line per valid tag in `CASCADE_TAGS` (space-separated) with
   `CASCADE_SOURCE` as the source. A source outside `core`, `catalog_opm`, `library`,
-  `opm-operator` and `cli` SHALL be dropped with a warning, and its tags with it. A tag not
+  `opm-operator`, `cli` and the names in `CASCADE_EXTRA_SOURCES` SHALL be dropped with a
+  warning, and its tags with it. `CASCADE_EXTRA_SOURCES` is a space-separated list that only the
+  sandbox receiver sets (to `cascade-sandbox-up`); a name in it that does not match the
+  resolver's repo-name pattern SHALL be ignored with a warning, and when it is unset or empty
+  the allowlist is exactly the five repos. A tag not
   matching `^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$` SHALL be dropped with a warning. A dropped
   value SHALL be named only with every character outside `[A-Za-z0-9._/-]` replaced by `?`, so
   payload text can never fail the mention lint. With nothing
@@ -175,6 +179,16 @@ Changed files: <s> shipped, <t> test, <r> release-tool.
 #### Scenario: Unknown source dropped
 
 - **WHEN** `CASCADE_SOURCE` is `evil` and `CASCADE_TAGS` is `v1.0.0`
+- **THEN** the section is `- None recorded (daily sweep or manual run).` and a warning names the dropped source
+
+#### Scenario: Sandbox source accepted when listed
+
+- **WHEN** `CASCADE_EXTRA_SOURCES` is `cascade-sandbox-up`, `CASCADE_SOURCE` is `cascade-sandbox-up` and `CASCADE_TAGS` is `v0.2.0`
+- **THEN** the section is ``- `cascade-sandbox-up` `v0.2.0` `` and no warning names the source
+
+#### Scenario: Sandbox source dropped when not listed
+
+- **WHEN** `CASCADE_EXTRA_SOURCES` is unset, `CASCADE_SOURCE` is `cascade-sandbox-up` and `CASCADE_TAGS` is `v0.2.0`
 - **THEN** the section is `- None recorded (daily sweep or manual run).` and a warning names the dropped source
 
 ### Requirement: Mention lint

@@ -1,0 +1,7 @@
+# actionlint v1.7.12 does not know the job.workflow_repository and
+# job.workflow_sha context properties (GitHub, 2026-04); the receive workflow
+# reads them to check its scripts out at its own commit.
+paths:
+  .github/workflows/cascade-receive.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type'

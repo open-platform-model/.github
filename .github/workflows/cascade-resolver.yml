@@ -1,8 +1,9 @@
 name: cascade-resolver
 
-# Tests the release-cascade resolver (.github/scripts/cascade/) offline:
-# shellcheck on every script, actionlint on every workflow, then the table
-# test, which answers every HTTP and git request from fixture files.
+# Tests the release-cascade resolver (.github/scripts/cascade/) and the
+# cascade workflows' scripts (.github/scripts/cascade/wiring/) offline:
+# shellcheck on every script, actionlint on every workflow, then the two
+# table tests, which answer every HTTP, git and gh request from fixture files.
 #
 # This is the check the main ruleset of this repo requires (workspace
 # RELEASING.md, section "Rulesets on main"), so it has no path filter: a
@@ -34,6 +35,9 @@ jobs:
       # one developers run; pin it so local and CI agree.
       SHELLCHECK_VERSION: 0.11.0
       SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+      # The runner image has no go-task; the wiring tests run task.
+      TASK_VERSION: 3.52.0
+      TASK_SHA256: 02c679ffae53dca791804847d78b31731615894e292948397c971c87ac9e95bd
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,7 +70,8 @@ jobs:
           find .github/scripts -name '*.sh' -print0 \
             | xargs -0 "$sc" -x \
                 .github/scripts/cascade/test/shim/curl \
-                .github/scripts/cascade/test/shim/git
+                .github/scripts/cascade/test/shim/git \
+                .github/scripts/cascade/wiring/test/shim/gh
 
       - name: actionlint
         run: |
@@ -78,5 +83,20 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -color .github/workflows/*.yml
 
+      - name: Install task
+        run: |
+          set -euo pipefail
+          tgz=task_linux_amd64.tar.gz
+          curl -q -sSfL --retry 3 -o "$RUNNER_TEMP/$tgz" \
+            "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/$tgz"
+          echo "$TASK_SHA256  $RUNNER_TEMP/$tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/task"
+          tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP/task" task
+          "$RUNNER_TEMP/task/task" --version
+          echo "$RUNNER_TEMP/task" >>"$GITHUB_PATH"
+
       - name: Offline resolver tests
         run: bash .github/scripts/cascade/test/run.sh
+
+      - name: Offline wiring tests
+        run: bash .github/scripts/cascade/wiring/test/run.sh
