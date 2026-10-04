@@ -200,7 +200,9 @@ check "release: ls-remote sees no extraheader and no credential helper" \
 check "release: ls-remote never prompts and reads no caller config" grep -qxF \
   "GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_PARAMETERS=unset GIT_CONFIG_COUNT=unset GIT_ASKPASS=unset GIT_DIR=unset" "$FX/git.env"
 check "release: ls-remote runs outside the caller's checkout with no credential helper" \
-  bash -c 'o=$(cat "$1/git.opts"); [[ $o == "opts=-C "* && $o != *"$2"* && $o == *" -c credential.helper=" ]]' _ "$FX" "$CK"
+  bash -c 'o=$(cat "$1/git.opts"); [[ $o == "opts=-C "* && $o != *"$2"* && $o == *" -c credential.helper= "* ]]' _ "$FX" "$CK"
+check "release: ls-remote aborts a transfer stalled for 60 seconds" \
+  bash -c 'o=$(cat "$1/git.opts"); [[ $o == *" -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60" ]]' _ "$FX"
 
 # --- holds --------------------------------------------------------------------------
 new_fx

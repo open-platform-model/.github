@@ -112,7 +112,7 @@ All through `lib/http.sh`, which issues only the contract §2.9 curl shape
 | Modulefile | `GET .../manifests/<v>` then `GET .../blobs/<digest>` of the `application/vnd.cue.modulefile.v1` layer | 200 or exit 1 |
 | Go list | `GET $CASCADE_GOPROXY/<path>/@v/list` | 200: lines; 404/410 on the new-major probe: none |
 | Go published | `GET .../@v/<v>.info` | 200 yes, 404/410 no |
-| Release candidates | `git -C $WORK -c credential.helper= ls-remote --tags --refs https://github.com/open-platform-model/<repo> 'refs/tags/v*'`, isolated (below) | non-zero git exit: retried like a `5xx`, then exit 1 |
+| Release candidates | `git -C $WORK -c credential.helper= -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 ls-remote --tags --refs https://github.com/open-platform-model/<repo> 'refs/tags/v*'`, isolated (below) | non-zero git exit: retried like a `5xx`, then exit 1 |
 | Release published | `HEAD -L https://github.com/open-platform-model/<repo>/releases/download/<v>/<asset>` per asset | all 200 yes; any 404 no |
 
 A GHCR `Link` header is relative (`</v2/<repo>/tags/list?last=...&n=1000>; rel="next"`), so
@@ -130,7 +130,8 @@ argument; the test shim logs that argument, and fixture tokens are dummies.
 `github.com` by default, and on a laptop a missing repo would make git prompt for a username:
 it runs with `-C $WORK` (a temp directory, with `GIT_CEILING_DIRECTORIES` stopping discovery
 there), `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_TERMINAL_PROMPT=0`,
-`-c credential.helper=`, and with `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`,
+`-c credential.helper=`, `-c http.lowSpeedLimit=1 -c http.lowSpeedTime=60` (a transfer stalled for 60 seconds
+fails like a curl `--max-time`), and with `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`,
 `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_ASKPASS` and `SSH_ASKPASS` unset. A failed
 call is retried with the HTTP budget (4 attempts, sleeping 2, 4 and 8 seconds). The `git` shim
 runs the real `git config` with the same options, environment and directory and logs every

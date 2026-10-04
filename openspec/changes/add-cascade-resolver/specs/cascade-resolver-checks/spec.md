@@ -65,7 +65,7 @@ suite SHALL put a `cue` that refuses to run first on `PATH`, so no case can depe
 - 5xx then 200, four 5xx, a 429 retry; a relative-`Link` pagination walk and 21 pages;
 - a draft or asset-less release skipped; a missing second asset; a failing `git ls-remote`
   tried 4 times and one retried to success; `git ls-remote` isolated from a credentialed
-  caller checkout;
+  caller checkout and run with the 60-second stall limit;
 - `--expect` published on the third poll, never published with a fake clock, above a hold and
   a prerelease against a stable current ignored;
 - `-q` first in every `curl.log` line; no request to `api.github.com` and no token value sent;

@@ -210,8 +210,9 @@ answer a version of another major, and the new major MUST NOT change the exit co
 Every request SHALL use the curl shape `curl -q -sS --connect-timeout 10 --max-time 60 -o <body>
 -D <headers> -w '%{http_code}' [-I] [-L] [-H <header>]... <url>`, with `-q` first and no curl
 `--retry`. Status `000`, `429` and `5xx` SHALL be retried up to 4 attempts in all, sleeping 2, 4
-and 8 seconds through `${CASCADE_SLEEP:-sleep}`, then exit 1. A failed `git ls-remote` SHALL
-get the same 4 attempts and sleeps. A 404 (or 410 on the proxy) SHALL
+and 8 seconds through `${CASCADE_SLEEP:-sleep}`, then exit 1. A `git ls-remote` SHALL abort a transfer stalled for 60 seconds
+(`http.lowSpeedLimit=1`, `http.lowSpeedTime=60`), and a failed one SHALL get the same 4
+attempts and sleeps. A 404 (or 410 on the proxy) SHALL
 mean not published and SHALL NOT be retried. Any other unexpected status SHALL be exit 1; the
 resolver MUST NOT fall back to an older or guessed version. `--expect <v>` SHALL apply only when
 `<v>` is valid, in-major, above `--current`, allowed by the prerelease rule and not above an

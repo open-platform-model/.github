@@ -16,7 +16,7 @@ ls_remote_tags() {
   (
     unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_ASKPASS SSH_ASKPASS
     export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="${WORK%/*}"
-    exec git -C "$WORK" -c credential.helper= ls-remote --tags --refs "$GH/$1" 'refs/tags/v*'
+    exec git -C "$WORK" -c credential.helper= -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 ls-remote --tags --refs "$GH/$1" 'refs/tags/v*'
   )
 }
 
