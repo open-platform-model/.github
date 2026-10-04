@@ -90,10 +90,16 @@ YAML
 # wc_run [<config>]: runs the check from the fixture's root (RC, OUT, ERR).
 wc_run() { run env -C "$WCD" bash "$WCHECK" "$@"; }
 
+# The offline output on success: the ok line, then the note that the copy
+# was not compared.
+wc_ok_out() {
+  printf 'cascade wiring: ok, .github %s (.github main)\ncascade wiring: the copy was not compared with .github %s (offline; --pin-on-main compares it)' "$1" "$1"
+}
+
 # wc_ok <name>: the check passes with the ok line.
 wc_ok() {
   wc_run
-  check "wiring check: $1" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$WC_SHA" "$ERR"
+  check "wiring check: $1" bash -c '[ "$1" = 0 ] && [ "$2" = "$3" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$(wc_ok_out "$WC_SHA")" "$ERR"
 }
 
 # wc_mut <name> <file> <yq program> <stderr substring>: a fresh receiver
@@ -362,11 +368,13 @@ wc_cfg "a publish-workflows path" '.["publish-workflows"] += ["../x.yml"]' "is n
 
 # --- --pin-on-main ----------------------------------------------------------------
 COMPARE=(api "repos/open-platform-model/.github/compare/$WC_SHA...main" --jq .status)
+FETCH=(api -H 'Accept: application/vnd.github.raw' "repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=$WC_SHA")
 for st in identical ahead; do
   wc_fresh; gh_reset
   gh_fx 0 "$st" -- "${COMPARE[@]}"
+  gh_fx_file 0 "$WCHECK" -- "${FETCH[@]}"
   run env -C "$WCD" bash "$WCHECK" --pin-on-main
-  check "pin on main: $st passes" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ]' _ "$RC" "$OUT" "$WC_SHA"
+  check "pin on main: $st passes" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$WC_SHA" "$ERR"
 done
 for st in behind diverged; do
   wc_fresh; gh_reset
@@ -378,6 +386,44 @@ wc_fresh; gh_reset
 gh_fx_err 1 "HTTP 404" -- "${COMPARE[@]}"
 run env -C "$WCD" bash "$WCHECK" --pin-on-main
 check "pin on main: a failed compare is refused" bash -c '[ "$1" = 1 ] && [[ $2 == *"cannot compare .github"* ]]' _ "$RC" "$ERR"
+check "pin on main: a failed compare fetches no copy" test "$(gh_count "api -H *")" = 0
+
+# --- the copy is the file at the pin ---------------------------------------------
+# As CI runs it: the copy at .tasks/cascade/wiring-check.sh, from the repo root.
+wc_copy_run() { run env -C "$WCD" bash .tasks/cascade/wiring-check.sh "$@"; }
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+gh_fx 0 identical -- "${COMPARE[@]}"
+gh_fx_file 0 "$WCHECK" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a byte-identical copy at the pin passes" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$WC_SHA" "$ERR"
+check "copy: the pinned file is fetched once, raw" test "$(gh_count "api -H Accept: application/vnd.github.raw repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=$WC_SHA")" = 1
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+printf '# a local tweak\n' >>"$WCD/.tasks/cascade/wiring-check.sh"
+gh_fx 0 identical -- "${COMPARE[@]}"
+gh_fx_file 0 "$WCHECK" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a copy that drifted is refused" bash -c '[ "$1" = 1 ] && [ -z "$2" ] && [[ $3 == *".tasks/cascade/wiring-check.sh differs from .github/scripts/cascade/wiring-check.sh at .github $4"* ]]' _ "$RC" "$OUT" "$ERR" "$WC_SHA"
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+printf '# the pinned file had one more line\n' | cat "$WCHECK" - >"$T_ROOT/wc-newer.sh"
+gh_fx 0 ahead -- "${COMPARE[@]}"
+gh_fx_file 0 "$T_ROOT/wc-newer.sh" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a copy left behind at a pin bump is refused" bash -c '[ "$1" = 1 ] && [[ $2 == *"differs from"* ]]' _ "$RC" "$ERR"
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+gh_fx 0 identical -- "${COMPARE[@]}"
+gh_fx_err 1 "HTTP 403: API rate limit exceeded" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a failed fetch is refused" bash -c '[ "$1" = 1 ] && [ -z "$2" ] && [[ $3 == *"cannot fetch .github/scripts/cascade/wiring-check.sh at .github $4"* ]]' _ "$RC" "$OUT" "$ERR" "$WC_SHA"
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+printf '# a local tweak\n' >>"$WCD/.tasks/cascade/wiring-check.sh"
+wc_copy_run
+check "copy: offline, a drifted copy passes with the note and makes no request" bash -c '[ "$1" = 0 ] && [ "$2" = "$3" ] && [ ! -s "$4" ]' _ "$RC" "$OUT" "$(wc_ok_out "$WC_SHA")" "$GHFX/log"
+
 wc_fresh; gh_reset
 yq -i '.jobs.notify-downstream.timeout-minutes = 30' "$WCD/.github/workflows/release.yml"
 run env -C "$WCD" bash "$WCHECK" --pin-on-main

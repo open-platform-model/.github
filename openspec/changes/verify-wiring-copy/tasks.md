@@ -7,9 +7,9 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 1. The copy compares itself with the pinned file
 
-- [ ] 1.1 `wiring-check.sh`: capture `${BASH_SOURCE[0]}`; with `--pin-on-main`, after `compare`, fetch the canonical file at the SHA (raw) and `cmp` it; the offline note after the ok line; header comment (D1)
-- [ ] 1.2 Test helper `gh_fx_file` (a fixture answer whose stdout is a file's exact bytes); cases: identical copy passes, a one-byte drift fails, a failed fetch fails, a failed compare makes no fetch, offline prints the note and makes no request, the copy run from the fixture's `.tasks/cascade/` as CI runs it; existing `--pin-on-main` and ok cases adapted
-- [ ] 1.3 Gates green, then commit `fix(cascade): compare the wiring check copy with the pinned file`
+- [x] 1.1 `wiring-check.sh`: capture `${BASH_SOURCE[0]}`; with `--pin-on-main`, after `compare`, fetch the canonical file at the SHA (raw) and `cmp` it; the offline note after the ok line; header comment (D1)
+- [x] 1.2 Test helper `gh_fx_file` (a fixture answer whose stdout is a file's exact bytes); cases: identical copy passes, a one-byte drift fails, a failed fetch fails, a failed compare makes no fetch, offline prints the note and makes no request, the copy run from the fixture's `.tasks/cascade/` as CI runs it; existing `--pin-on-main` and ok cases adapted
+- [x] 1.3 Gates green, then commit `fix(cascade): compare the wiring check copy with the pinned file`
 
 ## 2. Declared extra references and credential-free resolver checkouts
 

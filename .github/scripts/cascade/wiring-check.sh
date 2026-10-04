@@ -9,14 +9,21 @@
 #
 # It guards against mistakes. The copy and the config live in the repo's own
 # tree, so a PR can change them along with the workflows; review and the main
-# ruleset guard against a deliberate edit.
+# ruleset guard against a deliberate edit. Online it also compares itself with
+# the canonical file at the pinned SHA: that catches a copy that drifted or was
+# not replaced at a pin bump, and makes an edit to the copy fail unless the
+# edit also removes this comparison, which the diff shows. It is no substitute
+# for review, since the copy under test runs the comparison.
 #
 # Usage, from the repo root:
 #   bash .tasks/cascade/wiring-check.sh [--pin-on-main] [<config>]
 # Offline by default (task cascade:wiring:check). --pin-on-main, which the
 # required CI step passes, also asks the GitHub API (gh, GH_TOKEN) that the
 # one .github SHA is on .github's main, so a commit that exists only in a
-# fork of .github (an "imposter commit") is refused.
+# fork of .github (an "imposter commit") is refused, and then fetches
+# .github/scripts/cascade/wiring-check.sh at that SHA and compares it byte for
+# byte with this running file. Offline, a second line after the ok line says
+# the copy was not compared.
 # <config> defaults to .tasks/cascade/wiring-check.yaml:
 #   pin-comment: .github main      # the comment after every .github SHA
 #   receiver: true                 # false: notify only (core)
@@ -36,8 +43,9 @@
 #
 # Exit status: 0 the shapes match (prints "cascade wiring: ok, .github <sha>
 # (<pin comment>)"); 1 a mismatch, or with --pin-on-main a SHA not on
-# .github main or an API call that failed (every problem is printed on
-# stderr); 2 usage, a missing tool or a bad config.
+# .github main, a copy that differs from the file at the SHA, or an API call
+# that failed (every problem is printed on stderr); 2 usage, a missing tool or
+# a bad config.
 #
 # Tools: bash, coreutils, sed, grep, mikefarah yq v4; gh with --pin-on-main
 # (through "${CASCADE_GH:-gh}").
@@ -45,6 +53,8 @@
 set -euo pipefail
 
 usage_err() { echo "cascade wiring: $*" >&2; exit 2; }
+# The file bash is running: the copy --pin-on-main compares with the pinned one.
+SELF=${BASH_SOURCE[0]}
 PIN_ON_MAIN=false
 if [ "${1:-}" = --pin-on-main ]; then PIN_ON_MAIN=true; shift; fi
 [ $# -le 1 ] && [[ ${1:-} != -* ]] || usage_err "usage: wiring-check.sh [--pin-on-main] [<config>]"
@@ -419,4 +429,25 @@ if [ "$PIN_ON_MAIN" = true ]; then
       ;;
   esac
 fi
+
+# --- the copy is the file at the pin --------------------------------------------
+
+# The canonical file at the pinned SHA, as raw bytes, compared with the file
+# bash is running. Only after the SHA was found on main, so a fork-only
+# commit is never fetched.
+CANON=.github/scripts/cascade/wiring-check.sh
+if [ "$PIN_ON_MAIN" = true ]; then
+  pinned=$(mktemp)
+  trap 'rm -f "$pinned"' EXIT
+  "${CASCADE_GH:-gh}" api -H 'Accept: application/vnd.github.raw' \
+    "repos/open-platform-model/.github/contents/$CANON?ref=$shas" >"$pinned" || {
+    echo "cascade wiring: cannot fetch $CANON at .github $shas" >&2
+    exit 1
+  }
+  cmp -s "$pinned" "$SELF" || {
+    echo "cascade wiring: $SELF differs from $CANON at .github $shas; replace it with that file (.github README, \"Keeping the copy in sync\")" >&2
+    exit 1
+  }
+fi
 echo "cascade wiring: ok, .github $shas ($PIN_COMMENT)"
+[ "$PIN_ON_MAIN" = true ] || echo "cascade wiring: the copy was not compared with .github $shas (offline; --pin-on-main compares it)"
