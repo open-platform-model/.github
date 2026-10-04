@@ -23,7 +23,8 @@ run three jobs:
 
 `compute` runs the repo's task and holds no secret. `publish` runs only `git`, `gh`, `jq` and the
 `org-github` scripts, never a repo task or repo code. Task (3.x) is always installed, and
-`compute` SHALL fail unless `yq --version` reports mikefarah.
+`compute` SHALL fail unless `yq --version` reports mikefarah. The bot SHALL never enable
+auto-merge on a cascade PR (every cascade PR is merged by a human).
 
 #### Scenario: Bad gate mode
 
@@ -32,8 +33,11 @@ run three jobs:
 
 ### Requirement: Dry run fails closed
 
-`publish` SHALL run only when `compute` succeeded, its `dry_run` output is not `true`, and its
-`action` output is one of `push`, `recreate`, `close`, `conflict` or `too_long`. `compute` SHALL
+`publish` SHALL run only when `compute` succeeded, its `dry_run` output is not `true`, its
+`action` output is one of `push`, `recreate`, `close`, `conflict` or `too_long`, and, read by
+the reusable workflow itself rather than from `compute`, the `dry-run` input is false and the
+run's ref is `refs/heads/main`. `publish` SHALL also refuse, before minting, a plan whose
+`effective_dry_run` is true. `compute` SHALL
 treat a run from any ref other than `refs/heads/main` as a dry run whatever the input says. In a
 dry run `compute` SHALL still write the job summary with the line "DRY RUN: nothing was pushed",
 the mode, action, tips, title, labels, gate results, the body and the diff (capped at 200 KB in
@@ -43,6 +47,11 @@ the summary, in full as `diff.patch` in the `cascade-plan` artifact). Notify ign
 
 - **WHEN** the caller passes `dry-run: true` and the task moves a pin
 - **THEN** the summary shows the diff and "DRY RUN: nothing was pushed", and no branch, PR, label or comment changes
+
+#### Scenario: Forged dry-run output
+
+- **WHEN** the caller passes `dry-run: true` and repo code in `compute` makes its `dry_run` output read `false`
+- **THEN** `publish` is still skipped
 
 #### Scenario: Branch run is a dry run
 

@@ -43,12 +43,19 @@ Each job that needs the shared scripts or the resolver SHALL check out
 `open-platform-model/.github` at the input `org-github-ref` (default `main`) to `org-github`, with
 `persist-credentials: false`. The first step of every job SHALL fail with "org-github-ref may
 differ from main only in a sandbox repo" when `org-github-ref` is not `main` and the calling repo
-does not match `^open-platform-model/cascade-sandbox-`.
+does not match `^open-platform-model/cascade-sandbox-`. That check and the repo-name derivation
+SHALL be written inline in the reusable workflow and run before any checkout, never read from
+the `org-github` checkout whose ref they guard.
 
 #### Scenario: Production repo with a branch ref
 
 - **WHEN** `library` calls `cascade-receive.yml` with `org-github-ref: feat/x`
 - **THEN** every job fails in its first step with the message above
+
+#### Scenario: Guard does not come from the guarded ref
+
+- **WHEN** a production repo passes an `org-github-ref` whose scripts would accept any ref
+- **THEN** the job still fails in its first step, before that ref is checked out
 
 #### Scenario: Sandbox repo with a branch ref
 
@@ -77,3 +84,16 @@ receive it as a masked `http.https://github.com/.extraheader` value through `GIT
 
 - **WHEN** a job that declares `environment: cascade` runs from a ref other than `main`
 - **THEN** GitHub refuses the deployment before any step runs and no token is minted
+
+### Requirement: Repo code never holds a token
+
+Every command that runs code from the calling repo (its cascade tasks, its `pins.sh`, and the G2
+task in a release-head worktree) SHALL run with `GH_TOKEN`, `GITHUB_TOKEN`, the read-token
+variable and every `GIT_CONFIG_*` header variable unset. A git read of the calling repo that
+needs credentials SHALL receive the `GITHUB_TOKEN` header through `GIT_CONFIG_*` only for that
+one git call, never written to `.git/config`, a file, `GITHUB_ENV` or a step output.
+
+#### Scenario: Task sees no token
+
+- **WHEN** `compute` runs `task -x deps:cascade` in a run where `GITHUB_TOKEN` is available to the job
+- **THEN** the task's environment holds neither `GH_TOKEN` nor `GITHUB_TOKEN` nor an authorization header

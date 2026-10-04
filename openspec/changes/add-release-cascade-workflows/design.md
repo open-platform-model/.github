@@ -85,18 +85,31 @@ current release at implementation time, recorded in a comment.
 | --- | --- | --- | --- | --- | --- |
 | `cascade-notify.yml` | `notify` (`Notify downstream`) | `cascade` | `contents: read` | 20 | guard, checkout `org-github`, `notify.sh validate`, Go proxy wait (library), mint, `notify.sh dispatch` |
 | `cascade-receive.yml` | `compute` (`Compute`) | none | `contents: read`, `pull-requests: read` | 45 | contract §6.2 steps 1 to 15 |
-| | `gates` (`Post gates`) | none | `statuses: write`, `pull-requests: read` | 10 | contract §6.3 |
+| | `gates` (`Post gates`) | none | `contents: read`, `statuses: write`, `pull-requests: read` | 10 | contract §6.3 |
 | | `publish` (`Publish`) | `cascade` | `contents: read`, `pull-requests: read` | 15 | contract §6.4 |
 | `cascade-gates.yml` | `gates` (`Cascade gates`) | none | `statuses: write`, `actions: write` | 5 | contract §8.3, inline script, no checkout |
 
-No job name here is, or becomes in this change, a required check. Each job's first step derives
-the repo name from `GITHUB_REPOSITORY` (contract §2.2) and runs the `org-github-ref` guard
-(contract §2.4); both are `lib.sh` functions, except in `cascade-gates.yml`, which inlines the
-same two checks because it checks nothing out (contract §8.3).
+No job name here is, or becomes in this change, a required check.
+
+**The guard step.** The first step of every job (five jobs in three workflows) is the same
+inline `run:` step, `Guard`, written in the reusable YAML and run before any checkout. It reads
+`GITHUB_REPOSITORY` and the input `org-github-ref` (through `env:` as `INPUTS_REF`), fails unless
+the owner is exactly `open-platform-model` and the name is non-empty and matches the resolver's
+`REPO_RE`, fails with "org-github-ref may differ from main only in a sandbox repo" when
+`INPUTS_REF != main` and the repository does not match `^open-platform-model/cascade-sandbox-`,
+and writes the name to the step output `repo` (contract §2.2, §2.4). It is never a `lib.sh`
+function: `lib.sh` exists on disk only after the `org-github` checkout, and that checkout uses
+the very ref being guarded, so a guard read from it could be replaced by the ref it guards. The
+wiring suite extracts the step text from each job with `yq`, asserts the five copies are
+identical, and runs it against the guard cases.
 
 The `compute` job outputs `action`, `dry_run` and `mode`. `publish`'s `if:` is the contract
-§6.4 expression. Artifacts: `cascade-gates` (`gates.json`) and `cascade-plan` (`plan.json`,
-`body.md`, `cascade.bundle`, and `diff.patch` in a dry run), retention 1 day.
+§6.4 expression with two terms added, both read by the reusable workflow itself and never from
+`compute`: `!inputs.dry-run && github.ref == 'refs/heads/main'`. `compute` runs repo code, which
+can write `GITHUB_ENV` or `BASH_ENV` for the steps after it, so its `dry_run` output alone cannot
+hold the `CASCADE_DRY_RUN` stop switch; `receive-publish.sh verify` also refuses a plan whose
+`effective_dry_run` is true. Artifacts: `cascade-gates` (`gates.json`) and `cascade-plan`
+(`plan.json`, `body.md`, `cascade.bundle`, and `diff.patch` in a dry run), retention 1 day.
 
 ### Script interfaces
 
@@ -111,13 +124,33 @@ to `$RUNNER_TEMP/cascade`; scripts refuse a `CASCADE_T` inside `repo/` or `org-g
 | `notify.sh` | `notify.sh validate --tag <tag>` | `CASCADE_REPO` | stdout: targets, comma-separated; exit 1 "not a cascade source" or bad tag |
 | | `notify.sh dispatch --tag <tag>` | `CASCADE_REPO`, `GH_TOKEN` (App), `GITHUB_STEP_SUMMARY` | one summary line per target; exit 1 when any target failed after 3 attempts |
 | | `notify.sh wait-proxy --tag <tag>` | `CASCADE_PROXY` (default `https://proxy.golang.org`) | always exit 0; a warning on timeout |
-| `receive-compute.sh` | `receive-compute.sh <step>`, step one of `guard`, `payload`, `gates`, `state`, `prepare`, `notes`, `run`, `text`, `action`, `plan`, `summary` | `CASCADE_REPO`, `CASCADE_T`, `CASCADE_RESOLVER`, `CASCADE_DRY_RUN`, `CASCADE_REF` (`github.ref`), `CASCADE_EVENT` (`github.event_name`), `CASCADE_PAYLOAD` (`toJSON(github.event.client_payload)`), `CASCADE_G2_MODE`, `CASCADE_G3_MODE`, `GH_TOKEN` (`GITHUB_TOKEN`) | `GITHUB_ENV`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, files under `CASCADE_T` |
-| `receive-publish.sh` | `receive-publish.sh verify`, then (token minted) `receive-publish.sh act` | `CASCADE_REPO`, `CASCADE_T`, `CASCADE_LABELS_MANAGED`, `GH_TOKEN` (`GITHUB_TOKEN` for `verify`, App token for `act`), `CASCADE_PUSH_B64` (masked header, `act` only) | PR, labels, comments, branch; `verify` exits 1 before the mint on any refusal; `act` exits 1 for `too_long` |
+| `receive-compute.sh` | `receive-compute.sh <step>`, step one of `init`, `payload`, `gates`, `state`, `prepare`, `notes`, `run`, `text`, `action`, `plan`, `summary` | `CASCADE_REPO` (the `Guard` output), `CASCADE_T`, `CASCADE_RESOLVER`, `CASCADE_DRY_RUN`, `CASCADE_GATES_ONLY`, `CASCADE_REF` (`github.ref`), `CASCADE_EVENT` (`github.event_name`), `CASCADE_PAYLOAD` (`toJSON(github.event.client_payload)`), `CASCADE_G2_MODE`, `CASCADE_G3_MODE`; `GH_TOKEN` and `CASCADE_READ_TOKEN` (both `GITHUB_TOKEN`) only on the steps that call the API or fetch (`gates`, `state`, `text`) | `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, files under `CASCADE_T`; never `GITHUB_ENV` |
+| `receive-publish.sh` | `receive-publish.sh verify`, then (token minted) `receive-publish.sh act` | `CASCADE_REPO`, `CASCADE_T`, `CASCADE_LABELS_MANAGED`, `GH_TOKEN` (`GITHUB_TOKEN` for `verify`, the mint output for `act`), `CASCADE_READ_TOKEN` (`verify` only) | PR, labels, comments, branch; `verify` exits 1 before the mint on any refusal; `act` exits 1 for `too_long` |
 | `gates-eval.sh` | `gates-eval.sh` | `CASCADE_REPO`, `CASCADE_T`, `CASCADE_RESOLVER`, `GH_TOKEN` | `$CASCADE_T/gates.json`; exit 1 only when the release-PR list cannot be read (then no file) |
 | `gates-post.sh` | `gates-post.sh --g2-mode <m> --g3-mode <m> <gates.json>` | `CASCADE_REPO`, `CASCADE_RUN_URL`, `GH_TOKEN` | statuses; exit 1 when any post failed |
 
 Each step of `receive-compute.sh` is one workflow step, so the job log shows which part failed
-and contract §6.2's order is visible in the workflow file.
+and contract §6.2's order is visible in the workflow file. Steps hand values to each other
+through one file per value under `$CASCADE_T/state/`, read without `eval` or `source`; the
+payload values reach the task only through the `run` step's own environment.
+
+### Token hygiene in `compute` and `publish`
+
+- **Repo code never sees a token.** Every command that runs repo code (`task -x deps:cascade`,
+  its `:title` and `:body` tasks, `.tasks/cascade/pins.sh`, and the G2 task in a release-head
+  worktree) runs under
+  `env -u GH_TOKEN -u GITHUB_TOKEN -u CASCADE_READ_TOKEN -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0`.
+  The `run` step is not given either token at all. A wiring case has the toy task fail when it
+  sees `GH_TOKEN`, `GITHUB_TOKEN` or `CASCADE_READ_TOKEN`.
+- **The read header.** `actions/checkout` keeps no credential (`persist-credentials: false`), so
+  the later `git ls-remote` and `git fetch` of a private repo (only `cascade-sandbox-down`) need
+  one. `lib.sh`'s `git_read` sets `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0` and
+  `GIT_CONFIG_VALUE_0` to the masked `GITHUB_TOKEN` header inside a subshell around that one git
+  call, and only when `CASCADE_READ_TOKEN` is set; nothing is written to `.git/config`.
+- **The push header.** `act` receives only the mint output, as `GH_TOKEN` through `env:`. It
+  computes the base64 of `x-access-token:<token>` itself, prints `::add-mask::` for it, and
+  exports `GIT_CONFIG_*` inside its own process. No step hands the header to another step, and
+  nothing writes it to `GITHUB_ENV`, an output or a file.
 
 ### Network requests
 
@@ -155,12 +188,16 @@ resolver suite: `test/run.sh` sources `test/lib.sh` (case runner, `PASS`/`FAIL`,
 a trap, git isolated with `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`). The `gh`
 shim answers each `gh` invocation from a per-case fixture directory keyed by the argument
 vector, logs every call, and fails a case on an unexpected call. A static case greps the three
-workflows' `run:` blocks for `${{` and fails on a match.
+workflows' `run:` blocks for `${{` and fails on a match. The toy task calls the real resolver
+for `title`, `body`, `classify` and `semver-cmp`, all offline; no case calls `newest`,
+`published` or `pin-of`.
 
-`cascade-resolver.yml` gains one step, `Offline wiring tests` (`bash
-.github/scripts/cascade/wiring/test/run.sh`), after `Offline resolver tests`, and the `gh` shim
-joins the shellcheck file list. The job and context name stay `Resolver tests`; the timeout is
-raised from 10 only if a green run needs it.
+`cascade-resolver.yml` gains two steps in the `Resolver tests` job: `Install task`, which
+downloads go-task v3.52.0 from its GitHub release and checks a pinned sha256, as the job already
+does for shellcheck and actionlint (the ubuntu-24.04 image ships no go-task, and the wiring
+suite runs `task`); and `Offline wiring tests` (`bash .github/scripts/cascade/wiring/test/run.sh`)
+after `Offline resolver tests`. The `gh` shim joins the shellcheck file list. The job and
+context name stay `Resolver tests`; the timeout is raised from 10 only if a green run needs it.
 
 ## Research & Decisions
 
@@ -224,14 +261,32 @@ raised from 10 only if a green run needs it.
   refusal is an owner decision for opm-operator (contract §15 item 2), not something this change
   works around.
 
-### Departures from contract §12, reported to the supervisor
+### Departures from the contract, reported to the supervisor
 
-- **The wiring suite uses the real resolver, not the stub.** The toy task needs `title`,
-  `body` and `classify`, which the stub does not implement (`stub-resolve.sh:18-90`) and which
-  run offline in the real resolver. The toy task never calls `newest`, so no network is reached.
-- **The concurrency-group expression is not tested offline.** It lives in each caller (contract
-  §5), not in any `.github` file, and no offline evaluator of GitHub expressions exists here.
-  actionlint checks it in the sandbox caller, and S11 proves the three cases from run logs.
+- **The wiring suite uses the real resolver, not the stub** (contract §12). The toy task needs
+  `title`, `body` and `classify`, which the stub does not implement (`stub-resolve.sh:18-90`)
+  and which run offline in the real resolver. No case calls `newest`, `published` or `pin-of`,
+  so no network is reached.
+- **The concurrency-group expression is not evaluated offline** (contract §12). It lives in each
+  caller (contract §5), and no offline evaluator of GitHub expressions exists here. Instead the
+  sandbox caller is committed with this change (`sandbox/down/`), the pinned actionlint checks
+  it, a wiring case asserts its `concurrency.group` equals the contract §5 string byte for byte,
+  and S11 proves the three cases from run logs.
+- **`publish`'s `if:` gains `!inputs.dry-run && github.ref == 'refs/heads/main'`, and `verify`
+  refuses `effective_dry_run: true`** (contract §6.4). Only additions: the stop switch no longer
+  depends on an output of the job that runs repo code.
+- **The `gates` job also has `contents: read`** (contract §6.1 table). It checks out `org-github`
+  for `gates-post.sh`, and contract §2.2 gives that checkout `contents: read`.
+- **The title-rise comment fires only on `push` and `recreate`** (contract §6.4 step 5 says
+  "independently of the action"). "Once per rise" relies on the body marker being rewritten with
+  `T_computed`; the other actions never edit the body, so firing there would repeat the comment
+  on every run.
+- **E3/E4 (b) is split** (contract §11.4). As written, (b) closes the PR, reruns and expects
+  "recreate with the Notes carried", but with no open PR `CASCADE_NOTES_FILE` is not set
+  (contract §6.2 step 9) and "a recreate with no open PR carries nothing" (contract §6.4). (b) is
+  now a bot-only branch under an open PR (`rebuild` turned into `recreate` by the guard, Notes
+  and labels carried); (b2) is the closed PR (a fresh PR with no Notes). The contract text is
+  inconsistent, not the design; reported to the supervisor.
 
 ## Risks / Trade-offs
 
@@ -253,16 +308,26 @@ raised from 10 only if a green run needs it.
   recorded; it blocks only Phase 5's required contexts.
 - [Public repos disable scheduled workflows after 60 days without activity] → product repos are
   active; the sandbox uses no schedule.
-- [`publish` runs with `GITHUB_TOKEN` for git reads on the private sandbox] → the header is set
-  through `GIT_CONFIG_*` like the push header, never persisted in `.git/config`.
+- [`compute` and `publish` read the private sandbox with `GITHUB_TOKEN`] → the header is set
+  through `GIT_CONFIG_*` in a subshell around the one git call, never persisted in
+  `.git/config`, and every repo-code command runs with all tokens unset (Token hygiene).
+- [During the cycle the sandbox callers run `@feat/add-release-cascade-workflows`, an
+  unprotected branch, inside `cascade` Environments that hold the one App key] → anyone with
+  write access to `.github` can push to that branch and dispatch a sandbox run that mints a
+  token for any of the seven repos. Accepted for the length of the cycle (the org's writers are
+  the owner and the supervisor's agents); recorded under "Shared-key reach"; right after this PR
+  merges the supervisor switches the sandbox callers to `@main` and deletes the branch (Migration
+  Plan step 4).
 
 ## Migration Plan
 
 1. Sections 1 to 4 of `tasks.md` land the code and tests, each green and committed.
 2. The supervisor completes the sandbox preconditions (proposal "Depends on").
 3. Section 5 runs the sandbox cycle against this branch and records results here.
-4. The contract §14 workspace PR merges, then this PR, then the sandbox callers move to `@main`
-   and S1 is rerun once (contract §11.3).
+4. The contract §14 workspace PR merges, then this PR. Right after the merge the supervisor
+   switches the sandbox callers to `@main` (dropping `org-github-ref`) in one sandbox PR,
+   deletes `feat/add-release-cascade-workflows` from `origin`, and reruns S1 once (contract
+   §11.3).
 5. B1 to B5 merge after this, each receiver behind `CASCADE_DRY_RUN=true`.
 
 Rollback: callers stop at once by stop switches (contract §9.2: `CASCADE_NOTIFY=off`,
@@ -271,52 +336,84 @@ PR breaks every `@main` caller, so revert the callers first.
 
 ## Sandbox cycle
 
-The run follows contract §11.3 and §11.4. The sandbox repos are seeded by PRs there; pushes,
-releases, tags and repository variables in the two sandbox repos are allowed by the Phase 3 run
-rules; Environments, secrets, Actions settings and rulesets there are supervisor-only. Every row
-gets its run URL, PR URL and observed outcome. Nothing has run yet.
+The run follows contract §11.3 and §11.4, with E3/E4 (b) split as "Departures" says. The
+sandbox repos are seeded by PRs there. Under the Phase 3 brief the agent may, in the two
+sandbox repos only, open and merge PRs, push branches, create releases and tags (never move or
+delete one), send dispatches and set repository variables; Environments, secrets, Actions
+settings and rulesets there stay supervisor steps. Sandbox clones use `git@github.com:` URLs:
+the owner's `gh` token has no `workflow` scope, so an HTTPS push of `.github/workflows/*` would
+be refused. Every row gets its run URL, PR URL, the `org-github` commit it ran, and the observed
+outcome, here and in the scratchpad file `p3-gh-workflows-sandbox.md`.
 
-**Preconditions** (supervisor): `cascade-sandbox-up` public; `main` rulesets on both sandboxes;
-`CASCADE_DRY_RUN=false` on `cascade-sandbox-down`; this branch pushed to `origin` so
-`@feat/add-release-cascade-workflows` resolves.
+**Preconditions** (supervisor): `cascade-sandbox-up` public; `main` rulesets on both sandboxes
+(contract §11.5); this branch pushed to `origin` so `@feat/add-release-cascade-workflows`
+resolves. **Agent:** the variable `CASCADE_DRY_RUN=false` on `cascade-sandbox-down`, set after
+the seed PR merges and before E1.
 
-**Seeds.** `cascade-sandbox-up`: `README.md`; `.github/workflows/release.yml`
-(`workflow_dispatch` input `version`; job `release` with `contents: write` creating a published
-release with `up.tar.gz`; job `notify-downstream` calling `cascade-notify.yml@feat/add-release-cascade-workflows`
-with `org-github-ref` set the same); seed release `v0.1.0`. `cascade-sandbox-down`:
-`UPSTREAM_VERSION` (`v0.1.0`), `Taskfile.yml` with the four cascade tasks, `.tasks/cascade/classes`
-(`shipped UPSTREAM_VERSION`, `test fixtures/`), `.tasks/cascade/pins.sh` (one row, key
-`github.com/open-platform-model/cascade-sandbox-up`, display `up`, class `shipped`),
-`.tasks/cascade/cascade.sh` (contract §11.3), `.github/workflows/ci.yml` (job `ci`),
+**Seeds** (committed under `sandbox/up/` and `sandbox/down/` in this change, linted with the
+pinned actionlint and shellcheck before they are pushed). `cascade-sandbox-up`: `README.md`;
+`.github/workflows/release.yml` (`workflow_dispatch` input `version`; job `release` with
+`contents: write` creating a published release with `up.tar.gz`; job `notify-downstream`
+calling `cascade-notify.yml@feat/add-release-cascade-workflows` with `org-github-ref` set the
+same); `.github/workflows/probe-env.yml` (E1b: `workflow_dispatch`, calls the same notify, its
+job skipped on `main` so only the `--ref probe-env` run reaches the Environment); seed release
+`v0.1.0`. `cascade-sandbox-down`: `UPSTREAM_VERSION` (`v0.1.0`), `Taskfile.yml` with the four
+cascade tasks, `.tasks/cascade/classes` (`shipped UPSTREAM_VERSION`, `test fixtures/`),
+`.tasks/cascade/pins.sh` (one row, key `github.com/open-platform-model/cascade-sandbox-up`,
+display `up`, class `shipped`), `.tasks/cascade/cascade.sh` (contract §11.3),
+`.github/workflows/ci.yml` (job `ci`, plus one step using a deliberately old SHA-pinned
+`actions/checkout` for E7), `.github/dependabot.yml` (`github-actions`, daily),
 `.github/workflows/touch.yml`, `.github/workflows/deps-cascade.yml` (contract §5, no schedule,
-`setup-cue: false`), `.github/workflows/cascade-gates.yml` (contract §8.3).
+`setup-cue: false`), `.github/workflows/cascade-gates.yml` (contract §8.3), and
+`.github/workflows/probe.yml`: `workflow_dispatch` with a choice input `e4c-inplace`,
+`e4c-merge` or `e5` and a `pr` input, one job in the `cascade` Environment that mints a token
+with `repositories: cascade-sandbox-down` and only `contents: write` (E4c) or `contents: write`
+plus `pull-requests: write` (E5), and records whether GitHub accepts the push or the
+update-branch call. `probe.yml` is in the first seed so that no workflow change on `main` is
+needed mid-cycle; it is removed by a sandbox PR, and the `probe-env` branch and the `probe/*`
+branches deleted, after the cycle.
 
-| Id | Step | Pass | Run / PR | Result |
-| --- | --- | --- | --- | --- |
-| E1 | S1: release `v0.2.0` in up | notify mints in the reusable job; down starts a `repository_dispatch` run whose actor is `opm-cascade[bot]`; a branch `workflow_dispatch` of down's caller is a forced dry run | | not run |
-| E1b | `probe-env` branch in up calls notify | the Environment refuses before any step; no token | | not run |
-| E2 | S2: receiver opens the PR | one PR by `app/opm-cascade`, title `fix(deps): bump up to v0.2.0`, body with moved pin, triggering release and Notes marker; bot commit; `ci` and `mention-guard` pass | | not run |
-| S3 | release `v0.3.0` | same PR number, one commit, `v0.3.0`, title updated | | not run |
-| S4 | human commit `fixtures/human.txt`, release `v0.4.0` | human commit kept as ancestor, bot commit on top, title `fix(deps)` | | not run |
-| E3/E4 | `touch.yml` changed on `main`; (a) with the human commit, (b) bot-only after close and rerun, (c) probe pushes | (a) `conflict`, label and comment, no push; (b) `recreate` with Notes and labels carried; (c) decides `WF_GUARD_RULE` | | not run |
-| E5 | probe update-branch with the App token | recorded only | | not run |
-| E6 | `sha_pinning_required` on down (supervisor), caller at `@main` | recorded; refusal goes to the owner | | not run (needs A on `main`) |
-| E7 | a Dependabot PR in down | `n/a` statuses posted, or the read-only token recorded as a Phase 5 blocker | | not run |
-| S5 | Notes edited, release again | Notes byte for byte; a bare mention in Notes fails mention-guard (accepted) | | not run |
-| S6 | squash-merge the PR | `main` message is exactly `<PR title> (#N)` | | not run |
-| S7 | fake `release-please--x` PR behind | `cascade/freshness` `WARN: behind: up …`; ordinary PR `n/a` | | not run |
-| S8 | dispatch `{"source":"evil","tags":["@x"]}` | dropped with a warning, sweep, no mention | | not run |
-| S9 | `CASCADE_DRY_RUN=true`, release | summary diff and "DRY RUN", nothing pushed | | not run |
-| S10 | retitle to `feat(deps): sandbox`, release | title kept, marker computed, no title-rise comment | | not run |
-| S11 | push to the S7 PR while a dispatch run is pending | gates-only run in `deps-cascade-gates`; pending run not replaced | | not run |
+| Id | Step | Pass | org-github SHA | Run / PR | Result |
+| --- | --- | --- | --- | --- | --- |
+| E1 | S1: release `v0.2.0` in up | notify mints in the reusable job; down starts a `repository_dispatch` run whose actor is `opm-cascade[bot]`; a branch `workflow_dispatch` of down's caller is a forced dry run | | | not run |
+| E1b | `probe-env` branch in up, `gh workflow run probe-env.yml --ref probe-env` | the Environment refuses before any step; no token | | | not run |
+| E2 | S2: receiver opens the PR | one PR by `app/opm-cascade`, title `fix(deps): bump up to v0.2.0`, body with moved pin, triggering release and Notes marker; bot commit; `ci` and `mention-guard` pass | | | not run |
+| S3 | release `v0.3.0` | same PR number, one commit, `v0.3.0`, title updated | | | not run |
+| S4 | human commit `fixtures/human.txt`, release `v0.4.0` | human commit kept as ancestor, bot commit on top, title `fix(deps)` | | | not run |
+| E3/E4 (a) | `touch.yml` changed on `main` (sandbox PR) with the human commit on the branch, release | `conflict` (workflows), label and comment once, no push | | | not run |
+| E3/E4 (b) | a human force-resets `deps/cascade` to the last bot-only commit with the PR open, release | `rebuild` → D2 non-empty → `recreate`: C-recreate on the old PR, a new PR with the Notes and the carried `deps-cascade:breaking`/`need-human-review` labels, "Continued in #N" | | | not run |
+| E3/E4 (b2) | close the PR, release | mode `recreate` with no open PR: a fresh PR with no Notes, nothing carried | | | not run |
+| E3/E4 (c) | `probe.yml` `e4c-inplace` and `e4c-merge` against `probe/*` branches built before the `touch.yml` change | decides `WF_GUARD_RULE` | | | not run |
+| E5 | `probe.yml` `e5` on a PR behind the workflow change | recorded only | | | not run |
+| E6 | the supervisor sets `sha_pinning_required` on down; dispatch down's caller (branch ref, a non-SHA ref like `@main`); the supervisor restores it | recorded; a refusal goes to the owner (contract §15 item 2) | | | not run |
+| E7 | the Dependabot PR bumping the old checkout pin in down | `n/a` statuses posted, or the read-only token recorded as a Phase 5 blocker | | | not run |
+| S5 | Notes edited, release again | Notes byte for byte; a bare mention in Notes fails mention-guard (accepted) | | | not run |
+| S6 | squash-merge the PR | `main` message is exactly `<PR title> (#N)` | | | not run |
+| S7 | fake `release-please--branches--main` PR with `UPSTREAM_VERSION` behind | `cascade/freshness` `WARN: behind: up …`; ordinary PR `n/a` | | | not run |
+| S8 | dispatch `{"source":"evil","tags":["@x"]}` | dropped with a warning, sweep, no mention | | | not run |
+| S9 | `CASCADE_DRY_RUN=true`, release, then back to `false` | summary diff and "DRY RUN", nothing pushed | | | not run |
+| S10 | retitle to `feat(deps): sandbox`, release | title kept, marker computed, no title-rise comment | | | not run |
+| S11 | push to the S7 PR while a dispatch run is pending | gates-only run in `deps-cascade-gates`; pending run not replaced | | | not run |
 
 **`WF_GUARD_RULE`:** `strict` (default; to be confirmed or changed by E4c).
 
 **Shared-key reach:** the seven `cascade` Environments hold one App key (contract Facts); whoever
 can run a `main` job in any of them can mint a token for all seven repos. Rotating the key
-rotates it everywhere.
+rotates it everywhere. During the cycle that reach also extends to whoever can push to
+`feat/add-release-cascade-workflows` in `.github` (Risks); it ends when the sandbox callers move
+to `@main` and the branch is deleted (Migration Plan step 4).
 
 ## Open Questions
 
 None that change the specs or tasks. E1, E2 and E6 can each force a supervisor or owner decision
 (contract §13, §15); the tasks stop and report at those points instead of choosing.
+
+## Plan review (commit c8a038d)
+
+1 blocker, 6 majors, 9 minors and 4 nits; every finding is applied. Finding 17 (the branch-ref
+reach during the cycle) is applied as its second option, record plus a listed supervisor step
+after merge, not by pinning the sandbox callers to a commit SHA per run: fixes found during the
+cycle would otherwise need a sandbox PR each, and the reach is the same set of people who can
+already change `.github`'s workflows by PR. Finding 4 also reports the contract §11.4 (b)
+inconsistency to the supervisor ("Departures").
+

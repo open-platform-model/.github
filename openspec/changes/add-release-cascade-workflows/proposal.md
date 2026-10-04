@@ -33,22 +33,28 @@ and the variable `CASCADE_APP_CLIENT_ID`.
 - **Scripts** under `.github/scripts/cascade/wiring/`: `lib.sh` (the fixed maps of contract §3,
   payload validation, the cascade-PR filter, Notes and title-marker parsing, the title rank, the
   mention lint, comment texts, `WF_GUARD_RULE`), `notify.sh`, `receive-compute.sh`,
-  `receive-publish.sh`, `gates-eval.sh`, `gates-post.sh`.
+  `receive-publish.sh`, `gates-eval.sh`, `gates-post.sh`. The repo-name derivation and the
+  `org-github-ref` guard are not scripts: they are the inline first step of every job, run
+  before anything is checked out from the ref they guard.
 - **Resolver widening for the sandbox** (contract §11.2): `lib/prtext.sh:11` accepts the names in
   `CASCADE_EXTRA_SOURCES` as triggering sources; only the sandbox receiver sets it.
 - **Tests and CI**: an offline wiring suite `.github/scripts/cascade/wiring/test/run.sh` (bare
-  `file://` repos, a `gh` shim, the canonical stub resolver) run as a new step of the existing
-  `Resolver tests` job in `cascade-resolver.yml`, with its shim added to the `shellcheck` step.
-  No new job and no new check context (contract §12).
+  `file://` repos, a `gh` shim, the real resolver's offline subcommands) run as a new step of
+  the existing `Resolver tests` job in `cascade-resolver.yml`, which also gains a pinned,
+  checksum-verified go-task install; its shim joins the `shellcheck` step. No new job and no new
+  check context (contract §12).
 - **README**: a "cascade workflows" part of the `cascade` section: the three workflows, the
   caller shapes, the repo variables (`CASCADE_DRY_RUN`, `CASCADE_NOTIFY`, `CASCADE_G2_MODE`,
   `CASCADE_G3_MODE`) and the stop switches.
-- **The sandbox cycle** (contract §11): seed `cascade-sandbox-up` and `cascade-sandbox-down` to
-  call these workflows at `@feat/add-release-cascade-workflows` with that `org-github-ref`, run
-  E1, E1b, E2 to E7 and S3 to S11, and record every run URL, PR URL and outcome in `design.md`
-  under "Sandbox cycle". E4c decides `WF_GUARD_RULE` (`strict` stays unless E4c proves `tree`
-  safe). The owner's pull-request-only bypass is not exercised; its manual check is handed to
-  the owner in the PR notes.
+- **The sandbox cycle** (contract §11): the seed files are committed under
+  `openspec/changes/add-release-cascade-workflows/sandbox/`, then pushed to `cascade-sandbox-up`
+  and `cascade-sandbox-down` to call these workflows at `@feat/add-release-cascade-workflows`
+  with that `org-github-ref`. Run E1, E1b, E2 to E7 (E6 with the supervisor toggling the setting
+  during the cycle, before merge) and S3 to S11, and record every run URL, PR URL and outcome in
+  `design.md` under "Sandbox cycle" and in the scratchpad file `p3-gh-workflows-sandbox.md`.
+  E4c decides `WF_GUARD_RULE` (`strict` stays unless E4c proves `tree` safe). The owner's
+  pull-request-only bypass is not exercised; its manual check goes to the scratchpad file
+  `p3-gh-workflows-owner-checks.md` for the PR notes.
 
 Not in this change:
 
@@ -99,13 +105,16 @@ Not in this change:
 - **Depends on:** `add-cascade-resolver` (merged); the Phase 0 settings (done); and, before the
   sandbox cycle (section 5 of `tasks.md`), three supervisor steps from contract §11 and §15:
   `cascade-sandbox-up` made public (it is still private on 2026-10-04), a PR-required `main`
-  ruleset with an owner pull-request-only bypass on both sandboxes (none exists yet), and the
-  variable `CASCADE_DRY_RUN=false` on `cascade-sandbox-down`.
+  ruleset with an owner pull-request-only bypass on both sandboxes (none exists yet), and this
+  branch pushed to `origin`. The agent sets `CASCADE_DRY_RUN=false` on `cascade-sandbox-down`
+  after seeding (allowed by the Phase 3 brief). During the cycle the supervisor also toggles
+  `sha_pinning_required` on `cascade-sandbox-down` for E6. After merge the supervisor moves the
+  sandbox callers to `@main` and deletes the branch.
 - **Gate to merge:** the full sandbox cycle green with E1, E1b and E2 to E5 recorded (contract
   §1), and the contract §14 RELEASING.md amendments merged before or together with this PR.
 - **Depended on by:** `join-release-cascade` in core, catalog_opm, library, opm-operator and cli;
   each may be written in parallel but merges only after this change, because it calls `@main`.
-- **Owner steps (never in `tasks.md`):** the bypass check written to the PR notes; if E6 shows
+- **Owner steps (never in `tasks.md`):** the bypass check in `p3-gh-workflows-owner-checks.md`; if E6 shows
   `sha_pinning_required` refuses an `@main` reusable call, the opm-operator decision of contract
   §15 item 2.
 - **Release class:** none; `.github` does not release. PR title:
