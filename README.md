@@ -375,7 +375,9 @@ branch or tag (opm-operator's `sha_pinning_required` refuses an action named by 
 `ref:` of the `open-platform-model/.github` checkout in each receiver's `cascade-task.yml` (the CI
 job that tests the repo's `deps:cascade` task against the resolver; core has none) carries the
 same SHA, so CI tests
-the resolver the receiver runs. A repo uses one SHA in all these references. The scripts come
+the resolver the receiver runs. Any other checkout of `.github` a repo needs (opm-operator's
+`module-deps.yml`) is declared in its wiring config and carries the same SHA too. A repo uses one
+SHA in all these references. The scripts come
 from that same commit: the two actions run them from their own directory (`GITHUB_ACTION_PATH`),
 and the receive workflow checks them out at its own `job.workflow_sha`, so a pinned reference
 runs exactly that commit's code and there is no input naming another `.github` ref. A merge to
@@ -417,12 +419,15 @@ reference on its own. To roll a change out:
    and the `.tasks/cascade/wiring-check.yaml` edit ride the same PR. Find them with
    `grep -rn -A1 'open-platform-model/.github' .github/workflows`: the `uses:` lines and the
    `repository:` line of the `cascade-task.yml` checkout, whose `ref:` the `-A1` prints on the
-   next line (comment lines also match and need no change). All of a repo's cascade references
-   carry the same SHA. Before the PR is opened, `bash .tasks/cascade/wiring-check.sh
-   --pin-on-main` passes (the shapes, then the `compare` check of step 1 for that SHA).
+   next line (comment lines also match and need no change); opm-operator's `module-deps.yml`
+   has a second such checkout, declared in its config's `extra-references`. All of a repo's
+   cascade references carry the same SHA. Before the PR is opened, `bash
+   .tasks/cascade/wiring-check.sh --pin-on-main` passes (the shapes, then the `compare` check of
+   step 1 for that SHA, then the comparison of the new copy with the file at that SHA).
 4. Merge each after its CI is green and its "Verify the cascade wiring" step printed
    `cascade wiring: ok, .github <SHA> (.github main)`: that step runs the same check with
-   `--pin-on-main`, so it has also confirmed the SHA is on `.github`'s `main`. After the canary (its dry-run checks, or its first successful live run for a
+   `--pin-on-main`, so it has also confirmed the SHA is on `.github`'s `main` and the copy is
+   the file at that SHA. After the canary (its dry-run checks, or its first successful live run for a
    `cascade-publish` or `cascade-notify` change, step 2) the order does not matter, because a
    repo runs only its own pin. To roll back, move the pins back the same way (no canary needed for a SHA the repo
    already ran).
@@ -441,7 +446,8 @@ offline through `task cascade:wiring:check`, and online in a step of its require
 ```
 
 It prints every mismatch and exits 1, or prints `cascade wiring: ok, .github <SHA> (<pin
-comment>)`; a bad config exits 2. It checks:
+comment>)`; offline (without `--pin-on-main`) a second line says `the copy was not compared`; a
+bad config exits 2. It checks:
 
 - no workflow file uses a YAML anchor or alias (GitHub resolves them, the check reads text);
 - the key-holding jobs (`notify-downstream`, `publish`): exact job and step keys, names,
@@ -468,21 +474,32 @@ comment>)`; a bad config exits 2. It checks:
   `type=gha` anywhere (buildx `cache-from`/`cache-to`). A reusable workflow called from there is
   not checked (docs-kit's `publish.yml` sets `cache: false`);
 - one full SHA and the pin comment on every `.github` reference, matched in any case (the four
-  `uses:` and the `cascade-task.yml` resolver `ref:`);
+  `uses:`, the `cascade-task.yml` resolver `ref:`, and each resolver checkout the config's
+  `extra-references` declares), and no other reference;
+- every checkout of `.github` (a step whose `with.repository` names it) is
+  `actions/checkout@<full SHA>` with exactly `repository`, `ref`, `path` and
+  `persist-credentials: false`, so no token or SSH key reaches it;
 - that the config's CI job runs it as exactly the step above on every pull request: no path
   filter, no `if:` or `continue-on-error`, no `shell` or `working-directory` of its own or from
   `defaults`;
 - with `--pin-on-main`, after every shape matched:
   `gh api repos/open-platform-model/.github/compare/<SHA>...main --jq .status` prints
   `identical` or `ahead`, so a commit that exists only in a fork of `.github` (which GitHub also
-  resolves under this repo's name) is refused.
+  resolves under this repo's name) is refused; then
+  `gh api -H 'Accept: application/vnd.github.raw'
+  "repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=<SHA>"`
+  must return exactly the bytes of the script that is running (`.tasks/cascade/wiring-check.sh`
+  in CI), so a copy that drifted or was not replaced at a pin bump fails with `differs from`.
 
 The config is data, read with `yq`, never run. `env-allow` may name only `CUE_*`, `OPM_*`,
 `REGISTRY` and `IMAGE_NAME`: a workflow-level env reaches the notify action's steps, which hold
 the App token, and too many other names make bash, git, gh, node, curl or the loader run code or
 send traffic elsewhere (`BASH_ENV`, `GIT_*`, `GH_*`, `NODE_*`, `LD_*`, `XDG_*`, `SSL_*`,
 `*_PROXY` and more) for a deny-list to be safe. `publish-workflows` must list `release.yml`.
-Each repo's values:
+`extra-references` (optional) lists more pinned `.github` references, one item per reference,
+each a map of exactly `file` (a workflow file name) and `kind`; the only kind is `resolver`, a
+checkout of `.github` held to the rules above. A new kind (another action or reusable-workflow
+call) is a change here, never a config entry. Each repo's values:
 
 | Repo | `receiver` | `env-allow` | `publish-workflows` | `ci` (workflow, job) | `notify.needs` | `labels-managed` |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -493,7 +510,9 @@ Each repo's values:
 | cli | `true` | (none) | `release.yml`, `publish-fixtures.yml`, `docs.yml` | `pr.yml`, `lint` | `release-please`, `goreleaser` | `true` |
 
 `pin-comment` is `.github main` everywhere; `notify.if` and `notify.tag` are each repo's own
-`release.yml` values. catalog_opm's file, for example:
+`release.yml` values. Only opm-operator sets `extra-references`, for the resolver checkout in
+`module-deps.yml` (the operator module's own dependency bot, job `compute`):
+`extra-references: [{file: module-deps.yml, kind: resolver}]`. catalog_opm's file, for example:
 
 ```yaml
 pin-comment: .github main
@@ -522,10 +541,34 @@ gh api "repos/open-platform-model/.github/contents/.github/scripts/cascade/wirin
 
 so the PR's diff of the copy is exactly `.github`'s change between the two SHAs, and a reviewer
 confirms it with the same `gh api` call piped to `cmp - .tasks/cascade/wiring-check.sh`. A change
-to the check is made here, never in a copy. The script cannot verify its own provenance offline,
-so this is the review's job. The copy and the config live in the repo's own tree, so a PR can
-change them along with the workflows: the check guards against mistakes, and review plus the
-`main` ruleset guard against a deliberate edit.
+to the check is made here, never in a copy. The required CI step makes the same comparison
+(`--pin-on-main`), so a copy that differs from the file at the pin fails CI on every PR. The
+comparison runs from the copy under test, though: a PR can edit the copy and delete the
+comparison together. It catches drift and a copy left behind at a bump, and forces a deliberate
+edit to show in the diff, but it does not replace review. The copy and the config live in the
+repo's own tree, so a PR can change them along with the workflows: the check guards against
+mistakes, and review (CODEOWNERS on `/.tasks/`) plus the `main` ruleset guard against a
+deliberate edit. Offline (`task cascade:wiring:check`) the copy is not compared, and the check
+says so.
+
+**When the wiring step's API call fails.** The required step makes two GitHub API requests (the
+`compare`, then the contents read of the pinned file), so a GitHub outage, a secondary rate limit
+or the job token's hourly limit fails the required job on every PR with `cannot compare .github
+<SHA> with main` or `cannot fetch .github/scripts/cascade/wiring-check.sh at .github <SHA>`.
+Only those two messages are outages:
+
+1. Re-run the failed job (`gh run rerun <run id> --failed -R open-platform-model/<repo>`).
+2. Check <https://www.githubstatus.com> and `gh api rate_limit`; wait for the reset or the
+   recovery and re-run again.
+3. If it lasts and a merge cannot wait, an admin may merge with admin bypass (`gh pr merge
+   --admin`) only a PR whose changed files (`gh pr diff <n> --name-only`) include nothing under
+   `.github/**` or `.tasks/**`, after every other required check passed and `task
+   cascade:wiring:check` passed on the PR head. A PR touching those paths waits for the API.
+4. Never remove `--pin-on-main` from the step (the check refuses that shape anyway), and never
+   edit the copy to skip a request.
+
+`is not on .github main` and `differs from` are findings, not outages: fix the pin or the copy,
+and never bypass them.
 
 `<sha>` in the shapes below stands for that full SHA.
 

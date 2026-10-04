@@ -20,6 +20,6 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 3. README
 
-- [ ] 3.1 The wiring-check section: the copy comparison and its limit, `extra-references` with opm-operator's value, the resolver checkout rule; "Keeping the copy in sync" and pin-bump steps 3 and 4 say CI compares the copy (D1, D2, D3)
-- [ ] 3.2 Runbook for a failed API call (D4)
-- [ ] 3.3 Gates green (the README-shape cases still pass), then commit `docs(cascade): document the copy comparison and the API-failure runbook`
+- [x] 3.1 The wiring-check section: the copy comparison and its limit, `extra-references` with opm-operator's value, the resolver checkout rule; "Keeping the copy in sync" and pin-bump steps 3 and 4 say CI compares the copy (D1, D2, D3)
+- [x] 3.2 Runbook for a failed API call (D4)
+- [x] 3.3 Gates green (the README-shape cases still pass), then commit `docs(cascade): document the copy comparison and the API-failure runbook`
