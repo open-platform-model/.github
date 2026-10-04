@@ -250,8 +250,9 @@ workflows, because the receive workflow runs the scripts of its own commit, so a
 between them). Each caller names `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and
 `cascade-gates.yml` by the full 40-character SHA of a commit on this repo's `main`, never by a
 branch or tag (opm-operator's `sha_pinning_required` refuses an action named by branch). The
-`ref:` of the `open-platform-model/.github` checkout in each repo's `cascade-task.yml` (the CI job
-that tests the repo's `deps:cascade` task against the resolver) carries the same SHA, so CI tests
+`ref:` of the `open-platform-model/.github` checkout in each receiver's `cascade-task.yml` (the CI
+job that tests the repo's `deps:cascade` task against the resolver; core has none) carries the
+same SHA, so CI tests
 the resolver the receiver runs. A repo uses one SHA in all these references. The scripts come
 from that same commit: the two actions run them from their own directory (`GITHUB_ACTION_PATH`),
 and the receive workflow checks them out at its own `job.workflow_sha`, so a pinned reference
@@ -269,7 +270,8 @@ reference on its own. To roll a change out:
    made on `main` (`git rev-parse origin/main` right after fetching, or the PR's merge commit),
    and check it is on `main`: `gh api repos/open-platform-model/.github/compare/<SHA>...main
    --jq .status` must print `identical` or `ahead`. This repo is squash-only, so a branch commit
-   left behind by the merge prints `diverged`.
+   left behind by the merge prints `diverged`, and it deletes the PR branch on merge, so pin the
+   squash SHA, never a branch commit.
 2. Canary: a dry-run pin bump in one receiver first (catalog_opm, library, opm-operator or cli;
    core has no receiver). Set that repo's variable `CASCADE_DRY_RUN` to `true` if it is not
    already, noting the old value; open and merge its pin PR as in steps 3 and 4; run
@@ -281,7 +283,11 @@ reference on its own. To roll a change out:
    resolver out at `<SHA>` and passes. Then set `CASCADE_DRY_RUN` back. A dry run skips
    `Publish` and notify runs only on a release, so a change to `cascade-publish` or
    `cascade-notify` first meets real GitHub on the canary's next live run or the next release
-   of an upstream that pins it; watch that run and roll back (step 4) if it fails.
+   of an upstream that pins it; watch that run and roll back (step 4) if it fails. **When the
+   diff touches `cascade-publish` or `cascade-notify`, the other repos stay on the old pin until
+   the canary's first live publish (or notify) run has succeeded**, so that first live run
+   happens in one repo only. A diff that touches neither goes on to step 3 after the dry-run
+   checks.
 3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
    PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
    every cascade reference and changes nothing else, unless the `.github` change altered an
@@ -293,9 +299,20 @@ reference on its own. To roll a change out:
    SHA and `task cascade:wiring:check` passes.
 4. Merge each after its CI is green, its "Verify the cascade wiring" step printed
    `cascade wiring: ok, .github <SHA> (.github main)`, and the `compare` check passes for the
-   SHA it pins. After the canary the order does not matter, because a repo runs only its own
-   pin. To roll back, move the pins back the same way (no canary needed for a SHA the repo
+   SHA it pins. After the canary (its dry-run checks, or its first successful live run for a
+   `cascade-publish` or `cascade-notify` change, step 2) the order does not matter, because a
+   repo runs only its own pin. To roll back, move the pins back the same way (no canary needed for a SHA the repo
    already ran).
+
+**The wiring check.** Each product repo's `task cascade:wiring:check` runs in its required CI
+job and checks the caller shapes below: one SHA and the pin comment on every cascade reference,
+exact key sets on the key-holding jobs (`notify-downstream`, `publish`) and their one step,
+`runs-on: ubuntu-latest` on those jobs, no `secrets: inherit`, the key only where the contract
+puts it, and `release.yml`'s top-level `env` keys from a per-repo allow-list (core
+`CUE_VERSION`, `CUE_REGISTRY`; catalog_opm `OPM_REGISTRY`, `CUE_REGISTRY`; opm-operator
+`REGISTRY`, `IMAGE_NAME`, `CUE_VERSION`; library and cli none). The script lives in the repo's
+own tree, so a PR can change it along with the workflows: it guards against mistakes, and
+review plus the `main` ruleset guard against a deliberate edit.
 
 `<sha>` in the shapes below stands for that full SHA.
 

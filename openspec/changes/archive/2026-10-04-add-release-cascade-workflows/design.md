@@ -442,8 +442,9 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   nothing a sandbox runs until a sandbox PR, merged by PR under the sandbox `main` ruleset, moves
   the pin. Owner decision 26 ended this reach before merge: the key left both sandbox
   Environments, so a sandbox run can no longer mint a token. The sandbox callers keep `a2950ce`
-  until both sandboxes are archived after Phase 3, and the branch is deleted only then (Migration
-  Plan step 4, task 5.8).
+  until both sandboxes are archived after Phase 3. `.github` deletes branches on merge, so
+  merging this PR deletes the branch; those pins then name an unreachable commit, which does not
+  matter because nothing runs in the sandboxes again (Migration Plan step 4, task 5.8).
 
 ## Migration Plan
 
@@ -454,13 +455,27 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
    decision 26, superseding decision 25): the production key and the client-id variable are
    already gone from both sandbox Environments, `cascade-sandbox-up` is private again, no
    sandbox App exists, and both sandbox repos are archived after Phase 3. The sandbox callers
-   are not moved to `main` and S1 is not rerun; they keep `a2950ce`, so
-   `feat/add-release-cascade-workflows` stays on `origin` until every join change has merged at
-   its `main` SHA and both sandboxes are archived (contract §11.3, task 5.8). The product
-   callers pin a `.github` `main` SHA (owner decision 24) and move it by the README's bump
-   procedure: the offline suites on the `.github` PR, then a dry-run pin bump in one receiver
-   (`CASCADE_DRY_RUN=true` there), then the other repos.
-5. B1 to B5 merge after this, each receiver behind `CASCADE_DRY_RUN=true`.
+   are not moved to `main` and S1 is not rerun; they keep `a2950ce`. `.github` deletes branches
+   on merge (`delete_branch_on_merge: true`), so merging this PR deletes
+   `feat/add-release-cascade-workflows`: each join change pins this PR's `main` squash SHA right
+   away, and the sandbox pins do not matter once the sandboxes are archived (contract §11.3,
+   task 5.8). After the archive, a follow-up `.github` PR removes the sandbox entries from
+   `wiring/lib.sh` (notify edge, receiver allowlist, G3 upstreams, `CASCADE_EXPECT` pair,
+   changelog source, `extra_sources`) and their wiring cases. The product callers pin a
+   `.github` `main` SHA (owner decision 24) and move it by the README's bump procedure: the
+   offline suites on the `.github` PR, then a dry-run pin bump in one receiver
+   (`CASCADE_DRY_RUN=true` there), then the other repos. When the diff touches
+   `cascade-publish` or `cascade-notify`, the other repos stay on the old pin until the canary's
+   first live publish (or notify) run has succeeded, so that first live run happens in one repo
+   only.
+5. Each join change's `task cascade:wiring:check` (contract §10.1 item 6, with the supervisor's
+   addendum) holds the caller shapes in CI: the key-holding jobs (`notify-downstream`,
+   `publish`) have exact key sets and `runs-on: ubuntu-latest`, and `release.yml`'s top-level
+   `env` keys are a per-repo allow-list (core `CUE_VERSION`, `CUE_REGISTRY`; catalog_opm
+   `OPM_REGISTRY`, `CUE_REGISTRY`; opm-operator `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION`;
+   library and cli none). The check lives in each repo's own tree, so it guards against
+   mistakes; review plus the `main` ruleset guard against a deliberate edit.
+6. B1 to B5 merge after this, each receiver behind `CASCADE_DRY_RUN=true`.
 
 Rollback: callers stop at once by stop switches (contract §9.2: `CASCADE_NOTIFY=off`,
 `CASCADE_DRY_RUN` not `false`, disabling `deps-cascade.yml`, suspending the App). Every caller
@@ -597,8 +612,9 @@ one commit (D1 empty, D2 the three files) and the push of a merge commit bringin
 update to the old tip. `strict` stays implemented and tested through a rule-swapped copy of the
 scripts, should GitHub tighten the rule.
 
-**Shared-key reach:** the seven `cascade` Environments hold one App key (contract Facts); whoever
-can run a `main` job in any of them can mint a token for all seven repos. Rotating the key
+**Shared-key reach:** the `cascade` Environments hold one App key (contract Facts): seven during
+the cycle, five now that both sandbox Environments lost it (below); whoever can run a `main` job
+in any of them can mint a token for every repo on the installation. Rotating the key
 rotates it everywhere. During the cycle that reach also extended to whoever can push to
 `feat/add-release-cascade-workflows` in `.github` (Risks). It ended on 2026-10-04 under owner
 decision 26: the key and the client-id variable were deleted from both sandbox Environments and
@@ -638,7 +654,8 @@ reports the contract §11.4 (b) inconsistency to the supervisor ("Departures").
 owns). Applied in this change:
 
 - **3 (major).** Sandbox callers pin a full commit SHA of this branch (Risks); task 5.8 moves
-  them to a SHA on `main` after merge and deletes the branch.
+  them to a SHA on `main` after merge and deletes the branch (superseded by owner decision 26
+  and the merge setting that deletes the branch; see Migration Plan step 4).
 - **4.** `gates-post.sh` posts only on the head of an open same-repo release PR, listed with
   `GITHUB_TOKEN` exactly as `--missing` lists them; any other entry in `gates.json` (which
   compute, running repo code, wrote) is skipped with a warning, and a failed listing posts

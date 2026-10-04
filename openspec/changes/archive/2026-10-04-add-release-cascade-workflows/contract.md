@@ -6,8 +6,8 @@ including each receiver's `cascade-task.yml` resolver checkout `ref:` carries th
 SHA, and the bump grep is `grep -rn 'open-platform-model/.github' .github/workflows`; finding 3
 re-arm (superseded in 3.1.1, below). It was written against `.github` PR #9
 (`open-platform-model/.github#9`, head `99d93e5`, README "Pinning and bumps" and the archived
-`add-release-cascade-workflows` design); where the README still differs, §15 item 14 lists what A
-must change. Passages changed in 3.1 are marked `[v3.1]`; §2.4 and §10.1 were rewritten as
+`add-release-cascade-workflows` design); ~~where the README still differs, §15 item 14 lists what A
+must change~~ (**[v3.1.2]** the README no longer differs: §15 item 14 is done). Passages changed in 3.1 are marked `[v3.1]`; §2.4 and §10.1 were rewritten as
 wholes. A branch cites this file as "Phase 3 wiring contract (version 3.1)".
 
 **Changelog 3.1.1** (2026-10-04; the version a branch cites stays "version 3.1"): applies the
@@ -20,6 +20,23 @@ step, on `deps-cascade.yml`'s top level, and refuses startup-code variables in `
 workflow `env` (§10.1 item 6). Passages changed in 3.1.1 are marked `[v3.1.1]`; "Version 3.1.1
 notes" at the end maps each finding. A branch that applied 3.1 re-applies §10.1 items 3, 6, 9 and
 11 and the pre-merge check.
+
+**Changelog 3.1.2** (2026-10-04, a correction made in place after this change was archived, so
+the file does not mislead; the version a branch cites stays "version 3.1"): applies the final
+cross-check of PR #9 (`p3g-crosscheck.md`, findings 1, 3, 6 and 7) with the supervisor's
+decisions. (1) `.github` **does** delete branches on merge (`delete_branch_on_merge: true`, read
+back 2026-10-04): merging A deletes `feat/add-release-cascade-workflows` at once, each B swaps
+its pins to A's `main` squash SHA right away, and the sandbox callers' `a2950ce` pins do not
+matter because the sandboxes are archived after Phase 3 (Facts, §2.4, §11.3, §15 items 10 and
+12). (3) Canary rule: when a `.github` diff touches `cascade-publish` or `cascade-notify`, the
+other repos stay on the old pin until the canary's first live publish (or notify) run has
+succeeded (§2.4 steps 2 and 4). (6) §14 and §15 item 14 are marked done. (7) The §11.3
+`[v3]` sandbox-move paragraph is struck through. Separately, the supervisor's addendum for the
+five join changes (`p3-join-addendum.md`) makes the §10.1 item 6 wiring check stricter: a
+per-repo allow-list of `release.yml` top-level `env` keys replaces the deny-list, and every
+key-holding job must have `runs-on: ubuntu-latest`; the check guards against mistakes, while
+review and the `main` ruleset guard against a deliberate edit. Passages changed in 3.1.2 are
+marked `[v3.1.2]`.
 
 Version 3 folds in what the sandbox cycle established (the `.github` branch at `4d6a616`, its
 deviations 1 to 9), the sandbox verification ("Contract points the five join changes must
@@ -113,10 +130,15 @@ Facts checked on 2026-10-04:
   refuses an **action** named by branch ("must be pinned to a full-length commit SHA") and does
   **not** refuse a reusable **workflow** named by branch or SHA. **[v3.1]** Decision 24 pins the
   actions; the supervisor's extension pins the workflows too (top, item 2).
-- **[v3]** `.github` has `delete_branch_on_merge: false`, so merging A does not delete
-  `feat/add-release-cascade-workflows`. ~~The sandbox callers pin `a2950ce` on that branch, and it
-  must stay reachable until task 5.8 moves them (§11.3).~~ **[v3.1.1]** The sandbox callers keep
-  their `a2950ce` pins until the sandboxes are archived; nothing moves them (§11.3, §15 item 10).
+- ~~**[v3]** `.github` has `delete_branch_on_merge: false`, so merging A does not delete
+  `feat/add-release-cascade-workflows`. The sandbox callers pin `a2950ce` on that branch, and it
+  must stay reachable until task 5.8 moves them (§11.3).~~ ~~**[v3.1.1]** The sandbox callers
+  keep their `a2950ce` pins until the sandboxes are archived; nothing moves them (§11.3, §15 item
+  10).~~ **[v3.1.2]** `.github` has `delete_branch_on_merge: true` (read back 2026-10-04), so
+  merging A deletes `feat/add-release-cascade-workflows` at once. Each B therefore swaps its pins
+  to A's `main` squash SHA right away (§2.4 "Before A merges"). The sandbox callers keep their
+  `a2950ce` pins, and that does not matter: the sandboxes hold no key and are archived after
+  Phase 3 (§11.3).
 - **[v3.1.1]** `.github` merge settings are now PR_TITLE + BLANK and squash-only, the same as the
   five product repos (set by the supervisor 2026-10-04, review finding 9). Merging A therefore
   always makes one new squash commit on `main`, and A's branch commits (`99d93e5`, `a2950ce`)
@@ -394,7 +416,11 @@ this section matches it:
      against real GitHub for the first time on the canary's next live receiver run (publish) or
      on the next release of an upstream that pins it (notify). The offline suites (stub `gh`,
      local bare repos, §12) are the only evidence before that. The supervisor watches that first
-     live run and rolls back (step 4) if it fails.
+     live run and rolls back (step 4) if it fails. **[v3.1.2]** So that the first live run is the
+     canary's alone: when the `.github` diff touches `cascade-publish` or `cascade-notify`, the
+     other repos stay on the old pin until the canary's first live publish run (for
+     `cascade-publish`) or notify run (for `cascade-notify`) has succeeded. A diff that touches
+     neither moves on to step 3 right after the dry-run checks above.
   3. In each of core, catalog_opm, library, opm-operator and cli (**[v3.1.1]** the canary first,
      step 2), open one PR titled
      `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in every
@@ -409,7 +435,9 @@ this section matches it:
   4. Merge each after its CI is green, the "Verify the cascade wiring" step printed
      `cascade wiring: ok, .github <SHA> (.github main)`, and the `compare` check passes for the
      SHA it pins. After the canary, the order of the other four does not matter, because a repo
-     runs only its own pin. To roll back, move the pins back the same way (no canary needed for a
+     runs only its own pin. **[v3.1.2]** "After the canary" means after its dry-run checks, or,
+     for a diff touching `cascade-publish` or `cascade-notify`, after its first live publish or
+     notify run succeeded (step 2). To roll back, move the pins back the same way (no canary needed for a
      rollback to a SHA the repo already ran).
 - **Before A merges** (B branches only). No `.github` `main` commit carries the cascade yet. A B
   branch pins its cascade references to the A branch head the supervisor hands it (today
@@ -420,10 +448,15 @@ this section matches it:
   the supervisor hands each B the squash SHA, and the B's last commit before merge,
   `ci: pin the cascade to .github main`, replaces every SHA and comment with
   `<SHA> # .github main` and sets `PIN_COMMENT='.github main'`. A B never merges with a branch
-  SHA or a branch comment; the §10.1 pre-merge check refuses it.
+  SHA or a branch comment; the §10.1 pre-merge check refuses it. **[v3.1.2]** Merging A deletes
+  its branch (`delete_branch_on_merge: true`, Facts), so after that the branch SHA is reachable
+  only through `refs/pull/9/head`, which is not relied on: each B makes its pin commit with the
+  squash SHA right away.
 - **[v3.1.1] Sandbox.** The sandboxes take no part in a bump (decision 26). Their callers keep
   the `a2950ce` pins with ` # feat/add-release-cascade-workflows`, they hold no key, and they are
   archived after Phase 3. Task 5.8's sandbox pin move and S1 rerun are dropped (§11.3).
+  **[v3.1.2]** That those pins name a commit on a deleted branch does not matter, since nothing
+  runs there again.
 - **Why `main`-only commits matter.** The Environment's `main`-only branch policy and each
   product repo's `main` ruleset still decide who can make a key-holding job run. A pin to an
   unmerged `.github` commit would run code no `.github` review approved. **[v3.1.1]** Only a B
@@ -1938,6 +1971,12 @@ reusable workflow publishes, mints a token or declares the Environment. cli move
 
 **6. The wiring check, run in CI on every PR (all five).** This is what keeps the key-holding
 jobs locked after merge (review finding 4); a verify step or a local-only test does not count.
+**[v3.1.2]** The join changes apply the supervisor's addendum on top of the script below: the
+`release.yml` workflow-`env` deny-list becomes a per-repo allow-list (core `CUE_VERSION`,
+`CUE_REGISTRY`; catalog_opm `OPM_REGISTRY`, `CUE_REGISTRY`; opm-operator `REGISTRY`,
+`IMAGE_NAME`, `CUE_VERSION`; library and cli none), and every key-holding job
+(`notify-downstream`, `publish`) must have `runs-on: ubuntu-latest`. The check guards against
+mistakes; review plus the `main` ruleset guard against a deliberate edit.
 
 - Add the file `.tasks/cascade/wiring-check.sh` (core creates `.tasks/cascade/`) with exactly
   the content below, changing only `RECEIVER` (core: `RECEIVER=false`) and, while A is open,
@@ -2333,17 +2372,21 @@ change is proven by the offline suites and the canary of §2.4 step 2, not here.
 - Repo variable `CASCADE_DRY_RUN=false`, set by the supervisor, so the cycle runs live (§9.1).
   S9 sets it to `true` and back.
 
-**[v3]** After A merges, task 5.8 moves the sandbox callers to A's `main` squash SHA (never
+~~**[v3]** After A merges, task 5.8 moves the sandbox callers to A's `main` squash SHA (never
 `@main`, decision 24) with the comment `# .github main`, in one more sandbox PR per sandbox repo,
 and re-runs S1 once to confirm. Until then the branch commit `a2950ce` must stay reachable: do
 not delete `feat/add-release-cascade-workflows` (`.github` does not delete branches on merge)
-before task 5.8 is done. ~~**[v3.1]** Task 5.8 then deletes that branch from `origin` and
+before task 5.8 is done.~~ ~~**[v3.1]** Task 5.8 then deletes that branch from `origin` and
 disarms the sandboxes (§11.5); every later bump re-arms them for its sandbox step only (§2.4 step
 2).~~ **[v3.1.1]** Decision 26 drops the sandbox move and the S1 rerun: the sandboxes hold no key,
 so S1 cannot run, and nothing will run there again. The sandbox callers keep `a2950ce` until the
-repos are archived. Task 5.8 shrinks to one step: once every B has merged at its `main` SHA and
+repos are archived. ~~Task 5.8 shrinks to one step: once every B has merged at its `main` SHA and
 both sandboxes are archived, delete `feat/add-release-cascade-workflows` from `origin` (§15
-item 10). A's `tasks.md` says so (§15 item 14).
+item 10). A's `tasks.md` says so (§15 item 14).~~ **[v3.1.2]** `.github` deletes branches on
+merge (Facts), so merging A deletes `feat/add-release-cascade-workflows` and task 5.8 has no
+branch step left; the sandbox pins to `a2950ce` do not matter once the sandboxes are archived.
+After the archive, the sandbox entries in `wiring/lib.sh` are removed by a follow-up `.github`
+PR (§15 item 10).
 
 ### 11.4 Sandbox runs and E-tests (results recorded in A's `design.md`; each with run URL)
 
@@ -2536,12 +2579,14 @@ and escalate. Do not grant the permission.
 
 These land before A merges (§1), so RELEASING.md never describes behaviour the merged workflows
 do not have. ~~**[v3]** Still open (verification B1): workspace `main` (9ce8faa) has none of them,
-and `origin/docs/release-cascade-followups` does not carry them either.~~ **[v3.1.1]** The
+and `origin/docs/release-cascade-followups` does not carry them either.~~ ~~**[v3.1.1]** The
 amendments sit on the workspace branch `docs/releasing-phase3-wiring` at `6ec574e`, not merged
 yet; workspace `main` (9ce8faa) still has none of them. On `main`, RELEASING.md lines 192-194
 (the Environment "is declared inside the reusable notify workflow") and 285-296 ("two jobs",
 `publish` posts G2 and G3) still say the opposite of what ships. That branch also needs the
-3.1.1 items below before it merges.
+3.1.1 items below before it merges.~~ **[v3.1.2]** Done on the branch: the workspace branch
+`docs/releasing-phase3-wiring` at `c1e5266` carries every amendment below, the 3.1.1 items
+included (final cross-check, 2026-10-04). It still merges before or with A (§15 item 7).
 
 - "Stop switches": add `CASCADE_NOTIFY=off`. `CASCADE_DRY_RUN` is live only at exactly `false`.
   **[v3]** The switch is enforced by `cascade-publish`'s `dry-run` input as well as by the
@@ -2567,7 +2612,8 @@ yet; workspace `main` (9ce8faa) still has none of them. On `main`, RELEASING.md 
   or back: the `compare` check that the SHA is on `main`; ~~the sandbox step (re-arm, move the
   sandbox pins, run, disarm)~~ **[v3.1.1]** the canary (one receiver's pin PR first, as a dry run
   with `CASCADE_DRY_RUN=true`, checked as §2.4 step 2 says, including that `cascade-publish` and
-  `cascade-notify` first run live after it); then one
+  `cascade-notify` first run live after it; **[v3.1.2]** and that for such a diff the other
+  repos wait for that first live run to succeed); then one
   `ci(deps): pin the cascade to .github <sha7>` PR per remaining repo, found with
   `grep -rn -A1 'open-platform-model/.github' .github/workflows`, each with the `compare` check
   and `task cascade:wiring:check` passing.
@@ -2634,22 +2680,30 @@ yet; workspace `main` (9ce8faa) still has none of them. On `main`, RELEASING.md 
    the key and client id are gone from both sandbox Environments and up is private. Left: the
    owner unchecks both sandboxes in the `opm-cascade` installation (the supervisor reads the
    list back), and the supervisor archives both after Phase 3. No re-arm, ever.
-10. **[v3.1.1] Delete `feat/add-release-cascade-workflows`** from `origin` only after every B
+10. ~~**[v3.1.1] Delete `feat/add-release-cascade-workflows`** from `origin` only after every B
     has merged at its `main` SHA (their pre-merge pins name `99d93e5` on it) and both sandboxes
-    are archived (their pins name `a2950ce` on it) (§11.3).
+    are archived (their pins name `a2950ce` on it) (§11.3).~~ **[v3.1.2]** Merging A deletes the
+    branch (`delete_branch_on_merge: true`); each B pins A's `main` squash SHA at once (item 12),
+    and the sandbox pins do not matter once both sandboxes are archived. Follow-up after the
+    archive: a `.github` PR removes the sandbox entries from `wiring/lib.sh` (the notify edge,
+    the receiver allowlist, the G3 upstreams, the `CASCADE_EXPECT` pair, the changelog source
+    and the §3.6 `extra_sources` widening) and their wiring cases.
 11. **[v3] m3 for Phase 5.** Repo code in `compute` can shape `gates.json` and the job outputs
     before G2 and G3 become required checks. Written down in A's design Risks; not fixed.
 12. **[v3] B pin swap.** After A merges, hand each B the `.github` `main` squash SHA for its
     final pin commit (§2.4, §10). **[v3.1]** Before that, hand each B the A branch head to
-    develop against (today `99d93e5`). Run the §10.1 pre-merge check on every B.
+    develop against (today `99d93e5`). Run the §10.1 pre-merge check on every B. **[v3.1.2]**
+    Hand the squash SHA over right after A merges: the merge deletes A's branch.
 13. **[v3.1] Report to the owner** in the phase report: the supervisor extended decision 24
     (actions) to the two reusable workflows and the `cascade-task.yml` resolver `ref:` (top,
     item 2). **[v3.1.1]** Also report the cost of decision 26: with no sandbox, a change to
     `cascade-publish` or `cascade-notify` first runs against real GitHub, with the production
     key, in a product repo (the canary's next live run, or the next upstream release); the
     canary dry run proves only `compute`, `gates`, the pins and the wiring check. Rollback is a
-    pin PR back.
-14. **[v3.1.1] A-side follow-ups** (the `.github` README and A's archived change, before A
+    pin PR back. **[v3.1.2]** The canary rule (§2.4 step 2) keeps that first live run to the
+    canary alone: the other repos stay on the old pin until it has succeeded.
+14. ~~**[v3.1.1] A-side follow-ups**~~ **[v3.1.2]** Done (`6b01380`, `7b5157b`; final
+    cross-check 2026-10-04). They were (the `.github` README and A's archived change, before A
     merges): README "Pinning and bumps" replaces the sandbox step with the §2.4 step 2 canary,
     adds the per-PR `compare` check and `task cascade:wiring:check` to its bump steps 3 and 4
     (review finding 14), and uses `grep -rn -A1`; README "CI checks this repo out at `main`"
@@ -2821,10 +2875,15 @@ Choices this version makes that no source fixed, flagged for the supervisor:
   notify action runs node steps (`actions/create-github-app-token`) that read it at startup, and
   `release.yml` keeps a free workflow `env` in three repos, so a denylist is the most the check
   can assert there. It is a lint against a mistaken edit, not a boundary: the `main` ruleset and
-  review stay the control for a deliberate one.
+  review stay the control for a deliberate one. **[v3.1.2]** Superseded for the join changes by
+  the supervisor's addendum: a per-repo allow-list of `release.yml` top-level `env` keys (core
+  `CUE_VERSION`, `CUE_REGISTRY`; catalog_opm `OPM_REGISTRY`, `CUE_REGISTRY`; opm-operator
+  `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION`; library and cli none), and `runs-on: ubuntu-latest`
+  on every key-holding job. It is still a lint against mistakes.
 - **The canary is a receiver**, never core: only a receiver's dry run runs `compute` and `gates`.
   Which receiver is the supervisor's pick per bump.
 - **The S5 fallback becomes a hard failure** rather than staying with a new message, so a pin to
   a commit without the resolver fails the network job instead of skipping S5.
-- **Task 5.8 keeps one step** (deleting A's branch), gated on every B merged and both sandboxes
-  archived, because B pre-merge pins and the sandbox pins name commits on that branch.
+- ~~**Task 5.8 keeps one step** (deleting A's branch), gated on every B merged and both sandboxes
+  archived, because B pre-merge pins and the sandbox pins name commits on that branch.~~
+  **[v3.1.2]** Moot: `.github` deletes branches on merge, so merging A deletes the branch (§11.3).
