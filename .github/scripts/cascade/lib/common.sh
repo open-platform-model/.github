@@ -64,11 +64,13 @@ need_tools() {
   done
 }
 
-# work_dir: create the per-run scratch directory once; removed on exit.
+# work_dir: create the per-run scratch directory once; removed on exit. The
+# removal is retried once and can never fail the run: under set -e a failed
+# EXIT trap would turn a good answer into exit 1.
 WORK=""
 work_dir() {
   if [ -z "$WORK" ]; then
     WORK=$(mktemp -d "${TMPDIR:-/tmp}/cascade-resolve.XXXXXX")
-    trap 'rm -rf "$WORK"' EXIT
+    trap 'rm -rf "$WORK" 2>/dev/null || { sleep 1; rm -rf "$WORK" 2>/dev/null; } || true' EXIT
   fi
 }

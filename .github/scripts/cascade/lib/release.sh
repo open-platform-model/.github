@@ -17,8 +17,9 @@ ls_remote_tags() {
 }
 
 # git_isolated <dir> <git args...>: git in <dir> with no system, global or
-# environment config, no credential helper, no prompt, and a stalled
-# transfer aborted after 60 seconds. ls-remote and the tag-on-main check run
+# environment config, no credential helper, no prompt, no background gc or
+# maintenance (a detached writer would race the scratch cleanup), and a
+# stalled transfer aborted after 60 seconds. ls-remote and the tag-on-main check run
 # through it.
 git_isolated() {
   local d="$1"
@@ -26,7 +27,7 @@ git_isolated() {
   (
     unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_ASKPASS SSH_ASKPASS
     export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="${WORK%/*}"
-    exec git -C "$d" -c credential.helper= -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 "$@"
+    exec git -C "$d" -c credential.helper= -c gc.auto=0 -c maintenance.auto=false -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 "$@"
   )
 }
 
