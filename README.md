@@ -8,9 +8,10 @@ required PR workflow and the `tag-ledger` drift check.
 An organization ruleset ("Require workflows to pass before merging") runs
 [`.github/workflows/mention-guard.yml`](.github/workflows/mention-guard.yml)
 on every pull request in every repo of this org. It scans the **PR title, PR
-body, and every branch commit message**. All three are public on the PR, and
-the squash commit is built from them: release-please later copies it into
-changelogs and GitHub release notes, which re-render mentions.
+body, and every branch commit message**. All three are public on the PR. The
+squash commit is built from the title and, in some repos, the commit messages,
+never the body; release-please later copies it into changelogs and GitHub
+release notes, which re-render mentions.
 
 What the squash commit carries depends on the repo's merge settings. Repos that
 squash with `squash_merge_commit_message: COMMIT_MESSAGES` put the branch commit

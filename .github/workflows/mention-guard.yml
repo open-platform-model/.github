@@ -107,9 +107,11 @@ jobs:
             // release repos, BLANK; neither includes the PR body), so it never
             // reaches permanent history. A finding there is reported, not
             // blocking — otherwise the only way to merge is admin bypass.
-            // The title, which DOES land in history, and the commit messages,
-            // which DO land in history in repos that squash with
-            // COMMIT_MESSAGES, stay hard failures for bots and humans alike.
+            // The title, which lands in history (except in a one-commit PR
+            // under COMMIT_OR_PR_TITLE, where the commit subject does), and
+            // the commit messages, which DO land in history in repos that
+            // squash with COMMIT_MESSAGES, stay hard failures for bots and
+            // humans alike.
             const authorIsBot =
               pr.user?.type === 'Bot' || /\[bot\]$/.test(pr.user?.login ?? '');
 
@@ -138,7 +140,7 @@ jobs:
 
             if (blocking.length > 0) {
               core.summary.addHeading('mention-guard: violations found', 2);
-              core.summary.addRaw('\nThese strings become permanent once merged: the PR title (and, in repos squashing with COMMIT_MESSAGES, the branch commit messages) become the squash commit; release-please copies it into release notes.\n\n');
+              core.summary.addRaw('\nThese strings become permanent once merged: the PR title and, in repos squashing with COMMIT_MESSAGES, the branch commit messages become the squash commit; release-please copies it into release notes.\n\n');
               render(blocking);
               core.summary.addRaw('\n**Fix:** edit the PR title in the web UI; rewrite commit messages with `git commit --amend` or `git rebase -i` and force-push the branch.\n');
             }
