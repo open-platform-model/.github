@@ -1,0 +1,109 @@
+schema: spec-driven
+
+context: |
+  # open-platform-model/.github: org meta repo
+
+  This repo holds org-wide GitHub configuration and the code it runs: required PR workflows
+  (`mention-guard`), scheduled checks (`tag-ledger`), and shared scripts other repos call
+  (the release-cascade resolver). It has no Go module, no Taskfile and no release-please:
+  nothing here is released or versioned, and other repos reference it at `main`. The
+  cross-repo release design lives in the workspace `RELEASING.md`; changes here cite it as
+  "workspace RELEASING.md, section <name>".
+
+  ## Principles
+
+  ### I. Every workflow is least privilege
+  - `permissions:` is set per workflow or job, starting from `{}` or `contents: read`, and
+    widened only with a comment naming why.
+  - Third-party actions are pinned to a full commit SHA with the tag in a comment
+    (`actions/checkout@<sha> # v7.0.1`), as `tag-ledger.yml` does.
+  - Checkouts use `persist-credentials: false` unless the job pushes.
+  - A script never sends a token to a host that does not need it.
+
+  ### II. Scripts are bash, small and testable offline
+  - Bash with `set -euo pipefail`, a `die()` helper writing to stderr, `shellcheck` clean.
+    Tools beyond coreutils are named in the script header (`curl`, `jq`, `git`, mikefarah `yq`
+    v4) and checked at start.
+  - Network access goes through one wrapper per script so tests can replace it with PATH shims
+    answering from fixture files. No test needs the network; a live check is a separate,
+    non-required workflow.
+  - Exit codes are part of the interface and are documented in the script header.
+
+  ### III. Required checks report on every PR
+  - A check that a ruleset requires never uses a path filter: a filtered required check never
+    reports on other PRs and blocks them.
+  - Nothing here may break `mention-guard` (required org-wide by path from `main`) or
+    `tag-ledger`.
+
+  ### IV. Mergeable Sections
+  A change is delivered as the sections of its `tasks.md` (`## N. Title` headings with `N.M`
+  checkboxes). Every section ends green under the validation gates and closes with a commit
+  task naming its Conventional Commit. Nothing that would break `main` is carried across a
+  section boundary. One PR per change, one commit per section. More than about five sections
+  means split the change.
+
+  ## Validation Gates (before merge)
+  1. `shellcheck` on every `*.sh` under `.github/scripts/` and on the test shims
+  2. `actionlint` on `.github/workflows/*.yml`
+  3. every offline test suite under `.github/scripts/**/test/run.sh` passes
+  4. `openspec validate --all --strict`
+
+  ## Commit Standards
+  - Format: type(scope): description, lowercase subject. This repo does not release, so the
+    type is descriptive: `feat` for new behaviour other repos call, `fix`, `ci` for workflow-only
+    work, `test`, `docs`, `chore`.
+  - Scopes in use: `cascade`, `mention-guard`, `tag-ledger`, `openspec`.
+  - Never a bare `@word` in a title, body or commit message (mention-guard). Commits may end with
+    the plain `Co-Authored-By: Claude <noreply@anthropic.com>` trailer; never a session ID or
+    generated-with footer.
+
+  ## Comments
+  - Say what the code does and why in the comment's own words. When the rationale lives in an
+    enhancement, cite it as `0011:D9` (enhancement id, colon, decision id); a bare `D9` names
+    nothing. Never cite a section, phase or task number of a design doc in code.
+
+rules:
+  proposal:
+    - "Focus: WHY we're doing this, WHAT's in/out of scope"
+    - Name the workflows and scripts affected, and every repo that calls them
+    - State Depends on (changes that must merge first) and which later changes depend on this one
+    - Scope MUST cut into at most about five tasks.md sections, each ending green (Principle IV)
+
+  design:
+    - "Focus: HOW we'll implement it technically"
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - MUST include a "Research & Decisions" section when exploration was done, with context,
+      options considered, decision and rationale per topic
+    - Specify each script's command syntax, flags, environment variables and exit codes
+    - Specify every network request (host, path, headers, expected statuses) and its failure
+      handling
+    - Specify workflow triggers, job names (a required check is referenced by name), permissions
+      and timeouts
+
+  specs:
+    - "Focus: WHAT behavior is changing (not HOW it's implemented)"
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Describe observable behaviour of scripts and workflows (output, exit codes, checks)
+    - Use ADDED/MODIFIED/REMOVED sections; a MODIFIED requirement keeps every scenario of the main
+      spec (rename with REMOVED plus ADDED to drop one)
+    - Include scenarios that demonstrate requirements
+
+  tasks:
+    - "Focus: STEPS to take for implementation"
+    - "CRITICAL: Every `## N.` section MUST end green under the validation gates and MUST close
+      with a commit task naming the Conventional Commit, e.g. `- [ ] 1.4 shellcheck, actionlint and
+      test/run.sh green, then commit feat(cascade): add the semver helpers`."
+    - Each task should be independently testable offline
+    - "The section-closing commit is the ONLY delivery operation allowed in tasks.md: no pushing,
+      opening or merging PRs, and no ruleset or repo-settings edits (those are owner steps listed
+      in the proposal)."
+
+operations:
+  apply:
+    guidance:
+      - "Work section by section: run the validation gates on the whole tree before checking a
+        section's commit task, then make exactly the named commit. Never commit to main."
+      - "No push, no PR, no ruleset or settings change from apply."
+  archive:
+    guidance:
+      - "The archive commit rides the implementing PR; nothing is pushed to main afterwards."

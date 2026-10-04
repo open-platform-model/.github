@@ -143,3 +143,58 @@ follow later and show as pending), adds a branch ruleset on
 and one on this repo's default branch requiring a pull request, so an
 acknowledgement cannot land by direct push. The first run is then a manual
 one with `bootstrap: true`.
+
+## `cascade` (release-cascade resolver)
+
+[`.github/scripts/cascade/cascade-resolve.sh`](.github/scripts/cascade/cascade-resolve.sh)
+is the one implementation every repo's `task deps:cascade` (and, later, the
+cascade receive workflow) asks which upstream version a pin moves to, whether
+a pin is held or frozen, and what the cascade PR is called. The design is the
+workspace `RELEASING.md`, section "The cascade"; the interface is fixed by the
+Phase 2 cascade contract, kept with the OpenSpec change `add-cascade-resolver`.
+
+**How repos find it.** A repo task uses `CASCADE_RESOLVER` when it is set (an
+absolute path), and otherwise
+`<main checkout>/../.github/.github/scripts/cascade/cascade-resolve.sh`, so a
+checkout of this repo beside the others is all a laptop needs. CI checks this
+repo out at `main` beside the repo it works on.
+
+**Subcommands.** `newest`, `published`, `pin-of`, `language-of`, `frozen`,
+`is-frozen`, `hold`, `check-files`, `semver-cmp`, `semver-sort`,
+`next-patch`, `classify`, `title` and `body`; the script header lists their
+arguments. Query kinds: `cue` (GHCR), `go` (the Go proxy), `release` and
+`opm-cli` (git tags plus anonymous release downloads) and `oci` (published
+only). Versions are always `v`-prefixed SemVer.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | success; for `newest`, a newer version was printed; for a predicate, yes |
+| 3 | nothing to do, or no; for `title`, the diff is empty |
+| 1 | error: network after retries, an unexpected status, a malformed `.cascade-*` file, a missing tool, the mention lint; never a guessed version |
+| 2 | usage error |
+
+It needs `bash`, `curl`, `jq`, `git` and mikefarah `yq` v4, and no
+credentials: it never sends a token anywhere but GHCR's own anonymous pull
+token to `ghcr.io`, and never calls `api.github.com`.
+
+**The stub.** [`stub-resolve.sh`](.github/scripts/cascade/stub-resolve.sh) is
+the canonical stub the repos copy byte for byte into
+`.tasks/cascade/testdata/` (sha256
+`970130f7d55c07f5b86d4f5b6f392330427ff923eb34f93553656bcd4b893d9c`). The test
+suite checks the checksum and that the stub and the real resolver agree on
+every case the stub supports. Changing it means a new contract version and a
+new checksum in every copy.
+
+**Tests.** Run them locally with
+`bash .github/scripts/cascade/test/run.sh`. `curl` and `git` are PATH shims
+answering from `test/fixtures/` (captured from the real services), sleep and
+the date are faked, and nothing touches the network.
+[`cascade-resolver.yml`](.github/workflows/cascade-resolver.yml) runs
+pinned `shellcheck` and `actionlint` releases and the suite on every PR and push to `main`, with
+no path filter, as the job **`Resolver tests`**.
+[`cascade-resolver-live.yml`](.github/workflows/cascade-resolver-live.yml)
+checks read-only invariants against GHCR and GitHub weekly and on dispatch;
+it is never required.
+
+**Owner step after merge:** add `Resolver tests` to the ruleset on `main` of
+this repo (workspace `RELEASING.md`, section "Rulesets on main").

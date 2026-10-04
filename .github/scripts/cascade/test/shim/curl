@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# curl stand-in for the resolver's offline tests. Accepts only the one curl
+# shape the resolver may use:
+#   curl -q -sS --connect-timeout 10 --max-time 60 -o <body> -D <headers>
+#        -w '%{http_code}' [-I] [-L] [-H <header>]... <url>
+# (anything else exits 2), logs the argument vector to
+# $CASCADE_FIXTURE_DIR/curl.log, and answers <url> from
+# $CASCADE_FIXTURE_DIR/http/<host>/<path> ("?" written as "%3F"):
+#   <file>          the body (GET only)
+#   <file>.status   status lines, one consumed per request, the last repeating;
+#                   default 200 when <file> exists, else 404; 000 = no answer
+#   <file>.headers  response header lines (for Link pagination)
+set -uo pipefail
+dir="${CASCADE_FIXTURE_DIR:?CASCADE_FIXTURE_DIR is not set}"
+printf '%s\n' "$*" >>"$dir/curl.log"
+bad() { printf 'curl shim: %s\n' "$1" >&2; exit 2; }
+
+a=("$@")
+want=(-q -sS --connect-timeout 10 --max-time 60)
+i=0
+for w in "${want[@]}"; do
+  [ "${a[i]:-}" = "$w" ] || bad "argument $((i + 1)) is '${a[i]:-}', want '$w'"
+  i=$((i + 1))
+done
+if ! { [ "${a[i]:-}" = -o ] && [ -n "${a[i + 1]:-}" ]; }; then bad "want -o <body> at argument $((i + 1))"; fi
+body_out="${a[i + 1]}"; i=$((i + 2))
+if ! { [ "${a[i]:-}" = -D ] && [ -n "${a[i + 1]:-}" ]; }; then bad "want -D <headers> at argument $((i + 1))"; fi
+head_out="${a[i + 1]}"; i=$((i + 2))
+if ! { [ "${a[i]:-}" = -w ] && [ "${a[i + 1]:-}" = '%{http_code}' ]; }; then bad "want -w '%{http_code}' at argument $((i + 1))"; fi
+i=$((i + 2))
+method=GET
+if [ "${a[i]:-}" = -I ]; then method=HEAD; i=$((i + 1)); fi
+if [ "${a[i]:-}" = -L ]; then i=$((i + 1)); fi
+while [ "${a[i]:-}" = -H ]; do
+  [ -n "${a[i + 1]:-}" ] || bad "-H needs a value"
+  i=$((i + 2))
+done
+[ $((i + 1)) -eq "${#a[@]}" ] || bad "unexpected argument '${a[i]:-}' (the URL must be last)"
+url="${a[i]}"
+case "$url" in https://* | http://*) ;; *) bad "not a URL: $url" ;; esac
+
+rel="${url#*://}"
+f="$dir/http/${rel//\?/%3F}"
+code=404
+[ ! -f "$f" ] || code=200
+if [ -f "$f.status" ]; then
+  n=$(wc -l <"$f.status")
+  used=0
+  [ ! -f "$f.status.used" ] || used=$(cat "$f.status.used")
+  k=$((used + 1))
+  [ "$k" -le "$n" ] || k=$n
+  code=$(sed -n "${k}p" "$f.status")
+  echo $((used + 1)) >"$f.status.used"
+fi
+
+: >"$body_out"
+if [ "$code" = 000 ]; then
+  : >"$head_out"
+  printf '000'
+  exit 28
+fi
+{
+  printf 'HTTP/2 %s\r\n' "$code"
+  if [ -f "$f.headers" ]; then
+    while IFS= read -r h || [ -n "$h" ]; do printf '%s\r\n' "$h"; done <"$f.headers"
+  fi
+  printf '\r\n'
+} >"$head_out"
+if [ "$method" = GET ] && [ -f "$f" ]; then cat "$f" >"$body_out"; fi
+printf '%s' "$code"
+exit 0

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# git stand-in for the resolver's offline tests. `git [-C <dir>] [-c <k=v>]...
+# ls-remote ... <url> [<pattern>]` answers from
+# $CASCADE_FIXTURE_DIR/git/<repo>.refs (ls-remote output, filtered by the refs
+# pattern like real git); a missing file fails like an unreachable remote, and
+# so does a <repo>.refs.fail marker: always when empty, else for the first N
+# calls where N is its content. Each ls-remote also logs the leading options
+# and its subcommand to git.log, the isolation variables to git.env, and to
+# git.config every credential helper or extraheader the real git would see
+# with the same options, environment and directory. Every other command runs
+# the real git found on PATH after this directory.
+set -uo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IFS=: read -r -a parts <<<"$PATH"
+rest=""
+for p in "${parts[@]}"; do
+  [ "$p" = "$here" ] || rest="${rest:+$rest:}$p"
+done
+real=$(PATH="$rest" command -v git) || { echo "git shim: no real git on PATH" >&2; exit 127; }
+
+all=("$@")
+opts=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -C | -c) [ $# -ge 2 ] || break; opts+=("$1" "$2"); shift 2 ;;
+    *) break ;;
+  esac
+done
+if [ "${1:-}" = ls-remote ]; then
+  dir="${CASCADE_FIXTURE_DIR:?CASCADE_FIXTURE_DIR is not set}"
+  printf 'git %s\n' "$*" >>"$dir/git.log"
+  printf 'opts=%s\n' "${opts[*]}" >>"$dir/git.opts"
+  printf 'GIT_TERMINAL_PROMPT=%s GIT_CONFIG_NOSYSTEM=%s GIT_CONFIG_GLOBAL=%s GIT_CONFIG_PARAMETERS=%s GIT_CONFIG_COUNT=%s GIT_ASKPASS=%s GIT_DIR=%s\n' \
+    "${GIT_TERMINAL_PROMPT-unset}" "${GIT_CONFIG_NOSYSTEM-unset}" "${GIT_CONFIG_GLOBAL-unset}" \
+    "${GIT_CONFIG_PARAMETERS-unset}" "${GIT_CONFIG_COUNT-unset}" "${GIT_ASKPASS-unset}" "${GIT_DIR-unset}" >>"$dir/git.env"
+  "$real" "${opts[@]}" config --get-regexp '^(credential\.helper|http\..*extraheader)$' >>"$dir/git.config" 2>/dev/null || true
+  url="" pat=""
+  for x in "$@"; do
+    case "$x" in
+      https://*) url="$x" ;;
+      refs/*) pat="$x" ;;
+    esac
+  done
+  repo="${url##*/}"
+  repo="${repo%.git}"
+  f="$dir/git/$repo.refs"
+  failing=0
+  if [ -e "$f.fail" ]; then
+    n=$(cat "$f.fail")
+    used=0
+    [ ! -f "$f.fail.used" ] || used=$(cat "$f.fail.used")
+    echo $((used + 1)) >"$f.fail.used"
+    if [ -z "$n" ] || [ "$used" -lt "$n" ]; then failing=1; fi
+  fi
+  if [ -z "$url" ] || [ ! -f "$f" ] || [ "$failing" = 1 ]; then
+    echo "fatal: unable to access '$url'" >&2
+    exit 128
+  fi
+  while IFS=$'\t' read -r sha ref; do
+    [ -n "$ref" ] || continue
+    # shellcheck disable=SC2053 # the pattern is a glob, as in real git
+    [ -z "$pat" ] || [[ $ref == $pat ]] || continue
+    printf '%s\t%s\n' "$sha" "$ref"
+  done <"$f"
+  exit 0
+fi
+exec "$real" "${all[@]}"
