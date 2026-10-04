@@ -229,7 +229,8 @@ with the variable `CASCADE_APP_CLIENT_ID`. A reusable-workflow job that declares
 caller passes `secrets: inherit`, which no caller does), so every job that mints the App token is
 the caller's own: it declares `environment: cascade` and passes the key to a composite action
 as an input. No reusable workflow takes or reads a secret. Callers pin every cascade workflow
-and action to a full commit SHA (owner decision 24; see "Pinning and bumps" below).
+and action to a full commit SHA (owner decision 24 for the actions, extended to the workflows; see
+"Pinning and bumps" below).
 
 | File | Kind | Jobs or caller job | Does |
 | --- | --- | --- | --- |
@@ -241,26 +242,41 @@ and action to a full commit SHA (owner decision 24; see "Pinning and bumps" belo
 Every job's and every action's first step, `Guard`, derives the repo name from
 `GITHUB_REPOSITORY` and refuses a repo outside `open-platform-model`.
 
-**Pinning and bumps.** Owner decision 24 replaces `@main` (decision 13) for every cascade
-reference: each caller names `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and
+**Pinning and bumps.** Owner decision 24 pins the two cascade actions by SHA in every repo,
+replacing `@main` (decision 13) for them; the supervisor extended it to the two reusable
+workflows, because the receive workflow runs the scripts of its own commit, so a workflow at
+`main` with an action at a SHA would mix compute and publish script versions (the `plan.json`
+between them). Each caller names `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and
 `cascade-gates.yml` by the full 40-character SHA of a commit on this repo's `main`, never by a
-branch or tag (opm-operator's `sha_pinning_required` refuses an action named by branch), and a
-repo uses one SHA in all its cascade references. The scripts come from that same commit: the two
-actions run them from their own directory (`GITHUB_ACTION_PATH`), and the receive workflow checks
-them out at its own `job.workflow_sha`, so a pinned reference runs exactly that commit's code and
-there is no input naming another `.github` ref. A merge to `main` here therefore changes nothing in
-a product repo until that repo moves its pin. To roll a change out:
+branch or tag (opm-operator's `sha_pinning_required` refuses an action named by branch). The
+`ref:` of the `open-platform-model/.github` checkout in each repo's `cascade-task.yml` (the CI job
+that tests the repo's `deps:cascade` task against the resolver) carries the same SHA, so CI tests
+the resolver the receiver runs. A repo uses one SHA in all these references. The scripts come
+from that same commit: the two actions run them from their own directory (`GITHUB_ACTION_PATH`),
+and the receive workflow checks them out at its own `job.workflow_sha`, so a pinned reference
+runs exactly that commit's code and there is no input naming another `.github` ref. A merge to
+`main` here therefore changes nothing in a product repo until that repo moves its pin. A repo
+whose `dependabot.yml` configures the `github-actions` ecosystem ignores
+`open-platform-model/.github*`, so Dependabot never moves one reference on its own. To roll a
+change out:
 
 1. Merge the `.github` PR, then take the full SHA of the squash commit it made on `main`
-   (`git rev-parse origin/main` right after fetching, or the PR's merge commit).
-2. Move the sandbox callers (`cascade-sandbox-up` `release.yml`, `cascade-sandbox-down`
-   `deps-cascade.yml` and `cascade-gates.yml`) to that SHA by a sandbox PR and rerun the sandbox
-   scenario that covers the change.
+   (`git rev-parse origin/main` right after fetching, or the PR's merge commit), and check it is
+   on `main`: `gh api repos/open-platform-model/.github/compare/<SHA>...main --jq .status` must
+   print `identical` or `ahead` (a branch commit that a squash merge left behind prints
+   `diverged`).
+2. Rerun the sandbox scenario that covers the change. The sandboxes are disarmed between
+   rollouts (no App key in their `cascade` Environments, `cascade-sandbox-up` private), so:
+   re-arm them (the supervisor restores the key in both Environments and makes
+   `cascade-sandbox-up` public, under owner decision 22), move the sandbox callers
+   (`cascade-sandbox-up` `release.yml`, `cascade-sandbox-down` `deps-cascade.yml` and
+   `cascade-gates.yml`) to that SHA by a sandbox PR, run the scenario, then disarm them again.
 3. In each of core, catalog_opm, library, opm-operator and cli, open one PR titled
    `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in every
-   `uses: open-platform-model/.github/.github/` line (`grep -rn 'open-platform-model/.github/.github/' .github/workflows`)
-   and changes nothing else, unless the `.github` change altered an input, in which case the
-   caller edit rides the same PR. All of a repo's cascade references carry the same SHA.
+   cascade reference (`grep -rn 'open-platform-model/.github' .github/workflows`: the `uses:`
+   lines and the `ref:` under the `cascade-task.yml` checkout) and changes nothing else, unless
+   the `.github` change altered an input, in which case the caller edit rides the same PR. All of
+   a repo's cascade references carry the same SHA.
 4. Merge each after its CI is green; order does not matter, because a repo runs only its own pin.
    To roll back, move the pins back the same way.
 

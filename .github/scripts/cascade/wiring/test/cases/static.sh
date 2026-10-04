@@ -174,6 +174,7 @@ expect "static: the README publish job passes the stop switch to cascade-publish
 check "static: the README names no cascade reference at main or a branch" bash -c '
   ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$ORG_ROOT/README.md"
 check "static: the README pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$ORG_ROOT/README.md"
+check "static: the README bump procedure greps every .github reference, the cascade-task.yml checkout included" grep -qF "grep -rn 'open-platform-model/.github' .github/workflows" "$ORG_ROOT/README.md"
 check "static: the README names no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$ORG_ROOT/README.md"
 
 for sbx in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox \

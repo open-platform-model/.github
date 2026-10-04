@@ -103,8 +103,9 @@ the sandbox cycle it also refused an `org-github-ref` other than `main` outside 
 that input is gone (next paragraph).
 
 **Scripts at the pinned commit (review M2, owner decision 24).** Every caller pins the four
-cascade references to a full commit SHA of `.github` `main`, and the scripts always come from
-that same commit. The composite actions run them from their own directory
+cascade references to a full commit SHA of `.github` `main` (decision 24 names the actions; the
+supervisor extended it to the two reusable workflows, see Decisions), and the scripts always come
+from that same commit. The composite actions run them from their own directory
 (`$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/`; the runner downloads the whole `.github`
 tree at the action's ref) and check nothing else out. `cascade-receive.yml` cannot see its own
 files, so each job's `Own commit` step reads `job.workflow_repository` and `job.workflow_sha`
@@ -342,8 +343,13 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   owner decision 13). Its `cascade-receive.yml@main` and `cascade-gates.yml@main` calls are
   unaffected.
 - **Owner decision 24 (2026-10-04).** "Pin by SHA in all five repos": every repo pins the
-  cascade actions (and, in the README shapes, the two reusable workflows) to a `.github` commit
-  SHA; this supersedes `@main` from decision 13 for the cascade references. Review M2 made the
+  cascade actions to a `.github` commit SHA; this supersedes `@main` from decision 13 for the
+  actions. The supervisor extended it to the two reusable workflows and to the `ref:` of the
+  resolver checkout in each repo's `cascade-task.yml` (review of v3, findings 2 and 5): M2 ties
+  the receive workflow's scripts to its own SHA, so `cascade-receive.yml@main` with
+  `cascade-publish@<sha>` would mix compute and publish script versions across `plan.json`, and
+  CI at `main`'s resolver would test code the receiver does not run. That extension is the
+  supervisor's derivation, not the owner's words, and goes to the owner in the phase report. Review M2 made the
   pin mean what it says: the scripts now come from the pinned commit too (Workflows, "Scripts at
   the pinned commit"). The cost the owner accepted: every change to the cascade workflows or
   actions needs one pin-bump PR per product repo (README "Pinning and bumps").
@@ -442,8 +448,10 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
 4. The contract §14 workspace PR merges, then this PR. Right after the merge the sandbox
    callers move to a full commit SHA on `.github` `main` in one sandbox PR per sandbox,
    `feat/add-release-cascade-workflows` is deleted from `origin`, and S1 is rerun once (contract
-   §11.3, task 5.8). The product callers pin a `.github` `main` SHA as well (owner decision 24)
-   and move it by the README's bump procedure.
+   §11.3, task 5.8), and the sandboxes are disarmed: the production key leaves both sandbox
+   Environments and `cascade-sandbox-up` is private again. The product callers pin a `.github`
+   `main` SHA as well (owner decision 24) and move it by the README's bump procedure, whose
+   sandbox step re-arms and disarms the sandboxes.
 5. B1 to B5 merge after this, each receiver behind `CASCADE_DRY_RUN=true`.
 
 Rollback: callers stop at once by stop switches (contract §9.2: `CASCADE_NOTIFY=off`,
@@ -562,7 +570,7 @@ updating the rolling PR, notify, and the exit-3 annotation.
 | Id | Step | `.github` | Run / PR | Result |
 | --- | --- | --- | --- | --- |
 | R1 notify, switch on | `CASCADE_DRY_RUN=true` on down, release `v0.15.0` in up | `a2950ce` | [up 37211493811](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37211493811), [down 37211515507](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211515507) | **pass**: the notify job downloaded `open-platform-model/.github@a2950ce`, ran `notify.sh` from `GITHUB_ACTION_PATH` and dispatched (HTTP 204). Down's `Own commit` step logged `scripts from open-platform-model/.github a2950ce6d314618c108cfdf2e978133c2ab09f4a` in both jobs (so `job.workflow_sha` is the called workflow's SHA). The plan was `rebuild`/`push` with `effective_dry_run: true`, `Publish` was skipped, and `deps/cascade` stayed at `c4965a0` |
-| R2 switch inside the action | probe [down#17](https://github.com/open-platform-model/cascade-sandbox-down/pull/17): the real receiver (always a dry run) plus `cascade-publish` with `dry-run` given by hand and no switch in its `if:`; removed by [down#18](https://github.com/open-platform-model/cascade-sandbox-down/pull/18) | `a2950ce` | `true`: [down 37211613251](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211613251); empty: [down 37211616082](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211616082); `False`: [down 37211773378](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211773378) | **pass**: with `true` the Publish job ran and logged "dry run (the dry-run input is true); nothing is published", and the mint and `Act` steps were skipped. An empty dispatch value became the input's default `true` (GitHub's doing; the offline cases cover empty and missing). With `False` the job failed with "refusing the plan: the dry-run input must be true or false, not `False`" before the mint. `deps/cascade` stayed at `c4965a0` throughout |
+| R2 switch inside the action | probe [down#17](https://github.com/open-platform-model/cascade-sandbox-down/pull/17): the real receiver (always a dry run) plus `cascade-publish` with `dry-run` given by hand and no switch in its `if:`; removed by [down#18](https://github.com/open-platform-model/cascade-sandbox-down/pull/18) | `a2950ce` | `true`: [down 37211613251](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211613251); empty: [down 37211616082](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211616082); `False`: [down 37211773378](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211773378) | **pass**: with `true` the Publish job ran and logged "dry run (the dry-run input is true); nothing is published", and the mint and `Act` steps were skipped. The empty dispatch was replaced by the probe workflow's own `workflow_dispatch` input default (`probe-dry.yml`, `default: 'true'`), so empty and missing are covered offline only; the action has no default and refuses an empty value. With `False` the job failed with "refusing the plan: the dry-run input must be true or false, not `False`" before the mint. `deps/cascade` stayed at `c4965a0` throughout |
 | R3 switch off, one dispatch | `CASCADE_DRY_RUN=false`, release `v0.16.0` in up | `a2950ce` | [up 37211875058](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37211875058), [down 37211895079](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211895079), gates [down 37211939078](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211939078) | **pass**: notify dispatched (HTTP 204); the `repository_dispatch` run verified `push` and updated [down#14](https://github.com/open-platform-model/cascade-sandbox-down/pull/14) in place to `9f3806c` (one commit, author and committer `opm-cascade[bot]`, `fix(deps): bump up to v0.16.0`; the human title `feat(deps): sandbox` kept, as in S10); `Cascade gates` at `a2950ce` passed on the new head |
 | R4 sweep with nothing new | `workflow_dispatch` sweep | `a2950ce` | [down 37211972443](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37211972443) | **pass**: `rebuild` with an unchanged tree kept the old commit; PR 14's head stayed `9f3806c` |
 | R5 no-change annotation (m2) | squash-merge PR 14 (down `main` `9c504e9`), then a sweep | `a2950ce` | [down 37212051452](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37212051452) | **pass**: the task exited 3 (`fresh`/`noop`, `Publish` skipped); the log has go-task's plain "exit status 3" lines but no `##[error]`, and the job annotations are notices only |
@@ -585,7 +593,10 @@ scripts, should GitHub tighten the rule.
 can run a `main` job in any of them can mint a token for all seven repos. Rotating the key
 rotates it everywhere. During the cycle that reach also extends to whoever can push to
 `feat/add-release-cascade-workflows` in `.github` (Risks); it ends when the sandbox callers move
-to a SHA on `.github` `main` and the branch is deleted (Migration Plan step 4).
+to a SHA on `.github` `main` and the branch is deleted (Migration Plan step 4). After that the
+sandboxes are disarmed (the key removed from both sandbox Environments, `cascade-sandbox-up` made
+private again) and re-armed only for the sandbox step of a pin bump (README "Pinning and bumps",
+step 2), so the reach of the sandboxes exists only while a rollout is being proven.
 
 ## Open Questions
 

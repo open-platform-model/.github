@@ -13,8 +13,9 @@ name: Cascade receive
 # because a reusable-workflow job does not see the caller's Environment
 # secrets without `secrets: inherit` (sandbox cycle E1). Its if: reads the
 # outputs below. Callers pass no secrets to this workflow. Callers pin this
-# workflow to a .github commit SHA (owner decision 24); every job checks the
-# scripts out at that same commit (job.workflow_sha).
+# workflow to a .github commit SHA (owner decision 24, extended from the
+# actions to the workflows); every job checks the scripts out at that same
+# commit (job.workflow_sha).
 
 on:
   workflow_call:

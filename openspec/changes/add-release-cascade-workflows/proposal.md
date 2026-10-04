@@ -103,7 +103,7 @@ Not in this change:
   `cascade-resolver-live.yml` are untouched.
 - **Callers.** After this merges: core (notify only), catalog_opm, library, opm-operator and cli
   (notify, receiver, gates caller) through their `join-release-cascade`, each pinned to a
-  `.github` `main` commit SHA (owner decision 24, superseding `@main` from decision 13); during the change only `cascade-sandbox-up` and `cascade-sandbox-down`, at a commit SHA of
+  `.github` `main` commit SHA (owner decision 24 for the actions, extended by the supervisor to the reusable workflows and the `cascade-task.yml` resolver checkout, superseding `@main` from decision 13); during the change only `cascade-sandbox-up` and `cascade-sandbox-down`, at a commit SHA of
   `feat/add-release-cascade-workflows`.
 - **Hosts and APIs.** `api.github.com` (dispatches, pulls, releases, labels, comments, statuses,
   workflow dispatch), `github.com` (git fetch and push with the App token), `proxy.golang.org`

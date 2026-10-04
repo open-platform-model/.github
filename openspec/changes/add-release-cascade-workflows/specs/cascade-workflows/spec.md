@@ -53,8 +53,8 @@ NOT be used.
 
 Callers SHALL reference `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and
 `cascade-gates.yml` by the full 40-character SHA of a commit on `open-platform-model/.github`
-`main` (owner decision 24), never by a branch or tag, and one repo SHALL use one SHA in all its
-cascade references. The scripts SHALL run at that same commit, with no input naming another
+`main` (owner decision 24 for the actions, extended by the supervisor to the reusable workflows),
+never by a branch or tag, and one repo SHALL use one SHA in all its cascade references. The scripts SHALL run at that same commit, with no input naming another
 `.github` ref: the composite actions SHALL run them from their own directory
 (`GITHUB_ACTION_PATH`) and SHALL NOT check out `open-platform-model/.github`; each
 `cascade-receive.yml` job that needs them SHALL check out `open-platform-model/.github` to
