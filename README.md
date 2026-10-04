@@ -219,22 +219,29 @@ this repo (workspace `RELEASING.md`, section "Rulesets on main").
 
 ### Cascade workflows
 
-Three reusable workflows run the cascade in the five product repos (workspace
-`RELEASING.md`, sections "The cascade" and "Gates"). Their scripts live in
+Two reusable workflows and two composite actions run the cascade in the five product repos
+(workspace `RELEASING.md`, sections "The cascade" and "Gates"). Their scripts live in
 [`.github/scripts/cascade/wiring/`](.github/scripts/cascade/wiring/), with every fixed map
-(who notifies whom, which sources a receiver accepts, tag shapes) in `lib.sh`.
-Callers pass no secrets: the `opm-cascade` App key is each repo's `cascade` Environment secret
-`CASCADE_APP_PRIVATE_KEY`, with the variable `CASCADE_APP_CLIENT_ID`, and only a job that
-declares `environment: cascade` reads it. Callers use `@main` (owner decision 13).
+(who notifies whom, which sources a receiver accepts, tag shapes) in `lib.sh`. The
+`opm-cascade` App key is each repo's `cascade` Environment secret `CASCADE_APP_PRIVATE_KEY`,
+with the variable `CASCADE_APP_CLIENT_ID`. A reusable-workflow job that declares
+`environment: cascade` sees the caller's Environment variables but not its secrets (unless the
+caller passes `secrets: inherit`, which no caller does), so every job that mints the App token is
+the caller's own: it declares `environment: cascade` and passes the key to a composite action
+as an input. No reusable workflow takes or reads a secret. Callers use `@main` (owner decision
+13); the sandbox repos pin a commit SHA instead, because their Environments hold the production
+key.
 
-| Workflow | Jobs | Does |
-| --- | --- | --- |
-| [`cascade-notify.yml`](.github/workflows/cascade-notify.yml) | `Notify downstream` (`cascade` Environment) | after a release is published: checks the tag, waits up to 10 minutes for the Go proxy (library only), and sends `repository_dispatch` `upstream-released` with `{source, tags}` to each downstream repo |
-| [`cascade-receive.yml`](.github/workflows/cascade-receive.yml) | `Compute`, `Post gates`, `Publish` (`cascade` Environment) | runs the repo's `task -x deps:cascade` on the rolling `deps/cascade` branch with no secret in reach, posts G2 and G3 on open release PRs, then verifies the plan and pushes, opens, edits, recreates, closes or labels the cascade PR |
-| [`cascade-gates.yml`](.github/workflows/cascade-gates.yml) | `Cascade gates` | per PR (`pull_request_target`, nothing checked out): `n/a` on both gate contexts for an ordinary PR; a gates-only receiver run for a release PR |
+| File | Kind | Jobs or caller job | Does |
+| --- | --- | --- | --- |
+| [`cascade-notify`](.github/actions/cascade-notify/action.yml) | composite action | the caller's `Notify downstream` (`cascade` Environment) | after a release is published: checks the tag, waits up to 10 minutes for the Go proxy (library only), and sends `repository_dispatch` `upstream-released` with `{source, tags}` to each downstream repo |
+| [`cascade-receive.yml`](.github/workflows/cascade-receive.yml) | reusable workflow | `Compute`, `Post gates` | runs the repo's `task -x deps:cascade` on the rolling `deps/cascade` branch with no secret in reach and plans the result; posts G2 and G3 on open release PRs; outputs `action`, `dry-run` and `compute-ok` |
+| [`cascade-publish`](.github/actions/cascade-publish/action.yml) | composite action | the caller's `Publish` (`cascade` Environment) | verifies the plan, then pushes, opens, edits, recreates, closes or labels the cascade PR; never runs repo code |
+| [`cascade-gates.yml`](.github/workflows/cascade-gates.yml) | reusable workflow | `Cascade gates` | per PR (`pull_request_target`, nothing checked out): `n/a` on both gate contexts for an ordinary PR; a gates-only receiver run for a release PR |
 
-Every job's first step, `Guard`, derives the repo name from `GITHUB_REPOSITORY` and refuses an
-`org-github-ref` other than `main` outside the `cascade-sandbox-*` repos.
+Every job's and every action's first step, `Guard`, derives the repo name from
+`GITHUB_REPOSITORY` and refuses an `org-github-ref` other than `main` outside the
+`cascade-sandbox-*` repos.
 
 **Notify caller** (in each upstream's release workflow; `needs`, `if` and `tag` per repo):
 
@@ -243,11 +250,18 @@ Every job's first step, `Guard`, derives the repo name from `GITHUB_REPOSITORY` 
     name: Notify downstream
     needs: [release-please, publish]
     if: needs.release-please.outputs.release_created == 'true' && vars.CASCADE_NOTIFY != 'off'
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 20
     permissions:
       contents: read
-    uses: open-platform-model/.github/.github/workflows/cascade-notify.yml@main
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - name: Notify downstream
+        uses: open-platform-model/.github/.github/actions/cascade-notify@main
+        with:
+          tag: ${{ needs.release-please.outputs.tag_name }}
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
 ```
 
 **Receiver caller** (`deps-cascade.yml` in catalog_opm, library, opm-operator and cli):
@@ -291,13 +305,39 @@ jobs:
       g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
       g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
       setup-go: false
-      labels-managed: false
+
+  publish:
+    name: Publish
+    needs: cascade
+    if: >-
+      !cancelled()
+      && needs.cascade.outputs.compute-ok == 'true'
+      && needs.cascade.outputs.dry-run == 'false'
+      && inputs.dry_run != true
+      && vars.CASCADE_DRY_RUN == 'false'
+      && github.ref == 'refs/heads/main'
+      && contains(fromJSON('["push","recreate","close","conflict","too_long"]'), needs.cascade.outputs.action)
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Publish
+        uses: open-platform-model/.github/.github/actions/cascade-publish@main
+        with:
+          labels-managed: false
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
 ```
 
 Real runs on `main` share the group `deps-cascade`; gates-only runs use `deps-cascade-gates`
 and runs from any other ref (always dry runs) `deps-cascade-<ref>`, so neither replaces a
-pending real run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
-`labels-managed: true` (cli) only checks that the five cascade labels exist instead of
+pending real run. The `publish` job reads the dry-run switches itself, not from the reusable
+job that ran repo code, and `cascade-publish` refuses any ref but `main` and a plan marked as a
+dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
+`labels-managed: true` (cli, an input of `cascade-publish`) only checks that the five cascade labels exist instead of
 creating them; `setup-cue` (default true) and `cue-version` (default `v0.17.1`) install CUE.
 
 **Per-PR gates caller** (`cascade-gates.yml` in the same four repos):

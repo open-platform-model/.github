@@ -1,9 +1,10 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2016 # bash -c snippets read their own positional arguments
-# Static checks of the reusable cascade workflows: no expression inside a
-# run: block, no secrets input, explicit permissions on every job, every
-# third-party action pinned to a commit SHA, and one identical Guard step
-# first in every job.
+# Static checks of the reusable cascade workflows and the composite cascade
+# actions: no expression inside a run: block, no secrets input and no
+# Environment in a reusable workflow, explicit permissions on every job,
+# every third-party action pinned to a commit SHA, and one identical Guard
+# step first in every job and every action.
 
 new_fx
 
@@ -15,15 +16,19 @@ printf 'on: workflow_call\njobs:\n  a:\n    runs-on: x\n    steps:\n      - name
 expect "static: an inline expression in run: is found" 0 "a/bad" -- inline_expr "$FX/bad.yml"
 
 REUSABLE=()
-for wf in cascade-notify cascade-receive cascade-gates; do
-  [ -f "$WORKFLOWS/$wf.yml" ] && REUSABLE+=("$WORKFLOWS/$wf.yml")
+for wf in cascade-receive cascade-gates; do
+  REUSABLE+=("$WORKFLOWS/$wf.yml")
 done
+check "static: no reusable notify workflow is left (E1: notify is a composite action)" test ! -e "$WORKFLOWS/cascade-notify.yml"
 GUARD_TEXT=""
 for f in "${REUSABLE[@]}"; do
   n="${f##*/}"
   expect "static: $n has no expression inside run:" 0 "" -- inline_expr "$f"
   expect "static: $n is only workflow_call" 0 "workflow_call" -- yq -r '.on | keys | join(",")' "$f"
   expect "static: $n declares no secrets input" 0 "null" -- yq -r '.on.workflow_call.secrets' "$f"
+  expect "static: $n has no job in an Environment (E1: its secrets would be empty)" 0 "" -- \
+    yq -r '.jobs | to_entries[] | select(.value.environment != null) | .key' "$f"
+  check "static: $n reads no secret" bash -c '! grep -n "secrets\." "$1"' _ "$f"
   expect "static: $n gives every job explicit permissions" 0 "" -- yq -r '.jobs | to_entries[] | select(.value.permissions == null) | .key' "$f"
   check "static: $n pins every action to a SHA with a version comment" bash -c '
     ! grep -nE "^ *(- )?uses:" "$1" | grep -vE "uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]"' _ "$f"
@@ -36,6 +41,30 @@ for f in "${REUSABLE[@]}"; do
     check "static: $n job $j has the same Guard text" test "$t" = "$GUARD_TEXT"
   done
 done
+
+# The composite actions the caller's own cascade-Environment job runs.
+for a in cascade-notify cascade-publish; do
+  f="$ORG_ROOT/.github/actions/$a/action.yml"
+  n="actions/$a"
+  check "static: $n exists" test -f "$f"
+  [ -f "$f" ] || continue
+  expect "static: $n is a composite action" 0 composite -- yq -r '.runs.using' "$f"
+  expect "static: $n has no expression inside run:" 0 "" -- \
+    yq -r '.runs.steps[] | select((.run // "") | test("\$\{\{")) | .name' "$f"
+  expect "static: $n gives every run step bash" 0 "" -- yq -r '.runs.steps[] | select(.run != null and .shell != "bash") | .name' "$f"
+  check "static: $n pins every action to a SHA with a version comment" bash -c '
+    ! grep -nE "^ *(- )?uses:" "$1" | grep -vE "uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]"' _ "$f"
+  expect "static: $n has the Guard step first" 0 "Guard/guard" -- yq -r '.runs.steps[0].name + "/" + .runs.steps[0].id' "$f"
+  check "static: $n reads no secret and no event repository name" bash -c '! grep -nE "\\$\\{\\{[^}]*secrets\.|event\.repository\.name" "$1"' _ "$f"
+  expect "static: $n takes the key as a required input" 0 "true" -- yq -r '.inputs["private-key"].required' "$f"
+  t=$(yq -r '.runs.steps[] | select(.name == "Guard") | .run' "$f")
+  check "static: $n has the same Guard text" test "$t" = "$GUARD_TEXT"
+done
+expect "static: actions/cascade-notify mints for the targets only" 0 '${{ steps.validate.outputs.targets }}' -- \
+  yq -r '.runs.steps[] | select(.id == "mint") | .with.repositories' "$ORG_ROOT/.github/actions/cascade-notify/action.yml"
+expect "static: actions/cascade-publish mints for the calling repo only, after verify" 0 \
+  $'${{ steps.guard.outputs.repo }}\nsteps.verify.outputs.publish == \'true\'' -- \
+  yq -r '.runs.steps[] | select(.id == "mint") | (.with.repositories, .if)' "$ORG_ROOT/.github/actions/cascade-publish/action.yml"
 
 if [ -n "$GUARD_TEXT" ]; then
   # guard <GITHUB_REPOSITORY> <org-github-ref>: runs the inline Guard step.

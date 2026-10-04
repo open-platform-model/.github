@@ -11,7 +11,7 @@ from a pinned, checksum-verified release (the wiring suite runs `task`), run a p
 checksum-verified `shellcheck` release (not the runner image's own) on every `*.sh` under
 `.github/scripts` and on every test shim (the resolver's `curl` and `git` shims and the wiring
 suite's `gh` shim), run `actionlint` from a pinned, checksum-verified release on
-`.github/workflows/*.yml` (which includes the three reusable cascade workflows), and run both
+`.github/workflows/*.yml` (which includes the two reusable cascade workflows), and run both
 offline suites: the resolver suite and the wiring suite. It SHALL add no new job and no new
 check context. It MUST NOT change `mention-guard.yml` or `tag-ledger.yml`.
 

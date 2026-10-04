@@ -1,7 +1,8 @@
 name: Cascade gates
 
 # The per-PR gates caller (Phase 3 wiring contract section 8.3), at the
-# .github branch under test.
+# .github branch under test, pinned to a commit SHA (the cascade
+# Environment here holds the production App key).
 
 on:
   pull_request_target:
@@ -19,8 +20,8 @@ jobs:
     permissions:
       statuses: write
       actions: write
-    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@feat/add-release-cascade-workflows
+    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@d5d47bb4ab397fb53f6b598f325d5ee772ab48c7 # feat/add-release-cascade-workflows
     with:
       g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
       g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
-      org-github-ref: feat/add-release-cascade-workflows
+      org-github-ref: d5d47bb4ab397fb53f6b598f325d5ee772ab48c7

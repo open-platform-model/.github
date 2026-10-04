@@ -18,9 +18,16 @@ jobs:
   notify:
     name: Notify downstream
     if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 20
     permissions:
       contents: read
-    uses: open-platform-model/.github/.github/workflows/cascade-notify.yml@feat/add-release-cascade-workflows
-    with:
-      tag: ${{ inputs.tag }}
-      org-github-ref: feat/add-release-cascade-workflows
+    steps:
+      - name: Notify downstream
+        uses: open-platform-model/.github/.github/actions/cascade-notify@d5d47bb4ab397fb53f6b598f325d5ee772ab48c7 # feat/add-release-cascade-workflows
+        with:
+          tag: ${{ inputs.tag }}
+          org-github-ref: d5d47bb4ab397fb53f6b598f325d5ee772ab48c7
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}

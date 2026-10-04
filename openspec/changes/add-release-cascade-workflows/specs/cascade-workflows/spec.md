@@ -1,19 +1,24 @@
 ## Purpose
 
-Rules every reusable release-cascade workflow in `.github` follows: action pinning, explicit
-permissions, untrusted-input handling, where the shared scripts come from, and how the
-`opm-cascade` App token is minted and used.
+Rules every release-cascade reusable workflow and composite action in `.github` follows: action
+pinning, explicit permissions, untrusted-input handling, where the shared scripts come from, and
+how the `opm-cascade` App token is minted and used.
 
 ## ADDED Requirements
 
 ### Requirement: Hardened workflow shape
 
-`cascade-notify.yml`, `cascade-receive.yml` and `cascade-gates.yml` SHALL be callable only through
-`workflow_call`. Every job SHALL declare `permissions:` explicitly. Every third-party `uses:` SHALL
-be pinned to a full commit SHA with the version in a comment. No `run:` block SHALL contain a
-`${{ }}` expression; every context value SHALL reach a script through `env:`. No reusable
-workflow SHALL declare a `secrets:` input; the App key SHALL be read only as the `cascade`
-Environment secret `CASCADE_APP_PRIVATE_KEY`, inside a job that declares `environment: cascade`.
+`cascade-receive.yml` and `cascade-gates.yml` SHALL be callable only through `workflow_call`;
+`cascade-notify` and `cascade-publish` SHALL be composite actions under `.github/actions/`. Every
+job SHALL declare `permissions:` explicitly. Every third-party `uses:` SHALL be pinned to a full
+commit SHA with the version in a comment. No `run:` block SHALL contain a `${{ }}` expression;
+every context value SHALL reach a script through `env:`. No reusable workflow SHALL declare a
+`secrets:` input, read a secret or declare an Environment, because a reusable-workflow job sees
+the caller's Environment variables but not its Environment secrets unless the caller passes
+`secrets: inherit` (sandbox cycle E1). The App key SHALL be read only as the `cascade`
+Environment secret `CASCADE_APP_PRIVATE_KEY`, by the caller's own job that declares
+`environment: cascade`, and passed to the composite action as its `private-key` input; no caller
+SHALL pass `secrets:` or `secrets: inherit` to a reusable cascade workflow.
 
 #### Scenario: Inline expression rejected
 
@@ -22,8 +27,15 @@ Environment secret `CASCADE_APP_PRIVATE_KEY`, inside a job that declares `enviro
 
 #### Scenario: Caller passes no secrets
 
-- **WHEN** a repo calls `cascade-notify.yml` with no `secrets:` key
-- **THEN** the notify job still mints the App token from the caller repo's `cascade` Environment
+- **WHEN** an upstream's own `Notify downstream` job declares `environment: cascade` and runs the
+  `cascade-notify` action with `private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}`
+- **THEN** the action mints the App token from the caller repo's `cascade` Environment, and no
+  reusable workflow receives a secret
+
+#### Scenario: Reusable job does not see the Environment secret
+
+- **WHEN** a reusable-workflow job declares `environment: cascade` and its caller passes no `secrets:`
+- **THEN** `secrets.CASCADE_APP_PRIVATE_KEY` is empty in that job, so no reusable cascade workflow mints the token
 
 ### Requirement: Repo name from GITHUB_REPOSITORY
 
@@ -44,7 +56,7 @@ Each job that needs the shared scripts or the resolver SHALL check out
 `persist-credentials: false`. The first step of every job SHALL fail with "org-github-ref may
 differ from main only in a sandbox repo" when `org-github-ref` is not `main` and the calling repo
 does not match `^open-platform-model/cascade-sandbox-`. That check and the repo-name derivation
-SHALL be written inline in the reusable workflow and run before any checkout, never read from
+SHALL be written inline in the reusable workflow or composite action and run before any checkout, never read from
 the `org-github` checkout whose ref they guard.
 
 #### Scenario: Production repo with a branch ref
@@ -64,9 +76,11 @@ the `org-github` checkout whose ref they guard.
 
 ### Requirement: App token minting
 
-The App token SHALL be minted only in a job that declares `environment: cascade`, as the step
-directly before its first use and after every check that could still stop the job, from
-`vars.CASCADE_APP_CLIENT_ID` and `secrets.CASCADE_APP_PRIVATE_KEY`, with `owner:
+The App token SHALL be minted only inside the `cascade-notify` or `cascade-publish` composite
+action, run by a caller job that declares `environment: cascade`, as the step directly before its
+first use and after every check that could still stop the job, from the `client-id` and
+`private-key` inputs the caller fills with `vars.CASCADE_APP_CLIENT_ID` and
+`secrets.CASCADE_APP_PRIVATE_KEY`, with `owner:
 open-platform-model` and a non-empty `repositories` list. The step before the mint SHALL fail when
 that list is empty. Notify's token SHALL be scoped to its targets with `permission-contents:
 write` only; publish's token SHALL be scoped to the calling repo with `permission-contents:

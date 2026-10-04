@@ -1,7 +1,8 @@
 name: Deps cascade
 
 # The receiver caller (Phase 3 wiring contract section 5), at the .github
-# branch under test. No schedule: the sandbox runs by dispatch only.
+# branch under test, pinned to a commit SHA because this repo's cascade
+# Environment holds the production App key. No schedule: the sandbox runs by dispatch only.
 
 on:
   repository_dispatch:
@@ -30,7 +31,7 @@ jobs:
       contents: read
       pull-requests: read
       statuses: write
-    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@feat/add-release-cascade-workflows
+    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@d5d47bb4ab397fb53f6b598f325d5ee772ab48c7 # feat/add-release-cascade-workflows
     with:
       dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
       gates-only: ${{ inputs.gates_only == true }}
@@ -38,5 +39,34 @@ jobs:
       g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
       setup-go: false
       setup-cue: false
-      labels-managed: false
-      org-github-ref: feat/add-release-cascade-workflows
+      org-github-ref: d5d47bb4ab397fb53f6b598f325d5ee772ab48c7
+
+  # The caller owns the cascade-Environment job and passes the key to the
+  # composite action (a reusable workflow would not see the Environment
+  # secret; sandbox cycle E1). The stop switches are read here, not from
+  # the reusable job that ran repo code.
+  publish:
+    name: Publish
+    needs: cascade
+    if: >-
+      !cancelled()
+      && needs.cascade.outputs.compute-ok == 'true'
+      && needs.cascade.outputs.dry-run == 'false'
+      && inputs.dry_run != true
+      && vars.CASCADE_DRY_RUN == 'false'
+      && github.ref == 'refs/heads/main'
+      && contains(fromJSON('["push","recreate","close","conflict","too_long"]'), needs.cascade.outputs.action)
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Publish
+        uses: open-platform-model/.github/.github/actions/cascade-publish@d5d47bb4ab397fb53f6b598f325d5ee772ab48c7 # feat/add-release-cascade-workflows
+        with:
+          org-github-ref: d5d47bb4ab397fb53f6b598f325d5ee772ab48c7
+          labels-managed: false
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}

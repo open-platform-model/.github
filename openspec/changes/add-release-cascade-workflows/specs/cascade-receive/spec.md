@@ -1,6 +1,6 @@
 ## Purpose
 
-The reusable receive workflow each downstream repo calls from its `deps-cascade.yml`: it runs the
+The reusable receive workflow and the composite publish action each downstream repo runs from its `deps-cascade.yml`: they run the
 repo's `task -x deps:cascade`, keeps one rolling `deps/cascade` PR up to date without ever
 needing the Workflows permission, and never lets the job that runs repo code hold the App key.
 
@@ -11,18 +11,22 @@ needing the Workflows permission, and never lets the job that runs repo code hol
 `.github/workflows/cascade-receive.yml` SHALL take the inputs `dry-run` (boolean, required),
 `gates-only` (boolean, default false), `g2-mode` and `g3-mode` (string, default `warn`; any value
 other than `warn` or `enforce` fails `compute`), `setup-go` (boolean, default false; Go from
-`repo/go.mod`), `setup-cue` (boolean, default true), `cue-version` (string, default `v0.17.1`),
-`labels-managed` (boolean, default false) and `org-github-ref` (string, default `main`). It SHALL
-run three jobs:
+`repo/go.mod`), `setup-cue` (boolean, default true), `cue-version` (string, default `v0.17.1`)
+and `org-github-ref` (string, default `main`), SHALL run two jobs, and SHALL output `action`,
+`dry-run` and `compute-ok` (true only when every `compute` step succeeded). The third job,
+`publish`, is the caller's own: it needs the reusable job, declares `environment: cascade`, and
+runs the composite action `.github/actions/cascade-publish` with the inputs `org-github-ref`,
+`labels-managed` (default `false`), `client-id` and `private-key`:
 
-| Job | Environment | Permissions | Timeout |
-| --- | --- | --- | --- |
-| `compute` | none | `contents: read`, `pull-requests: read` | 45 min |
-| `gates` | none | `statuses: write`, `pull-requests: read` | 10 min |
-| `publish` | `cascade` | `contents: read`, `pull-requests: read` | 15 min |
+| Job | Where | Environment | Permissions | Timeout |
+| --- | --- | --- | --- | --- |
+| `compute` | `cascade-receive.yml` | none | `contents: read`, `pull-requests: read` | 45 min |
+| `gates` | `cascade-receive.yml` | none | `contents: read`, `statuses: write`, `pull-requests: read` | 10 min |
+| `publish` | the caller, running `cascade-publish` | `cascade` | `contents: read`, `pull-requests: read` | 15 min |
 
 `compute` runs the repo's task and holds no secret. `publish` runs only `git`, `gh`, `jq` and the
-`org-github` scripts, never a repo task or repo code. Task (3.x) is always installed, and
+`org-github` scripts, never a repo task or repo code, and fails on any ref other than
+`refs/heads/main`. Task (3.x) is always installed, and
 `compute` SHALL fail unless `yq --version` reports mikefarah. The bot SHALL never enable
 auto-merge on a cascade PR (every cascade PR is merged by a human).
 
@@ -33,10 +37,11 @@ auto-merge on a cascade PR (every cascade PR is merged by a human).
 
 ### Requirement: Dry run fails closed
 
-`publish` SHALL run only when `compute` succeeded, its `dry_run` output is not `true`, its
+`publish` SHALL run only when `compute-ok` is `true`, the `dry-run` output is `false`, the
 `action` output is one of `push`, `recreate`, `close`, `conflict` or `too_long`, and, read by
-the reusable workflow itself rather than from `compute`, the `dry-run` input is false and the
-run's ref is `refs/heads/main`. `publish` SHALL also refuse, before minting, a plan whose
+the caller's `publish` job itself rather than from `compute`, the `dry_run` dispatch input is not
+true, the repo variable `CASCADE_DRY_RUN` is exactly `false` and the run's ref is
+`refs/heads/main`. `publish` SHALL also refuse, before minting, a plan whose
 `effective_dry_run` is true. `compute` SHALL
 treat a run from any ref other than `refs/heads/main` as a dry run whatever the input says. In a
 dry run `compute` SHALL still write the job summary with the line "DRY RUN: nothing was pushed",

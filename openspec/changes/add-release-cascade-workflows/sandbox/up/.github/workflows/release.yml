@@ -1,8 +1,9 @@
 name: Release
 
 # Publishes a release with up.tar.gz, then notifies cascade-sandbox-down
-# through the shared cascade-notify workflow (sandbox cycle, Phase 3 wiring
-# contract section 11.3).
+# through the shared cascade-notify action (sandbox cycle, Phase 3 wiring
+# contract sections 11.3 and 13.1), pinned to a .github commit SHA because
+# the cascade Environment here holds the production App key.
 
 on:
   workflow_dispatch:
@@ -48,13 +49,23 @@ jobs:
           tar czf up.tar.gz README.md
           gh release create "$V" up.tar.gz --target main --title "$V" --notes "$notes"
 
+  # The caller owns the cascade-Environment job and passes the key to the
+  # composite action (a reusable workflow would not see the Environment
+  # secret; sandbox cycle E1).
   notify-downstream:
     name: Notify downstream
     needs: release
     if: success() && vars.CASCADE_NOTIFY != 'off'
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 20
     permissions:
       contents: read
-    uses: open-platform-model/.github/.github/workflows/cascade-notify.yml@feat/add-release-cascade-workflows
-    with:
-      tag: ${{ inputs.version }}
-      org-github-ref: feat/add-release-cascade-workflows
+    steps:
+      - name: Notify downstream
+        uses: open-platform-model/.github/.github/actions/cascade-notify@d5d47bb4ab397fb53f6b598f325d5ee772ab48c7 # feat/add-release-cascade-workflows
+        with:
+          tag: ${{ inputs.version }}
+          org-github-ref: d5d47bb4ab397fb53f6b598f325d5ee772ab48c7
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}

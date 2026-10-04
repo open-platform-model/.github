@@ -1,16 +1,18 @@
 ## Purpose
 
-The reusable notify workflow an upstream repo calls after its release is published, which tells
+The composite notify action an upstream repo runs after its release is published, which tells
 each downstream receiver through `repository_dispatch` that a new upstream version exists.
 
 ## ADDED Requirements
 
 ### Requirement: Notify interface
 
-`.github/workflows/cascade-notify.yml` SHALL take the inputs `tag` (string, required) and
-`org-github-ref` (string, default `main`) and SHALL run one job named `Notify downstream` with
-`environment: cascade`, `permissions: {contents: read}` and `timeout-minutes: 20`. It SHALL NOT
-have a dry-run mode; the repo variable `CASCADE_NOTIFY=off` is checked by the caller's `if:`.
+`.github/actions/cascade-notify/action.yml` SHALL be a composite action taking the inputs `tag`
+(required), `org-github-ref` (default `main`), `client-id` and `private-key` (both required). The
+upstream runs it as the only step of its own job named `Notify downstream`, which declares
+`environment: cascade`, `permissions: {contents: read}` and `timeout-minutes: 20`, and passes
+`vars.CASCADE_APP_CLIENT_ID` and `secrets.CASCADE_APP_PRIVATE_KEY`. It SHALL NOT have a dry-run
+mode; the repo variable `CASCADE_NOTIFY=off` is checked by the caller job's `if:`.
 
 #### Scenario: Caller switch off
 
@@ -38,7 +40,7 @@ job SHALL fail before the token is minted.
 
 #### Scenario: Unknown source
 
-- **WHEN** a repo outside the map calls `cascade-notify.yml`
+- **WHEN** a repo outside the map runs the `cascade-notify` action
 - **THEN** the job fails with "not a cascade source" and mints no token
 
 #### Scenario: Catalog tag shape

@@ -216,9 +216,28 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   summary suggested it does not.
 - **Options.** (a) Reusable jobs declare the Environment (contract §2.2). (b) Composite actions
   called from a caller-owned job that declares it (contract §13.1).
-- **Decision.** (a), proven by E1 (a real dispatch minted in the sandbox) and E1b (a branch
-  run is refused by the Environment's `main`-only policy before any step). If E1 fails, stop and
-  report; (b) is a contract change the supervisor must accept first.
+- **First decision.** (a), to be proven by E1 and E1b before merge.
+- **E1 result (2026-10-04): (a) fails.** In run
+  [37205835905](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37205835905)
+  the reusable notify job ran in the caller's `cascade` Environment and read
+  `vars.CASCADE_APP_CLIENT_ID` from it, but `secrets.CASCADE_APP_PRIVATE_KEY` was empty and the
+  mint failed ("The 'private-key' input must be set to a non-empty string"). A probe
+  ([37205963663](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37205963663))
+  called one reusable job with `environment: cascade` twice: without `secrets:` it saw the
+  variable but not the secret; with `secrets: inherit` it saw both. So a called workflow sees
+  the caller's Environment secrets only when the caller passes `secrets: inherit`, which contract
+  §2.2 forbids.
+- **Decision: (b), the contract §13.1 fallback**, implemented in this change on the
+  supervisor's standing instruction. Notify and publish are composite actions
+  (`.github/actions/cascade-notify`, `.github/actions/cascade-publish`) that take the key as the
+  `private-key` input. The caller owns each job that mints: it declares `environment: cascade`,
+  passes `secrets.CASCADE_APP_PRIVATE_KEY` and `vars.CASCADE_APP_CLIENT_ID`, and holds the
+  stop-switch `if:`. `cascade-notify.yml` is deleted; `cascade-receive.yml` keeps `compute` and
+  `gates`, and outputs `action`, `dry-run` and `compute-ok` for the caller's `publish` job, which
+  reads the dry-run switches itself. `cascade-publish` also fails on any ref but `main`.
+  `secrets: inherit` (the one-line alternative) was not chosen: it hands every repo and org
+  secret of the caller to the called workflow, where the composite action receives only the key.
+  E1 was re-run on the fallback (Sandbox cycle).
 
 ### When GitHub refuses an App push without the Workflows permission (E2 to E5)
 
