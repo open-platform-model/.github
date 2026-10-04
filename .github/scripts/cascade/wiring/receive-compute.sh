@@ -10,8 +10,8 @@
 # Usage: receive-compute.sh <step>, one workflow step each, in this order:
 #   init     checks tools, modes and the receiver; the effective dry run
 #   payload  validates a repository_dispatch payload (dropped when invalid)
-#   gates-read  the release PRs, G3 and the release heads' commits
-#            (gates-eval.sh read)
+#   gates-read  the release PRs and the release heads' commits
+#            (gates-eval.sh read); G3 is the Post gates job's
 #   state    the cascade PR, the remote deps/cascade tip, the mode, and the
 #            upstream releases the breaking check reads
 #   gates    G2 on the release heads (gates-eval.sh run); in a gates-only
@@ -31,8 +31,9 @@
 # CASCADE_PAYLOAD, CASCADE_G2_MODE, CASCADE_G3_MODE; GH_TOKEN and
 # CASCADE_READ_TOKEN (GITHUB_TOKEN) on gates-read and state only. Those two
 # steps make every read that needs a token and run no repo code; gates, run
-# and text run repo code (run_repo_code), and no step from gates on gets a
-# token.
+# and text run repo code (run_repo_code), and no step from gates on is given
+# a token (the job's read-only token still sits in the checkout actions'
+# post steps and the runner, where repo code can reach it: cascade-receive.yml).
 # Writes GITHUB_OUTPUT, GITHUB_STEP_SUMMARY and files under CASCADE_T.
 #
 # Exit status: 0 success, 1 failure (the job fails), 2 usage.
@@ -187,7 +188,8 @@ gates_table() {
     echo "- Gates: no open release PR"
     return 0
   fi
-  jq -r '.[] | "- Release PR #\(.pr) (`\(.sha[0:12])`): freshness \(.freshness.state) (\(.freshness.msg)); settled \(.settled.state) (\(.settled.msg))"' "$T/gates.json"
+  jq -r '.[] | "- Release PR #\(.pr) (`\(.sha[0:12])`): freshness \(.freshness.state) (\(.freshness.msg))"' "$T/gates.json"
+  echo "- \`cascade/settled\` (G3) is evaluated and posted by the Post gates job"
 }
 
 step_state() {

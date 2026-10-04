@@ -139,6 +139,14 @@ check "static: cascade-receive.yml passes no token as an action input in compute
   ! yq -r ".jobs.compute.steps[].with // {} | to_entries[] | .value" "$1" | grep -qE "github\.token|secrets\."' _ "$RECV"
 expect "static: cascade-receive.yml runs Gates even when Read state failed" 0 "\${{ !cancelled() && steps.gates-read.outcome == 'success' }}" -- \
   yq -r '.jobs.compute.steps[] | select(.id == "gates") | .if' "$RECV"
+# Repo code in compute could otherwise poison the cache main's publish jobs
+# restore: no step of the reusable workflows or actions saves or restores one.
+expect "static: compute's setup-go saves and restores no cache" 0 false -- \
+  yq -r '.jobs.compute.steps[] | select(.uses // "" | test("^actions/setup-go@")) | .with.cache' "$RECV"
+check "static: no cascade workflow or action uses a cache action or type=gha" bash -c '
+  ! grep -nE "uses: [^ ]*cache|type=gha" "$@"' _ "$WORKFLOWS"/cascade-*.yml "$ORG_ROOT"/.github/actions/cascade-*/action.yml
+check "static: Post gates evaluates G3 and compute does not" bash -c '
+  grep -q "g3_eval \"\$REPO\"" "$1" && ! grep -qE "^[^#]*(g3_eval|g3\(\))" "$2"' _ "$GATES_POST" "$GATES_EVAL"
 expect "static: cascade-receive.yml takes dry-run from Init" 0 '${{ steps.init.outputs.dry_run }}' -- yq -r '.jobs.compute.outputs.dry_run' "$RECV"
 expect "static: actions/cascade-notify mints for the targets only" 0 '${{ steps.validate.outputs.targets }}' -- \
   yq -r '.runs.steps[] | select(.id == "mint") | .with.repositories' "$ORG_ROOT/.github/actions/cascade-notify/action.yml"

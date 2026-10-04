@@ -111,6 +111,38 @@ g3_upstreams() {
   esac
 }
 
+# g3_eval <receiver>: sets G3_STATE and G3_MSG, gate G3 cascade/settled
+# (workspace RELEASING.md, section "Gates"): an upstream's open cascade PR
+# titled fix(deps) or feat(deps), or its `autorelease: pending` PR listing a
+# **deps:** bullet, is a problem; an API error is an evaluator error. Only
+# the API, read with GH_TOKEN: gates-post.sh evaluates it in the Post gates
+# job, which runs no repo code, so no release head can choose its result.
+g3_eval() {
+  local up pr n title pending problems=() p
+  G3_STATE=ok G3_MSG="ok: upstreams settled"
+  for up in $(g3_upstreams "$1"); do
+    if ! pr=$(cascade_pr "$up"); then G3_STATE=error G3_MSG="cannot read the cascade PR of $up"; return 0; fi
+    if [ -n "$pr" ]; then
+      n=$(jq -r .number <<<"$pr")
+      title=$(jq -r .title <<<"$pr")
+      case "$title" in "fix(deps)"* | "feat(deps)"*) problems+=("$up has open cascade #$n") ;; esac
+    fi
+    if ! pending=$(gh_ pr list -R "$ORG/$up" --base main --state open --label "autorelease: pending" --json number,body); then
+      G3_STATE=error G3_MSG="cannot list the release PRs of $up"
+      return 0
+    fi
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      problems+=("$up release #$p pending with deps")
+    done < <(jq -r '.[] | select((.body // "") | contains("**deps:**")) | .number' <<<"$pending")
+  done
+  if [ "${#problems[@]}" -gt 0 ]; then
+    G3_STATE=problem
+    G3_MSG=$(printf '%s; ' "${problems[@]}")
+    G3_MSG="${G3_MSG%; }"
+  fi
+}
+
 # tag_re <source>: the tag shape a release of <source> has.
 tag_re() {
   if [ "$1" = catalog_opm ]; then

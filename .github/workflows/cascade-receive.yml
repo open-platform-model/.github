@@ -8,16 +8,22 @@ name: Cascade receive
 #            so it holds no secret and only read permissions. Its two Read
 #            steps make every read that needs GITHUB_TOKEN; they run before
 #            the first step that runs repo code (Gates), and no step from
-#            Gates on gets a token. Repo code also gets no GITHUB_ENV,
+#            Gates on is given a token. Repo code also gets no GITHUB_ENV,
 #            GITHUB_PATH, GITHUB_OUTPUT, GITHUB_STEP_SUMMARY or GITHUB_STATE
 #            variable (run_repo_code). That is no boundary inside the job:
 #            repo code can find the runner's command files on disk, leave a
-#            process running into later steps, rewrite the scripts, and with
-#            the runner's sudo read the job's read-only token. So everything
-#            compute writes from Gates on is untrusted, and the jobs after it
-#            re-derive what they act on
-#   gates    posts G2 cascade/freshness and G3 cascade/settled on open
-#            release PRs with GITHUB_TOKEN
+#            process running into later steps, rewrite the scripts, plant a
+#            git hook or core.fsmonitor in repo/.git that the checkout
+#            actions' post steps (which carry the read-only token) then run,
+#            and with the runner's sudo read the job's read-only token and
+#            the artifact runtime token, which also writes the Actions cache
+#            of main's scope. So everything compute writes from Gates on is
+#            untrusted, the jobs after it re-derive what they act on, and no
+#            job that publishes may restore an Actions cache (the wiring
+#            check refuses one in each repo's publish workflows)
+#   gates    posts G2 cascade/freshness from compute's results and G3
+#            cascade/settled, which it evaluates itself, on open release
+#            PRs with GITHUB_TOKEN; it runs no repo code
 # The third job, publish, is the caller's own: it declares `environment:
 # cascade` and runs the composite action .github/actions/cascade-publish,
 # because a reusable-workflow job does not see the caller's Environment
@@ -145,11 +151,14 @@ jobs:
           path: org-github
           persist-credentials: false
 
+      # No cache: its post step would save a module and build cache after
+      # repo code ran, into main's scope, where publish jobs could restore it.
       - name: Set up Go
         if: inputs.setup-go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: repo/go.mod
+          cache: false
 
       - name: Set up CUE
         if: inputs.setup-cue
@@ -184,7 +193,7 @@ jobs:
         run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh payload
 
       # Every read that needs the token, before any repo code runs. The
-      # release-PR list, G3 and the release heads' commits.
+      # release-PR list and the release heads' commits.
       - name: Read gates
         id: gates-read
         env:
@@ -205,7 +214,7 @@ jobs:
         run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh state
 
       # G2 runs the release heads' own task: the first step that runs repo
-      # code, so no token from here on. Before any pin work, and also when
+      # code, so no step from here on is given a token. Before any pin work, and also when
       # Read state failed, so the gate results are uploaded either way.
       - name: Gates
         id: gates
@@ -297,7 +306,9 @@ jobs:
   gates:
     name: Post gates
     needs: compute
-    # Also in dry runs and gates-only runs: statuses are not pushes.
+    # Also in dry runs and gates-only runs: statuses are not pushes. G3 is
+    # evaluated here, from the API alone, so no release head's code can
+    # choose it; only G2 comes from compute's untrusted gates.json.
     if: always() && needs.compute.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 10
