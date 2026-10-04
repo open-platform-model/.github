@@ -83,6 +83,18 @@ gh_fx() {
   printf '%s\n' "$rc" >"$dir/$n.rc"
   printf '%s' "$out" >"$dir/$n.out"
 }
+# gh_fx_file <rc> <file> -- <argv...>: as gh_fx, with the file's exact bytes
+# as stdout (a trailing newline kept).
+gh_fx_file() {
+  local rc="$1" src="$2" key dir n
+  shift 3
+  gh_fx "$rc" "" -- "$@"
+  key=$(printf '%s\n' "$@" | sha256sum | cut -c1-32)
+  dir="$GHFX/$key"
+  n=1
+  while [ -f "$dir/$((n + 1)).rc" ]; do n=$((n + 1)); done
+  cp "$src" "$dir/$n.out"
+}
 # gh_fx_err <rc> <stderr> -- <argv...>
 gh_fx_err() {
   local rc="$1" err="$2" key dir n

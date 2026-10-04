@@ -90,10 +90,16 @@ YAML
 # wc_run [<config>]: runs the check from the fixture's root (RC, OUT, ERR).
 wc_run() { run env -C "$WCD" bash "$WCHECK" "$@"; }
 
+# The offline output on success: the ok line, then the note that the copy
+# was not compared.
+wc_ok_out() {
+  printf 'cascade wiring: ok, .github %s (.github main)\ncascade wiring: the copy was not compared with .github %s (offline; --pin-on-main compares it)' "$1" "$1"
+}
+
 # wc_ok <name>: the check passes with the ok line.
 wc_ok() {
   wc_run
-  check "wiring check: $1" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$WC_SHA" "$ERR"
+  check "wiring check: $1" bash -c '[ "$1" = 0 ] && [ "$2" = "$3" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$(wc_ok_out "$WC_SHA")" "$ERR"
 }
 
 # wc_mut <name> <file> <yq program> <stderr substring>: a fresh receiver
@@ -274,6 +280,30 @@ wc_mut "a workflow default shell" ci.yml '.defaults.run.shell = "true {0}"' "ci.
 wc_mut "a job default working directory" ci.yml '.jobs.ci.defaults.run.working-directory = "other"' "ci.yml defaults.run"
 wc_mut "the config naming another job" config '.ci.job = "other"' "ci.yml:other exists"
 
+# Nothing reaches the wiring step from around it (the review's routes: env,
+# an earlier step writing GITHUB_ENV, a container or a service).
+BEFORE="ci.yml:ci steps before the wiring step that are not a pinned action"
+wc_mut "BASH_ENV in the CI job env" ci.yml '.jobs.ci.env.BASH_ENV = "x"' "ci.yml:ci env keys outside"
+wc_mut "CASCADE_GH in the CI workflow env" ci.yml '.env.CASCADE_GH = "./gh"' "ci.yml env keys outside"
+wc_mut "PATH in the CI workflow env" ci.yml '.env.PATH = "."' "ci.yml env keys outside"
+wc_mut "the CI job env as an expression" ci.yml '.jobs.ci.env = "${{ fromJSON(vars.E) }}"' "ci.yml:ci env type"
+wc_mut "a container on the CI job" ci.yml '.jobs.ci.container = "node:20"' "ci.yml:ci container and services"
+wc_mut "a service on the CI job" ci.yml '.jobs.ci.services.s = {"image": "busybox", "volumes": ["/home/runner/work:/w"]}' "ci.yml:ci container and services"
+wc_mut "a run: step writing GITHUB_ENV before the wiring step" ci.yml \
+  '.jobs.ci.steps = [.jobs.ci.steps[0], {"run": "echo BASH_ENV=x >> \"$GITHUB_ENV\""}, .jobs.ci.steps[1]]' "$BEFORE"
+wc_mut "an action at a tag before the wiring step" ci.yml \
+  '.jobs.ci.steps = [.jobs.ci.steps[0], {"uses": "actions/setup-go@v7"}, .jobs.ci.steps[1]]' "$BEFORE"
+wc_mut "a local action before the wiring step" ci.yml \
+  '.jobs.ci.steps = [.jobs.ci.steps[0], {"uses": "./.github/actions/x@3d3c42e5aac5ba805825da76410c181273ba90b1"}, .jobs.ci.steps[1]]' "$BEFORE"
+wc_mut "an earlier action with an env of its own" ci.yml '.jobs.ci.steps[0].env.BASH_ENV = "x"' "$BEFORE"
+wc_mut "an earlier action with an if:" ci.yml '.jobs.ci.steps[0].if = "always()"' "$BEFORE"
+wc_fresh
+yq -i '.env = {"CUE_REGISTRY": "a", "OPM_REGISTRY": "b"} | .jobs.ci.env = {"CUE_VERSION": "v0"}
+  | .jobs.ci.steps = [.jobs.ci.steps[0] | .id = "co" | .with = {"fetch-depth": 0},
+    {"name": "Go", "uses": "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", "with": {"cache": false}},
+    .jobs.ci.steps[1], {"run": "echo after"}]' "$WCD/.github/workflows/ci.yml"
+wc_ok "registry env, pinned actions before and run: steps after the wiring step pass"
+
 # --- the config ---------------------------------------------------------------
 wc_cfg "an unknown key" '.extra = 1' "unknown key extra"
 wc_cfg "BASH_ENV in env-allow" '.["env-allow"] += ["BASH_ENV"]' "env-allow may not allow BASH_ENV"
@@ -360,13 +390,115 @@ wc_cfg "no publish-workflows" 'del(.["publish-workflows"])' "publish-workflows m
 wc_cfg "publish-workflows without release.yml" '.["publish-workflows"] = ["docs.yml"]' "publish-workflows must list release.yml"
 wc_cfg "a publish-workflows path" '.["publish-workflows"] += ["../x.yml"]' "is not a workflow file name"
 
+# --- declared extra references (opm-operator's module-deps.yml) ---------------------
+# wc_mdeps: the receiver fixture plus a module-deps.yml with a second resolver
+# checkout, as opm-operator main has, declared in the config.
+wc_mdeps() {
+  wc_fresh
+  cat >"$WCD/.github/workflows/module-deps.yml" <<YAML
+name: Operator module deps
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the cascade resolver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: open-platform-model/.github
+          ref: $WC_SHA # .github main
+          path: org-github
+          persist-credentials: false
+YAML
+  yq -i '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}]' "$WCD/.tasks/cascade/wiring-check.yaml"
+}
+MD="$T_ROOT/wc/.github/workflows/module-deps.yml"
+wc_mdeps
+wc_ok "a declared module-deps.yml resolver at the pin passes"
+wc_mdeps
+yq -i '.["extra-references"] = []' "$WCD/.tasks/cascade/wiring-check.yaml"
+rm "$MD"
+wc_ok "an empty extra-references list passes"
+wc_mdeps
+sed -i "s/ref: $WC_SHA/ref: $WC_SHA2/" "$MD"
+wc_run
+check "wiring check refuses: the declared resolver at another SHA" bash -c '[ "$1" = 1 ] && [[ $2 == *"one .github SHA"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+sed -i "s/ # \.github main$//" "$MD"
+wc_run
+check "wiring check refuses: the declared resolver without the pin comment" bash -c '[ "$1" = 1 ] && [[ $2 == *"pin comment on [module-deps.yml resolver@"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+yq -i 'del(.["extra-references"])' "$WCD/.tasks/cascade/wiring-check.yaml"
+wc_run
+check "wiring check refuses: an undeclared second resolver" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]] && [[ $2 == *"module-deps.yml resolver"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+rm "$MD"
+wc_run
+check "wiring check refuses: a declared resolver that is missing" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+yq -i '.jobs.compute.steps += [.jobs.compute.steps[0]]' "$MD"
+wc_run
+check "wiring check refuses: two resolvers for one declared entry" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]]' _ "$RC" "$ERR"
+wc_cfg "an extra reference declared twice" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}, {"file": "module-deps.yml", "kind": "resolver"}]' "module-deps.yml is declared twice"
+for fx in release.yml deps-cascade.yml cascade-gates.yml cascade-task.yml; do
+  wc_cfg "an extra reference in $fx" ".[\"extra-references\"] = [{\"file\": \"$fx\", \"kind\": \"resolver\"}]" "$fx already holds a fixed .github reference"
+done
+wc_cfg "an extra reference on core" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}]' "extra-references is only for a receiver" core
+
+# Every resolver checkout passes no credentials (the fixed one and declared ones).
+for m in '.jobs.compute.steps[0].with.token = "${{ secrets.GITHUB_TOKEN }}"' \
+  '.jobs.compute.steps[0].with.ssh-key = "${{ secrets.DEPLOY_KEY }}"' \
+  '.jobs.compute.steps[0].with.persist-credentials = true' \
+  '.jobs.compute.steps[0].with.persist-credentials = "false"' \
+  'del(.jobs.compute.steps[0].with.persist-credentials)' \
+  '.jobs.compute.steps[0].uses = "actions/checkout@v7"' \
+  '.jobs.compute.steps[0].uses = "someone/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"'; do
+  wc_mdeps
+  yq -i "$m" "$MD"
+  wc_run
+  check "wiring check refuses a resolver checkout: $m" bash -c '[ "$1" = 1 ] && [[ $2 == *".github checkouts not actions/checkout@<sha>"*"got [module-deps.yml:compute.steps.0]"* ]]' _ "$RC" "$ERR"
+done
+# A .github checkout by any spelling the literal name misses, and a clone in a run: step.
+OWNER_CO='{"name": "x", "uses": "actions/checkout@v4", "with": {"repository": "${{ github.repository_owner }}/.github", "ref": "main", "token": "${{ secrets.GITHUB_TOKEN }}"}}'
+wc_mut "an undeclared .github checkout through repository_owner" cascade-task.yml ".jobs.test.steps += [$OWNER_CO]" "steps whose repository input is an expression"
+wc_mut "a repository_owner checkout is held to the checkout rule" cascade-task.yml ".jobs.test.steps += [$OWNER_CO]" "got [cascade-task.yml:test.steps.1]"
+wc_mut "a repository_owner checkout is an unexpected reference" cascade-task.yml ".jobs.test.steps += [$OWNER_CO]" ".github references"
+wc_mut "a pinned checkout of another owner's .github" ci.yml \
+  '.jobs.ci.steps += [{"uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "with": {"repository": "someone/.github", "ref": "main", "token": "${{ github.token }}"}}]' ".github checkouts not actions/checkout@<sha>"
+wc_mut "a git clone of .github in a run: step" cascade-task.yml \
+  '.jobs.test.steps += [{"run": "git clone https://github.com/open-platform-model/.github org"}]' "run: steps that fetch .github outside the pinned checkouts: expected [], got [cascade-task.yml:test.steps.1]"
+wc_mut "a clone of the owner's .github in a run: step" ci.yml \
+  '.jobs.ci.steps += [{"run": "git clone \"https://github.com/${{ github.repository_owner }}/.github\""}]' "run: steps that fetch .github"
+wc_fresh
+yq -i '.jobs.ci.steps += [{"run": "bash ${{ github.workspace }}/.github/scripts/x.sh .github/y"}]' "$WCD/.github/workflows/ci.yml"
+wc_ok "a run: step using the repo's own .github/ paths passes"
+wc_fresh
+yq -i '.jobs.test.steps[0].with.token = "${{ github.token }}"' "$WCD/.github/workflows/cascade-task.yml"
+wc_run
+check "wiring check refuses: a token on the cascade-task.yml resolver" bash -c '[ "$1" = 1 ] && [[ $2 == *"got [cascade-task.yml:test.steps.0]"* ]]' _ "$RC" "$ERR"
+
+wc_cfg "extra-references as a map" '.["extra-references"] = {"file": "module-deps.yml", "kind": "resolver"}' "extra-references must be a list"
+wc_cfg "extra-references null" '.["extra-references"] = null' "extra-references must be a list"
+wc_cfg "an extra reference as a string" '.["extra-references"] = ["module-deps.yml"]' "extra-references item 1 is not a map"
+wc_cfg "an extra reference with a third key" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver", "sha": "x"}]' "must have exactly the keys file and kind"
+wc_cfg "an extra reference without a kind" '.["extra-references"] = [{"file": "module-deps.yml"}]' "must have exactly the keys file and kind"
+wc_cfg "an extra reference of another kind" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "action"}]' "kind [action] is not resolver"
+wc_cfg "an extra reference in another directory" '.["extra-references"] = [{"file": "../module-deps.yml", "kind": "resolver"}]' "file [../module-deps.yml] is not a workflow file name"
+wc_cfg "an extra reference file as a list" '.["extra-references"] = [{"file": ["a.yml"], "kind": "resolver"}]' "file and kind must be strings"
+
 # --- --pin-on-main ----------------------------------------------------------------
 COMPARE=(api "repos/open-platform-model/.github/compare/$WC_SHA...main" --jq .status)
+FETCH=(api -H 'Accept: application/vnd.github.raw' "repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=$WC_SHA")
 for st in identical ahead; do
   wc_fresh; gh_reset
   gh_fx 0 "$st" -- "${COMPARE[@]}"
+  gh_fx_file 0 "$WCHECK" -- "${FETCH[@]}"
   run env -C "$WCD" bash "$WCHECK" --pin-on-main
-  check "pin on main: $st passes" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ]' _ "$RC" "$OUT" "$WC_SHA"
+  check "pin on main: $st passes" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$WC_SHA" "$ERR"
 done
 for st in behind diverged; do
   wc_fresh; gh_reset
@@ -378,6 +510,49 @@ wc_fresh; gh_reset
 gh_fx_err 1 "HTTP 404" -- "${COMPARE[@]}"
 run env -C "$WCD" bash "$WCHECK" --pin-on-main
 check "pin on main: a failed compare is refused" bash -c '[ "$1" = 1 ] && [[ $2 == *"cannot compare .github"* ]]' _ "$RC" "$ERR"
+check "pin on main: a failed compare fetches no copy" test "$(gh_count "api -H *")" = 0
+for v in BASH_ENV ENV; do
+  wc_fresh; gh_reset
+  run env -C "$WCD" "$v=" bash "$WCHECK" --pin-on-main
+  check "pin on main: $v set is refused before any API call" bash -c '[ "$1" = 1 ] && [[ $2 == *"BASH_ENV or ENV is set"* ]] && [ ! -s "$3" ]' _ "$RC" "$ERR" "$GHFX/log"
+done
+
+# --- the copy is the file at the pin ---------------------------------------------
+# As CI runs it: the copy at .tasks/cascade/wiring-check.sh, from the repo root.
+wc_copy_run() { run env -C "$WCD" bash .tasks/cascade/wiring-check.sh "$@"; }
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+gh_fx 0 identical -- "${COMPARE[@]}"
+gh_fx_file 0 "$WCHECK" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a byte-identical copy at the pin passes" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ] && [ -z "$4" ]' _ "$RC" "$OUT" "$WC_SHA" "$ERR"
+check "copy: the pinned file is fetched once, raw" test "$(gh_count "api -H Accept: application/vnd.github.raw repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=$WC_SHA")" = 1
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+printf '# a local tweak\n' >>"$WCD/.tasks/cascade/wiring-check.sh"
+gh_fx 0 identical -- "${COMPARE[@]}"
+gh_fx_file 0 "$WCHECK" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a copy that drifted is refused" bash -c '[ "$1" = 1 ] && [ -z "$2" ] && [[ $3 == *".tasks/cascade/wiring-check.sh differs from .github/scripts/cascade/wiring-check.sh at .github $4"* ]]' _ "$RC" "$OUT" "$ERR" "$WC_SHA"
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+printf '# the pinned file had one more line\n' | cat "$WCHECK" - >"$T_ROOT/wc-newer.sh"
+gh_fx 0 ahead -- "${COMPARE[@]}"
+gh_fx_file 0 "$T_ROOT/wc-newer.sh" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a copy left behind at a pin bump is refused" bash -c '[ "$1" = 1 ] && [[ $2 == *"differs from"* ]]' _ "$RC" "$ERR"
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+gh_fx 0 identical -- "${COMPARE[@]}"
+gh_fx_err 1 "HTTP 403: API rate limit exceeded" -- "${FETCH[@]}"
+wc_copy_run --pin-on-main
+check "copy: a failed fetch is refused" bash -c '[ "$1" = 1 ] && [ -z "$2" ] && [[ $3 == *"cannot fetch .github/scripts/cascade/wiring-check.sh at .github $4"* ]]' _ "$RC" "$OUT" "$ERR" "$WC_SHA"
+wc_fresh; gh_reset
+cp "$WCHECK" "$WCD/.tasks/cascade/wiring-check.sh"
+printf '# a local tweak\n' >>"$WCD/.tasks/cascade/wiring-check.sh"
+wc_copy_run
+check "copy: offline, a drifted copy passes with the note and makes no request" bash -c '[ "$1" = 0 ] && [ "$2" = "$3" ] && [ ! -s "$4" ]' _ "$RC" "$OUT" "$(wc_ok_out "$WC_SHA")" "$GHFX/log"
+
 wc_fresh; gh_reset
 yq -i '.jobs.notify-downstream.timeout-minutes = 30' "$WCD/.github/workflows/release.yml"
 run env -C "$WCD" bash "$WCHECK" --pin-on-main
