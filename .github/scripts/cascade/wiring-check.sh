@@ -36,6 +36,8 @@
 #     tag: <the step's tag input>
 #   publish:                       # receivers only
 #     labels-managed: false        # a YAML boolean
+#   extra-references:              # optional: more pinned .github references
+#     - {file: module-deps.yml, kind: resolver}  # one entry per reference
 #
 # Beyond the cascade key it also binds the release App key: every job that
 # reads RELEASE_APP_PRIVATE_KEY declares `environment: release`, and only
@@ -85,7 +87,7 @@ yj() { yq -o=json -I=0 "$1" "$2"; }
 ENV_ALLOW_RE='^(CUE|OPM)_[A-Z0-9_]+$|^REGISTRY$|^IMAGE_NAME$'
 
 cfg_err() { usage_err "$CONFIG: $*"; }
-want_cfg=$(printf '%s' '["ci","env-allow","notify","pin-comment","publish","publish-workflows","receiver"]')
+want_cfg=$(printf '%s' '["ci","env-allow","extra-references","notify","pin-comment","publish","publish-workflows","receiver"]')
 [ "$(y 'type' "$CONFIG")" = '!!map' ] || cfg_err "not a YAML map"
 for k in $(y 'keys | .[]' "$CONFIG"); do
   [[ $want_cfg == *"\"$k\""* ]] || cfg_err "unknown key $k"
@@ -123,6 +125,26 @@ if [ "$RECEIVER" = true ]; then
   LABELS_MANAGED=$(y '.publish["labels-managed"]' "$CONFIG")
 else
   [ "$(y '.publish // "none"' "$CONFIG")" = none ] || cfg_err "publish is only for a receiver"
+fi
+
+# More .github references the repo declares, one item each. The only kind is
+# resolver, a checkout of .github (opm-operator's module-deps.yml); each
+# declared one is held to the fixed references' rules below.
+EXTRA_REFS=""
+if [ "$(y 'has("extra-references")' "$CONFIG")" = true ]; then
+  [ "$(y '.["extra-references"] | type' "$CONFIG")" = '!!seq' ] || cfg_err "extra-references must be a list"
+  n=$(y '.["extra-references"] | length' "$CONFIG")
+  for ((i = 0; i < n; i++)); do
+    it="extra-references item $((i + 1))"
+    [ "$(I=$i y '.["extra-references"][env(I)] | type' "$CONFIG")" = '!!map' ] || cfg_err "$it is not a map"
+    [ "$(I=$i yj '.["extra-references"][env(I)] | keys | sort' "$CONFIG")" = '["file","kind"]' ] || cfg_err "$it must have exactly the keys file and kind"
+    [ "$(I=$i y '[.["extra-references"][env(I)][] | type] | unique | join(",")' "$CONFIG")" = '!!str' ] || cfg_err "$it: file and kind must be strings"
+    ef=$(I=$i y '.["extra-references"][env(I)].file' "$CONFIG")
+    ek=$(I=$i y '.["extra-references"][env(I)].kind' "$CONFIG")
+    [[ $ef =~ ^[A-Za-z0-9._-]+\.ya?ml$ ]] || cfg_err "$it: file [$ef] is not a workflow file name"
+    [ "$ek" = resolver ] || cfg_err "$it: kind [$ek] is not resolver, the only kind"
+    EXTRA_REFS+="$ef resolver"$'\n'
+  done
 fi
 
 # --- the contract's fixed values ----------------------------------------------
@@ -374,6 +396,7 @@ if [ "$RECEIVER" = true ]; then
     "deps-cascade.yml open-platform-model/.github/.github/workflows/cascade-receive.yml" \
     "release.yml open-platform-model/.github/.github/actions/cascade-notify" | sort)
 fi
+want_refs=$(printf '%s\n%s' "$want_refs" "$EXTRA_REFS" | sed '/^$/d' | sort)
 eq ".github references" "$want_refs" "$(printf '%s\n' "$refs" | sed -E 's/@[^ ]* .*$//' | sort)"
 shas=$(printf '%s\n' "$refs" | sed -E 's/^[^ ]+ [^@]*@([^ ]*) .*$/\1/' | sort -u)
 re "one .github SHA" '^[0-9a-f]{40}$' "$shas"
@@ -381,6 +404,24 @@ while IFS= read -r line; do
   [ -n "$line" ] || continue
   eq "pin comment on [${line% *}]" "$PIN_COMMENT" "$(printf '%s' "$line" | sed -E 's/^[^ ]+ [^ ]+ //')"
 done <<<"$refs"
+
+# Every .github checkout (the resolver, fixed or declared) is actions/checkout
+# at a full SHA with exactly repository, ref, path and persist-credentials:
+# false, so no token or SSH key reaches it.
+bad_co=""
+for f in "$W"/*.yml "$W"/*.yaml; do
+  [ -e "$f" ] || continue
+  b=${f##*/}
+  bad_co+=$(yq -r '.jobs // {} | to_entries[] | .key as $j | (.value.steps // []) | to_entries[]
+    | select((.value.with.repository // "") | test("(?i)^open-platform-model/\\.github$"))
+    | select(((.value.uses // "") | test("^actions/checkout@[0-9a-f]{40}$") | not)
+      or ((.value.with | keys | sort | join(",")) != "path,persist-credentials,ref,repository")
+      or ((.value.with["persist-credentials"] | tag) != "!!bool")
+      or (.value.with["persist-credentials"] != false))
+    | $j + ".steps." + (.key | tostring)' "$f" | sed "s|^|$b:|")$'\n'
+done
+eq ".github checkouts not actions/checkout@<sha> with only repository, ref, path and persist-credentials: false" \
+  "" "$(printf '%s' "$bad_co" | sed '/^$/d' | tr '\n' ' ' | sed 's/ $//')"
 
 # --- the check runs on every PR -----------------------------------------------
 

@@ -366,6 +366,91 @@ wc_cfg "no publish-workflows" 'del(.["publish-workflows"])' "publish-workflows m
 wc_cfg "publish-workflows without release.yml" '.["publish-workflows"] = ["docs.yml"]' "publish-workflows must list release.yml"
 wc_cfg "a publish-workflows path" '.["publish-workflows"] += ["../x.yml"]' "is not a workflow file name"
 
+# --- declared extra references (opm-operator's module-deps.yml) ---------------------
+# wc_mdeps: the receiver fixture plus a module-deps.yml with a second resolver
+# checkout, as opm-operator main has, declared in the config.
+wc_mdeps() {
+  wc_fresh
+  cat >"$WCD/.github/workflows/module-deps.yml" <<YAML
+name: Operator module deps
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the cascade resolver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: open-platform-model/.github
+          ref: $WC_SHA # .github main
+          path: org-github
+          persist-credentials: false
+YAML
+  yq -i '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}]' "$WCD/.tasks/cascade/wiring-check.yaml"
+}
+MD="$T_ROOT/wc/.github/workflows/module-deps.yml"
+wc_mdeps
+wc_ok "a declared module-deps.yml resolver at the pin passes"
+wc_mdeps
+yq -i '.["extra-references"] = []' "$WCD/.tasks/cascade/wiring-check.yaml"
+rm "$MD"
+wc_ok "an empty extra-references list passes"
+wc_mdeps
+sed -i "s/ref: $WC_SHA/ref: $WC_SHA2/" "$MD"
+wc_run
+check "wiring check refuses: the declared resolver at another SHA" bash -c '[ "$1" = 1 ] && [[ $2 == *"one .github SHA"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+sed -i "s/ # \.github main$//" "$MD"
+wc_run
+check "wiring check refuses: the declared resolver without the pin comment" bash -c '[ "$1" = 1 ] && [[ $2 == *"pin comment on [module-deps.yml resolver@"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+yq -i 'del(.["extra-references"])' "$WCD/.tasks/cascade/wiring-check.yaml"
+wc_run
+check "wiring check refuses: an undeclared second resolver" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]] && [[ $2 == *"module-deps.yml resolver"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+rm "$MD"
+wc_run
+check "wiring check refuses: a declared resolver that is missing" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+yq -i '.jobs.compute.steps += [.jobs.compute.steps[0]]' "$MD"
+wc_run
+check "wiring check refuses: two resolvers for one declared entry" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]]' _ "$RC" "$ERR"
+wc_mdeps
+yq -i '.jobs.compute.steps += [.jobs.compute.steps[0]]' "$MD"
+yq -i '.["extra-references"] += [{"file": "module-deps.yml", "kind": "resolver"}]' "$WCD/.tasks/cascade/wiring-check.yaml"
+wc_ok "two declared entries for two resolvers in one file pass"
+
+# Every resolver checkout passes no credentials (the fixed one and declared ones).
+for m in '.jobs.compute.steps[0].with.token = "${{ secrets.GITHUB_TOKEN }}"' \
+  '.jobs.compute.steps[0].with.ssh-key = "${{ secrets.DEPLOY_KEY }}"' \
+  '.jobs.compute.steps[0].with.persist-credentials = true' \
+  '.jobs.compute.steps[0].with.persist-credentials = "false"' \
+  'del(.jobs.compute.steps[0].with.persist-credentials)' \
+  '.jobs.compute.steps[0].uses = "actions/checkout@v7"' \
+  '.jobs.compute.steps[0].uses = "someone/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"'; do
+  wc_mdeps
+  yq -i "$m" "$MD"
+  wc_run
+  check "wiring check refuses a resolver checkout: $m" bash -c '[ "$1" = 1 ] && [[ $2 == *".github checkouts not actions/checkout@<sha>"*"got [module-deps.yml:compute.steps.0]"* ]]' _ "$RC" "$ERR"
+done
+wc_fresh
+yq -i '.jobs.test.steps[0].with.token = "${{ github.token }}"' "$WCD/.github/workflows/cascade-task.yml"
+wc_run
+check "wiring check refuses: a token on the cascade-task.yml resolver" bash -c '[ "$1" = 1 ] && [[ $2 == *"got [cascade-task.yml:test.steps.0]"* ]]' _ "$RC" "$ERR"
+
+wc_cfg "extra-references as a map" '.["extra-references"] = {"file": "module-deps.yml", "kind": "resolver"}' "extra-references must be a list"
+wc_cfg "extra-references null" '.["extra-references"] = null' "extra-references must be a list"
+wc_cfg "an extra reference as a string" '.["extra-references"] = ["module-deps.yml"]' "extra-references item 1 is not a map"
+wc_cfg "an extra reference with a third key" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver", "sha": "x"}]' "must have exactly the keys file and kind"
+wc_cfg "an extra reference without a kind" '.["extra-references"] = [{"file": "module-deps.yml"}]' "must have exactly the keys file and kind"
+wc_cfg "an extra reference of another kind" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "action"}]' "kind [action] is not resolver"
+wc_cfg "an extra reference in another directory" '.["extra-references"] = [{"file": "../module-deps.yml", "kind": "resolver"}]' "file [../module-deps.yml] is not a workflow file name"
+wc_cfg "an extra reference file as a list" '.["extra-references"] = [{"file": ["a.yml"], "kind": "resolver"}]' "file and kind must be strings"
+
 # --- --pin-on-main ----------------------------------------------------------------
 COMPARE=(api "repos/open-platform-model/.github/compare/$WC_SHA...main" --jq .status)
 FETCH=(api -H 'Accept: application/vnd.github.raw' "repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=$WC_SHA")

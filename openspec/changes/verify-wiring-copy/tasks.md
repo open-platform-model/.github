@@ -13,10 +13,10 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 2. Declared extra references and credential-free resolver checkouts
 
-- [ ] 2.1 `wiring-check.sh`: the `extra-references` key and its strict validation; expected references from it; the resolver checkout shape rule (D2, D3)
-- [ ] 2.2 Cases: a declared `module-deps.yml` resolver passes; at another SHA, undeclared, declared but missing, without the pin comment fail; config refusals (wrong type, item keys, kind, file path); a token, an `ssh-key`, `persist-credentials: true` and a non-checkout action on a resolver checkout fail
-- [ ] 2.3 Proof outside the suite (recorded in the PR body): the new script, offline, against core, catalog_opm, library and cli `origin/main` with their configs, and against opm-operator `origin/main` with its wave-2 config plus `extra-references`
-- [ ] 2.4 Gates green, then commit `fix(cascade): let a repo declare extra pinned resolver checkouts`
+- [x] 2.1 `wiring-check.sh`: the `extra-references` key and its strict validation; expected references from it; the resolver checkout shape rule (D2, D3)
+- [x] 2.2 Cases: a declared `module-deps.yml` resolver passes; at another SHA, undeclared, declared but missing, without the pin comment fail; config refusals (wrong type, item keys, kind, file path); a token, an `ssh-key`, `persist-credentials: true` and a non-checkout action on a resolver checkout fail
+- [x] 2.3 Proof outside the suite (recorded in the PR body): the new script, offline, against core, catalog_opm, library and cli `origin/main` with their configs, and against opm-operator `origin/main` with its wave-2 config plus `extra-references`
+- [x] 2.4 Gates green, then commit `fix(cascade): let a repo declare extra pinned resolver checkouts`
 
 ## 3. README
 
