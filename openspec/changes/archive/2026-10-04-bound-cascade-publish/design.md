@@ -155,6 +155,12 @@ published but its tag is not on `<repo>` main; skipped", and the walk continues 
 candidates. Other kinds (fixtures, templates, oci) have no tag and are not checked. `published`
 does not check (it answers a different question).
 
+`compute` reaches `newest` only through the receiver's task, which is repo code, so `publish`
+repeats the check (review finding after the first push of the PR): the resolver's `tag-on-main
+<pin-key> <v>` (exit 0 on main or no tag source, 3 off main or missing) runs in `verify` for
+every key whose mirrored version differs between the merge base and the new tip, and anything
+but 0 refuses before the mint.
+
 ### D6. Wiring check: the release key (item 10)
 
 In every workflow file: a release-key reader is a job any of whose strings is an expression (or

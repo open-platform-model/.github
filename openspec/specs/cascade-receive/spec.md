@@ -386,7 +386,10 @@ keyed by the receiver, never read from the receiver's tree. The deny-list SHALL 
 allow-list. When a `push` does not contain the old tip and `origin/main..old` holds a commit the
 bot did not make, `publish` SHALL refuse; it SHALL refuse a `recreate` whenever `origin/main..old`
 holds such a commit, since `recreate` rebuilds the branch on `main`; `close` SHALL then keep the
-branch and delete only a bot-only one.
+branch and delete only a bot-only one. For every pin whose version differs between the merge
+base and the new tip (read with the `.github` pin mirror), `publish` SHALL run the resolver's
+`tag-on-main` itself and SHALL refuse when the tag is not on its repo's `main` or the check
+fails, so a forged tag is refused even when `compute` skipped the resolver.
 
 #### Scenario: A bundle that edits the cascade task
 
@@ -412,6 +415,11 @@ branch and delete only a bot-only one.
 
 - **WHEN** the remote branch holds a human commit and the plan's new tip does not contain it
 - **THEN** `publish` refuses with "would drop commits", and `close` keeps such a branch
+
+#### Scenario: A pin moved to a forged tag
+
+- **WHEN** the new tip moves a pin to `v0.2.0` and that tag of its repo is not on `main`
+- **THEN** `publish` refuses with "whose tag is not on its repo's main" before the mint
 
 #### Scenario: A recreate over a kept human commit
 

@@ -33,7 +33,7 @@
 # and labels itself, with the resolver and the .github mirror of the
 # receiver's pins.sh and classes (pins.sh here, lib.sh), in a scratch
 # worktree of the new tip under CASCADE_T: compute's body.md and titles are
-# hints only.
+# hints only. Every moved pin's release tag must be on its repo's main.
 #
 # verify writes publish=true to GITHUB_OUTPUT, or publish=false (exit 0) when
 # the dry-run input is true or the cascade PR got deps-cascade:hold since
@@ -180,18 +180,43 @@ resolver_text() {
     "$RESOLVER" "$what" --classes "$V/classes" --pins "$WIRING_DIR/pins.sh" --base origin/main --repo-root "$TREE" "$@"
 }
 
-# derive_breaking: sets BRK to yes or no from the mirrored pins at the merge
-# base and the new tip and the upstream releases (read here, with the job's
-# token), or to unknown when a release list could not be read.
-derive_breaking() {
-  local m pm pw k from to repo prefix tag brk v c1 c2 unknown=0
-  local -A FROM=() TO=()
-  BRK=no
+# mirror_pins: sets FROM and TO (pin key to version) from the mirrored pins
+# at the merge base and at the new tip.
+declare -A FROM=() TO=()
+mirror_pins() {
+  local m pm pw k v
+  FROM=() TO=()
   m=$(g merge-base origin/main refs/cascade/new) || refuse "no merge base between main and the new tip"
   pm=$(cd "$TREE" && CASCADE_PINS_REPO="$REPO" "$WIRING_DIR/pins.sh" "$m") || refuse "the pin mirror failed at the merge base"
   pw=$(cd "$TREE" && CASCADE_PINS_REPO="$REPO" "$WIRING_DIR/pins.sh" HEAD) || refuse "the pin mirror failed at the new tip"
   while IFS=$'\t' read -r k _ _ v _; do [ -z "$k" ] || FROM[$k]="$v"; done <<<"$pm"
   while IFS=$'\t' read -r k _ _ v _; do [ -z "$k" ] || TO[$k]="$v"; done <<<"$pw"
+}
+
+# check_tags_on_main: every pin the new tip moves (or adds) to a version that
+# is a release tag of an org repo has that tag on the repo's main, checked
+# here with the resolver's tag-on-main (an anonymous, tree-less clone), not
+# taken from compute, which ran repo code.
+check_tags_on_main() {
+  local k rc
+  for k in "${!TO[@]}"; do
+    [ "${FROM[$k]:-}" != "${TO[$k]}" ] || continue
+    rc=0
+    "$RESOLVER" tag-on-main "$k" "${TO[$k]}" >/dev/null 2>"$V/onmain.err" || rc=$?
+    case "$rc" in
+      0) ;;
+      3) refuse "\`$(safe_text "$k")\` moves to \`$(safe_text "${TO[$k]}")\`, whose tag is not on its repo's main" ;;
+      *) refuse "cannot check the tag of \`$(safe_text "$k")\` \`$(safe_text "${TO[$k]}")\` against main (resolver exit $rc): $(head -c 300 "$V/onmain.err")" ;;
+    esac
+  done
+}
+
+# derive_breaking: sets BRK to yes or no from the mirrored pins (FROM, TO)
+# and the upstream releases (read here, with the job's token), or to unknown
+# when a release list could not be read.
+derive_breaking() {
+  local k from to repo prefix tag brk v c1 c2 unknown=0
+  BRK=no
   mkdir -p "$V/releases"
   for k in "${!TO[@]}"; do
     from="${FROM[$k]:-}" to="${TO[$k]}"
@@ -265,6 +290,8 @@ derive_text() {
     is_bot_label "$l" || refuse "the labels marker names \`$(safe_text "$l")\`"
     [[ ",$LABELS," == *",$l,"* ]] || LABELS="$LABELS,$l"
   done
+  mirror_pins
+  check_tags_on_main
   derive_breaking
   case "$BRK" in
     yes) LABELS="$LABELS,deps-cascade:breaking" ;;

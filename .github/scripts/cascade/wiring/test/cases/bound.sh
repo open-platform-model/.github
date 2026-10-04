@@ -98,6 +98,24 @@ as_bot commit -q -a -m "test: b"
 replan
 bound_refuses "three commits" "the push adds 3 commits"
 
+# Publish repeats the resolver's tag-on-main check on every moved pin.
+planned_push
+publish_job
+gh_reset_p
+gh_prs '[]'
+publish verify
+check "bound: a moved pin's tag on main passes, checked by publish itself" bash -c '
+  [ "$1" = 0 ] && grep -qF "https://github.com/open-platform-model/cascade-sandbox-up " "$2" &&
+  grep -q "^git fetch .*+refs/tags/v0.2.0:refs/tags/v0.2.0$" "$2"' _ "$RC" "$FX/git.log"
+planned_push
+mkdir -p "$FX/git"
+echo v0.2.0 >"$FX/git/cascade-sandbox-up.offmain"
+bound_refuses "a pin moved to a tag that is not on main" "moves to \`v0.2.0\`, whose tag is not on its repo's main"
+planned_push
+mkdir -p "$FX/git"
+touch "$FX/git/cascade-sandbox-up.clone.fail"
+bound_refuses "a tag check that cannot reach the upstream" "cannot check the tag of"
+
 # A symlink that main already has may not be retargeted either.
 new_fx; mk_toy
 ln -s data.txt "$SEED/fixtures/link"

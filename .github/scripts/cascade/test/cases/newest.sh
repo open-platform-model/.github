@@ -263,6 +263,24 @@ fx_status "$PROXY/$X/v2/@v/list" 404
 expect "tag on main: a module outside the org is not checked" 0 v0.2.0 -- "$R" newest go "$X" --current v0.1.0
 check "tag on main: no clone for it" bash -c '! grep -q "^git clone" "$1/git.log" 2>/dev/null' _ "$FX"
 
+# tag-on-main: the same check for one version, which publish repeats.
+new_fx
+expect "tag-on-main: a tag on main" 0 "" -- "$R" tag-on-main "$LIB" v1.1.0
+check "tag-on-main: it fetched that tag" grep -q "^git fetch .*+refs/tags/v1.1.0:refs/tags/v1.1.0$" "$FX/git.log"
+echo v1.2.0 >"$FX/git/library.offmain"
+expect "tag-on-main: a forged tag" 3 "" -- "$R" tag-on-main "$LIB" v1.2.0
+echo v1.3.0 >"$FX/git/library.missing"
+expect "tag-on-main: a missing tag" 3 "" -- "$R" tag-on-main "$LIB" v1.3.0
+new_fx
+expect "tag-on-main: the opm catalog's opm- prefix" 0 "" -- "$R" tag-on-main opmodel.dev/catalogs/opm@v4 v4.6.0
+check "tag-on-main: catalog_opm, opm-v4.6.0" bash -c '
+  grep -qF "https://github.com/open-platform-model/catalog_opm " "$1" && grep -q "^git fetch .*+refs/tags/opm-v4.6.0:refs/tags/opm-v4.6.0$" "$1"' _ "$FX/git.log"
+new_fx
+expect "tag-on-main: a pin with no tag source" 0 "" -- "$R" tag-on-main example.com/mod v0.2.0
+check "tag-on-main: no clone for it" bash -c '! grep -q "^git clone" "$1/git.log" 2>/dev/null' _ "$FX"
+expect "tag-on-main: a malformed version is usage" 2 "" "is not a v-prefixed SemVer version" -- "$R" tag-on-main "$LIB" 1.2
+expect "tag-on-main: one argument is usage" 2 "" -- "$R" tag-on-main "$LIB"
+
 # --- holds --------------------------------------------------------------------------
 new_fx
 fx_body "$PROXY/$LIB/@v/list" "$FIXTURES/goproxy/library.list"

@@ -27,13 +27,14 @@ publish_job() {
 # PUBLISH_DRY_RUN is the action's dry-run input (default false); the value
 # "<unset>" leaves it out of the environment.
 # PUBLISH_GATES_ONLY is the action's gates-only input (default false), with
-# "<unset>" the same way.
+# "<unset>" the same way. git is the wiring shim (test/shim/git), so the
+# tag-on-main check answers from $FX/git.
 publish() {
   # env takes its -u options before any assignment.
   local -a un=() set=()
   if [ "${PUBLISH_DRY_RUN-}" = "<unset>" ]; then un+=(-u CASCADE_PUBLISH_DRY_RUN); else set+=(CASCADE_PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN-false}"); fi
   if [ "${PUBLISH_GATES_ONLY-}" = "<unset>" ]; then un+=(-u CASCADE_PUBLISH_GATES_ONLY); else set+=(CASCADE_PUBLISH_GATES_ONLY="${PUBLISH_GATES_ONLY-false}"); fi
-  run env -C "$PWS" "${un[@]}" "${set[@]}" CASCADE_REPO=cascade-sandbox-down CASCADE_T="$PWS/t" CASCADE_REPO_DIR="$PWS/repo" \
+  run env -C "$PWS" "${un[@]}" "${set[@]}" PATH="$W_HERE/shim:$PATH" CASCADE_REPO=cascade-sandbox-down CASCADE_T="$PWS/t" CASCADE_REPO_DIR="$PWS/repo" \
     GH_TOKEN=ghs_appTokenForTests CASCADE_LABELS_MANAGED="${LABELS_MANAGED:-false}" bash "$PUBLISH" "$1"
 }
 # edit_plan <jq filter>: tampers with the downloaded plan.

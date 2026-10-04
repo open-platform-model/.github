@@ -46,3 +46,4 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 ## 6. Review fixes
 
 - [x] 6.1 `receive-publish.sh verify` refuses a `recreate` when `origin/main..old` holds a commit the bot did not make; case: the branch `close` kept, planned as `recreate` on the next run
+- [x] 6.2 The resolver's `tag-on-main <pin-key> <v>`; `receive-publish.sh verify` runs it on every moved pin and refuses one not on main; cases in both suites (the wiring suite's git shim hands the clone to the resolver's)

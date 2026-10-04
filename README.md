@@ -190,7 +190,7 @@ repo out at the repo's cascade pin (see "Pinning and bumps" below) beside the
 repo it works on.
 
 **Subcommands.** `newest`, `published`, `pin-of`, `language-of`, `frozen`,
-`is-frozen`, `hold`, `check-files`, `semver-cmp`, `semver-sort`,
+`is-frozen`, `hold`, `check-files`, `tag-on-main`, `semver-cmp`, `semver-sort`,
 `next-patch`, `classify`, `title` and `body`; the script header lists their
 arguments. Query kinds: `cue` (GHCR), `go` (the Go proxy), `release` and
 `opm-cli` (git tags plus anonymous release downloads) and `oci` (published
@@ -210,7 +210,10 @@ modules `opmodel.dev/core` and `opmodel.dev/catalogs/opm`, whose tags are
 `opm-v*`). A tag made on a commit `main` never had (the release App can create
 one) is still served by the Go proxy and listed by git, so `newest` clones the
 repo once per run, bare and without trees, fetches each probed tag and skips,
-with a warning, one whose commit is not an ancestor of `main`. Release branches
+with a warning, one whose commit is not an ancestor of `main`. `tag-on-main
+<pin-key> <v>` answers the same for one version (exit 0 on main or no tag to
+check, 3 not), and `receive-publish.sh verify` runs it on every pin the new
+tip moves, since `compute` reaches `newest` only through repo code. Release branches
 (`release/*`) are not accepted yet; the release-branch automation extends this
 check when it lands.
 

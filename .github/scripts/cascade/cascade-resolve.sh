@@ -15,6 +15,7 @@
 #   cascade-resolve.sh is-frozen <repo-relative-path> <pin-key> [--repo-root DIR]
 #   cascade-resolve.sh hold <pin-key> [--repo-root DIR]
 #   cascade-resolve.sh check-files [--repo-root DIR]
+#   cascade-resolve.sh tag-on-main <pin-key> <v>
 #   cascade-resolve.sh semver-cmp <a> <b>
 #   cascade-resolve.sh semver-sort              (stdin, one version per line)
 #   cascade-resolve.sh next-patch <v>
@@ -38,7 +39,10 @@
 # a pin whose versions are tags of an org repo (Go modules at a repo root,
 # release repos and the opm CLI, core and the opm catalog on GHCR): it clones
 # that repo once, bare and without trees, and skips with a warning a
-# published version whose tag is missing or off main.
+# published version whose tag is missing or off main. tag-on-main is the same
+# check for one version, for publish to repeat on every moved pin: exit 0 when
+# the version's tag is on its repo's main or the pin has no tag to check, 3
+# when the tag is missing or off main.
 #
 # Tools: bash, coreutils, curl, jq, git, mikefarah yq v4. No credentials: GHCR
 # is read with its anonymous pull token, GitHub through git and anonymous
@@ -182,6 +186,16 @@ case "$CMD" in
     repo_root
     load_frozen
     load_holds
+    ;;
+  tag-on-main)
+    parse_args "" "$@"
+    npos 2
+    [ -n "${POS[0]}" ] || usage "tag-on-main needs a pin key"
+    need_version "${POS[1]}" "version"
+    if ! tag_source "${POS[0]}" >/dev/null; then exit 0; fi
+    read -r src prefix <<<"$(tag_source "${POS[0]}")"
+    on_main "$src" "$prefix${POS[1]}"
+    [ "$ONMAIN" = 1 ] || exit 3
     ;;
   semver-cmp)
     parse_args "" "$@"

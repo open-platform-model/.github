@@ -13,6 +13,9 @@ learn this with git only (a tree-less bare clone of the repo and a fetch of the 
 like `git ls-remote`: no system or global config, no credential helper, no prompt), never with
 `api.github.com`; a git failure after four attempts SHALL be exit 1, never a guess. Other pins
 (fixtures, templates, `oci`) SHALL NOT be checked, and `published` SHALL NOT check.
+`tag-on-main <pin-key> <v>` SHALL answer the same check for one version: exit 0 when the tag is
+on `main` or the pin has no tag to check, 3 when the tag is missing or off `main`, 1 on a git
+failure after four attempts.
 
 #### Scenario: A forged tag
 
@@ -23,6 +26,11 @@ like `git ls-remote`: no system or global config, no credential helper, no promp
 
 - **WHEN** `newest cue opmodel.dev/catalogs/opm@v4` finds `v4.6.0` published
 - **THEN** it checks the tag `opm-v4.6.0` of `catalog_opm` against `main`
+
+#### Scenario: One version checked on its own
+
+- **WHEN** the `v1.2.0` tag of library points to a commit not on library's `main`
+- **THEN** `tag-on-main github.com/open-platform-model/library v1.2.0` exits 3, and `tag-on-main example.com/mod v0.2.0` exits 0 without a clone
 
 #### Scenario: Git failure
 
