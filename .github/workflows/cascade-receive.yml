@@ -12,7 +12,10 @@ name: Cascade receive
 # cascade` and runs the composite action .github/actions/cascade-publish,
 # because a reusable-workflow job does not see the caller's Environment
 # secrets without `secrets: inherit` (sandbox cycle E1). Its if: reads the
-# outputs below. Callers pass no secrets to this workflow. Callers pin this
+# outputs below only as hints: compute ran repo code, so the caller reads
+# its own dry_run and gates_only inputs too, and passes gates-only to the
+# action, which refuses a gates-only run. Callers pass no secrets to this
+# workflow. Callers pin this
 # workflow to a .github commit SHA (owner decision 24, extended from the
 # actions to the workflows); every job checks the scripts out at that same
 # commit (job.workflow_sha).
@@ -21,13 +24,13 @@ on:
   workflow_call:
     outputs:
       action:
-        description: The planned action (push, recreate, close, conflict, too_long, skip, noop or gates-only)
+        description: The planned action (push, recreate, close, conflict, too_long, skip, noop or gates-only; always gates-only on a gates-only run)
         value: ${{ jobs.compute.outputs.action }}
       dry-run:
         description: true when compute planned a dry run (forced off main)
         value: ${{ jobs.compute.outputs.dry_run }}
       compute-ok:
-        description: true only when every compute step succeeded
+        description: true only when every compute step succeeded and the run is not gates-only
         value: ${{ jobs.compute.outputs.ok }}
     inputs:
       dry-run:
@@ -75,11 +78,14 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    # A gates-only run's action and ok come from the input, not from a step:
+    # the Gates step runs the release heads' code, which could write any
+    # output of its own step. dry_run comes from Init, before any repo code.
     outputs:
-      action: ${{ steps.plan.outputs.action || steps.gates.outputs.action }}
+      action: ${{ inputs.gates-only && 'gates-only' || steps.plan.outputs.action }}
       dry_run: ${{ steps.init.outputs.dry_run }}
       mode: ${{ steps.plan.outputs.mode }}
-      ok: ${{ steps.done.outputs.ok }}
+      ok: ${{ !inputs.gates-only && steps.done.outputs.ok == 'true' && 'true' || 'false' }}
     steps:
       # Derives the repo name the later steps use, from GITHUB_REPOSITORY
       # only, before any script runs.

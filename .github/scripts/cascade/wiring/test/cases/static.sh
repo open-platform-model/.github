@@ -114,6 +114,19 @@ PUB="$ORG_ROOT/.github/actions/cascade-publish/action.yml"
 expect "static: actions/cascade-publish takes a required dry-run input" 0 "true" -- yq -r '.inputs["dry-run"].required' "$PUB"
 expect "static: actions/cascade-publish passes dry-run to verify and act" 0 $'verify ${{ inputs.dry-run }}\nact ${{ inputs.dry-run }}' -- \
   yq -r '.runs.steps[] | select(.id == "verify" or .name == "Act") | ((.id // "act") + " " + .env.CASCADE_PUBLISH_DRY_RUN)' "$PUB"
+# A gates-only run never publishes: the caller's own input, required, reaches
+# both script steps (the publish cases show the scripts refuse it).
+expect "static: actions/cascade-publish takes a required gates-only input" 0 "true" -- yq -r '.inputs["gates-only"].required' "$PUB"
+expect "static: actions/cascade-publish passes gates-only to verify and act" 0 $'verify ${{ inputs.gates-only }}\nact ${{ inputs.gates-only }}' -- \
+  yq -r '.runs.steps[] | select(.id == "verify" or .name == "Act") | ((.id // "act") + " " + .env.CASCADE_PUBLISH_GATES_ONLY)' "$PUB"
+# The reusable workflow's outputs for a gates-only run come from its input,
+# not from a step the release heads' code ran in.
+RECV="$WORKFLOWS/cascade-receive.yml"
+expect "static: cascade-receive.yml takes action from the input on a gates-only run" 0 \
+  "\${{ inputs.gates-only && 'gates-only' || steps.plan.outputs.action }}" -- yq -r '.jobs.compute.outputs.action' "$RECV"
+expect "static: cascade-receive.yml reports compute-ok false on a gates-only run" 0 \
+  "\${{ !inputs.gates-only && steps.done.outputs.ok == 'true' && 'true' || 'false' }}" -- yq -r '.jobs.compute.outputs.ok' "$RECV"
+expect "static: cascade-receive.yml takes dry-run from Init" 0 '${{ steps.init.outputs.dry_run }}' -- yq -r '.jobs.compute.outputs.dry_run' "$RECV"
 expect "static: actions/cascade-notify mints for the targets only" 0 '${{ steps.validate.outputs.targets }}' -- \
   yq -r '.runs.steps[] | select(.id == "mint") | .with.repositories' "$ORG_ROOT/.github/actions/cascade-notify/action.yml"
 expect "static: actions/cascade-publish mints for the calling repo only, after verify" 0 \
@@ -171,6 +184,10 @@ expect "static: the README receiver passes the stop switch to the reusable job" 
   yq -r '.jobs.cascade.with["dry-run"]' "$FX/readme-receiver.yml"
 expect "static: the README publish job passes the stop switch to cascade-publish" 0 "$DRY_EXPR" -- \
   yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["dry-run"]' "$FX/readme-receiver.yml"
+expect "static: the README publish job passes its own gates_only input to cascade-publish" 0 "\${{ inputs.gates_only == true }}" -- \
+  yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["gates-only"]' "$FX/readme-receiver.yml"
+check "static: the README publish if: reads the caller's own gates_only input" bash -c '[[ $(yq -r ".jobs.publish.if" "$1") == *"&& inputs.gates_only != true"* ]]' _ "$FX/readme-receiver.yml"
+check "static: the README publish if: reads no gates-only output of the reusable job" bash -c '! yq -r ".jobs.publish.if" "$1" | grep -q "needs.cascade.outputs.gates"' _ "$FX/readme-receiver.yml"
 check "static: the README names no cascade reference at main or a branch" bash -c '
   ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$ORG_ROOT/README.md"
 check "static: the README pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$ORG_ROOT/README.md"
@@ -185,8 +202,13 @@ for sbx in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox \
     yq -r '.jobs.cascade.with["dry-run"]' "$seed"
   expect "static: the sandbox publish job passes the stop switch to cascade-publish" 0 "$DRY_EXPR" -- \
     yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["dry-run"]' "$seed"
-  expect "static: the sandbox publish if: is the README's" 0 "$(yq -r '.jobs.publish.if' "$FX/readme-receiver.yml")" -- \
-    yq -r '.jobs.publish.if' "$seed"
+  # The archived sandbox seeds are frozen at the cycle's shape, which predates
+  # the gates-only clause (owner decision 26 retired the sandboxes), so only
+  # the switches they share with the README are compared.
+  check "static: the sandbox publish if: reads the README's dry-run switches" bash -c '
+    for c in "inputs.dry_run != true" "vars.CASCADE_DRY_RUN == '"'"'false'"'"'" "needs.cascade.outputs.dry-run == '"'"'false'"'"'"; do
+      [[ $(yq -r ".jobs.publish.if" "$1") == *"$c"* ]] && [[ $(yq -r ".jobs.publish.if" "$2") == *"$c"* ]] || exit 1
+    done' _ "$seed" "$FX/readme-receiver.yml"
   # Every cascade reference of the sandboxes at one full commit SHA.
   refs=$(grep -rhoE "open-platform-model/\.github/\.github/[^@ ]+@[^ ]+" "$sbx" | sed 's/.*@//' | sort -u)
   check "static: the sandbox callers pin every cascade reference to one full SHA" bash -c '[[ $1 =~ ^[0-9a-f]{40}$ ]]' _ "$refs"

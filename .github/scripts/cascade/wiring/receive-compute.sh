@@ -99,12 +99,14 @@ step_init() {
   [ -d "$RD/.git" ] || die "no repo checkout at $RD"
   rm -rf "$T"
   mkdir -p "$T" "$ST"
-  local dry=false
+  local dry=false gates_only=false
+  [ "${CASCADE_GATES_ONLY:-false}" != true ] || gates_only=true
   # A run from any ref but main is always a dry run: the cascade
-  # Environment would refuse its publish job anyway.
-  if [ "${CASCADE_DRY_RUN:-true}" != false ] || [ "${CASCADE_REF:-}" != refs/heads/main ]; then dry=true; fi
+  # Environment would refuse its publish job anyway. A gates-only run is
+  # one too: it never publishes.
+  if [ "${CASCADE_DRY_RUN:-true}" != false ] || [ "${CASCADE_REF:-}" != refs/heads/main ] || [ "$gates_only" = true ]; then dry=true; fi
   st_set dry_run "$dry"
-  st_set gates_only "$([ "${CASCADE_GATES_ONLY:-false}" = true ] && echo true || echo false)"
+  st_set gates_only "$gates_only"
   output dry_run "$dry"
   trigger "- Event: \`$(safe_text "${CASCADE_EVENT:-unknown}")\` on \`$(safe_text "${CASCADE_REF:-}")\`; dry run: $dry"
 }

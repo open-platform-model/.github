@@ -249,8 +249,8 @@ and action to a full commit SHA (owner decision 24 for the actions, extended to 
 | File | Kind | Jobs or caller job | Does |
 | --- | --- | --- | --- |
 | [`cascade-notify`](.github/actions/cascade-notify/action.yml) | composite action | the caller's `Notify downstream` (`cascade` Environment) | after a release is published: checks the tag, waits up to 10 minutes for the Go proxy (library only), and sends `repository_dispatch` `upstream-released` with `{source, tags}` to each downstream repo |
-| [`cascade-receive.yml`](.github/workflows/cascade-receive.yml) | reusable workflow | `Compute`, `Post gates` | runs the repo's `task -x deps:cascade` on the rolling `deps/cascade` branch with no secret in reach and plans the result; posts G2 and G3 on open release PRs; outputs `action`, `dry-run` and `compute-ok` |
-| [`cascade-publish`](.github/actions/cascade-publish/action.yml) | composite action | the caller's `Publish` (`cascade` Environment) | verifies the plan, then pushes, opens, edits, recreates, closes or labels the cascade PR; never runs repo code |
+| [`cascade-receive.yml`](.github/workflows/cascade-receive.yml) | reusable workflow | `Compute`, `Post gates` | runs the repo's `task -x deps:cascade` on the rolling `deps/cascade` branch with no secret in reach and plans the result; posts G2 and G3 on open release PRs; outputs `action`, `dry-run` and `compute-ok` (hints only: `compute` ran repo code) |
+| [`cascade-publish`](.github/actions/cascade-publish/action.yml) | composite action | the caller's `Publish` (`cascade` Environment) | refuses a gates-only run, verifies the plan, then pushes, opens, edits, recreates, closes or labels the cascade PR; never runs repo code |
 | [`cascade-gates.yml`](.github/workflows/cascade-gates.yml) | reusable workflow | `Cascade gates` | per PR (`pull_request_target`, nothing checked out): `n/a` on both gate contexts for an ordinary PR; a gates-only receiver run for a release PR |
 
 Every job's and every action's first step, `Guard`, derives the repo name from
@@ -400,6 +400,7 @@ jobs:
       && needs.cascade.outputs.compute-ok == 'true'
       && needs.cascade.outputs.dry-run == 'false'
       && inputs.dry_run != true
+      && inputs.gates_only != true
       && vars.CASCADE_DRY_RUN == 'false'
       && github.ref == 'refs/heads/main'
       && contains(fromJSON('["push","recreate","close","conflict","too_long"]'), needs.cascade.outputs.action)
@@ -414,6 +415,7 @@ jobs:
         uses: open-platform-model/.github/.github/actions/cascade-publish@<sha> # .github main
         with:
           dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
+          gates-only: ${{ inputs.gates_only == true }}
           labels-managed: false
           client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
           private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
@@ -424,7 +426,15 @@ and runs from any other ref (always dry runs) `deps-cascade-<ref>`, so neither r
 pending real run. The stop switch is the `cascade-publish` input `dry-run`, given the same
 expression as the reusable job's `dry-run`: the action publishes only when it is exactly `false`,
 does nothing on `true` and fails on any other value (an empty or missing input included), so a
-mistyped `if:` cannot make a dry run publish. The `publish` job's `if:` repeats the switches only
+mistyped `if:` cannot make a dry run publish. GitHub compares strings without regard to case, so
+the receiver is live when `CASCADE_DRY_RUN` is `false` in any letter case (`False`, `FALSE`);
+any other value keeps it dry. A gates-only run never publishes: the `publish` job's `if:` reads
+the caller's own `gates_only` input, and the required `cascade-publish` input `gates-only`
+(the same input as `${{ inputs.gates_only == true }}`) makes the action fail before the mint
+unless it is exactly `false`. A gates-only run runs the code of every open release head inside
+`compute`, so `compute`'s outputs are hints there and everywhere: the reusable workflow also
+reports `action: gates-only` and `compute-ok: false` for such a run, from its input, but nothing
+relies on that. The `publish` job's `if:` repeats the switches only
 so a dry run does not start a `cascade` Environment job; it reads them itself, not from the
 reusable job that ran repo code. `cascade-publish` also refuses any ref but `main` and a plan
 marked as a dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
@@ -458,14 +468,14 @@ jobs:
 
 | Variable | Repo | Meaning |
 | --- | --- | --- |
-| `CASCADE_DRY_RUN` | receivers | the receiver pushes only when it is exactly `false`; unset, deleted or anything else is a dry run (compute, summary and artifact; no push, PR, label or comment) |
+| `CASCADE_DRY_RUN` | receivers | the receiver pushes only when it is `false`, in any letter case (GitHub compares without case); unset, deleted or anything else is a dry run (compute, summary and artifact; no push, PR, label or comment) |
 | `CASCADE_NOTIFY` | upstreams | `off` skips notify, so that repo's releases stop dispatching |
 | `CASCADE_G2_MODE`, `CASCADE_G3_MODE` | receivers | `warn` (default: a problem posts `success` with `WARN:`) or `enforce` (a problem posts `failure`) |
 
-A run from any ref other than `main` is always a dry run, and `workflow_dispatch` with
-`dry_run: true` dry-runs one run.
+A run from any ref other than `main` and every gates-only run is always a dry run, and
+`workflow_dispatch` with `dry_run: true` dry-runs one run.
 
 **Stop switches**, smallest first: the `deps-cascade:hold` label on the cascade PR (the bot
-skips it); a `.cascade-hold` entry (one pin); `CASCADE_DRY_RUN` set to anything but `false`;
+skips it); a `.cascade-hold` entry (one pin); `CASCADE_DRY_RUN` set to anything but `false` (in any letter case);
 `CASCADE_NOTIFY=off` in an upstream; disabling `deps-cascade.yml`; suspending the
 `opm-cascade` App (notify and publish then fail at minting, compute and gates keep running).

@@ -10,7 +10,10 @@ description: >-
 # but not its secrets unless the caller passes `secrets: inherit` (sandbox
 # cycle E1). So the caller owns the publish job: it needs the reusable
 # Deps cascade job, declares `environment: cascade`, and passes the key in
-# as an input. The plan is untrusted: compute ran repo code. The scripts run
+# as an input. The plan is untrusted: compute ran repo code. So are its
+# outputs: whether the run is gates-only comes in as the gates-only input,
+# from the caller's own dispatch input, and is checked before anything else.
+# The scripts run
 # from this action's own directory, so a caller that pins the action to a
 # .github commit SHA runs exactly that commit's code.
 
@@ -20,6 +23,13 @@ inputs:
       The receiver's stop switch: publish only when this is exactly false; true publishes
       nothing (exit 0), any other value fails. Callers pass
       `inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false'`.
+    required: true
+  gates-only:
+    description: >-
+      Whether the run is gates-only: publish only when this is exactly false; true or any
+      other value fails before the mint (a gates-only run never publishes). Callers pass
+      `inputs.gates_only == true`, their own dispatch input, never an output of the
+      reusable job.
     required: true
   labels-managed:
     description: The repo declares its labels itself (cli); publish only checks they exist
@@ -80,6 +90,7 @@ runs:
       id: verify
       shell: bash
       env:
+        CASCADE_PUBLISH_GATES_ONLY: ${{ inputs.gates-only }}
         CASCADE_PUBLISH_DRY_RUN: ${{ inputs.dry-run }}
         CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         GH_TOKEN: ${{ github.token }}
@@ -105,6 +116,7 @@ runs:
       if: steps.verify.outputs.publish == 'true'
       shell: bash
       env:
+        CASCADE_PUBLISH_GATES_ONLY: ${{ inputs.gates-only }}
         CASCADE_PUBLISH_DRY_RUN: ${{ inputs.dry-run }}
         CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         CASCADE_LABELS_MANAGED: ${{ inputs.labels-managed }}

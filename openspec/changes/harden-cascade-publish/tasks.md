@@ -7,12 +7,12 @@ are committed first as `docs(openspec): plan harden-cascade-publish`.
 
 ## 1. Gates-only runs never publish
 
-- [ ] 1.1 `cascade-publish/action.yml`: add the required input `gates-only` (description names the caller expression) and pass it to `Verify the plan` and `Act` as `CASCADE_PUBLISH_GATES_ONLY` (D1 point 2)
-- [ ] 1.2 `receive-publish.sh`: a `gates_only_switch` checked first in `verify` and `act`, before the dry-run input, the plan and any API call; `true` refuses with "a gates-only run never publishes", any value but `false` refuses; header documents the variable
-- [ ] 1.3 `cascade-receive.yml`: `compute` outputs `action` and `ok` computed from `inputs.gates-only` (D1 point 3); the header comment says so; `receive-compute.sh init` records a gates-only run as a dry run
-- [ ] 1.4 README receiver caller shape: `inputs.gates_only != true` in the `publish` `if:` and `gates-only: ${{ inputs.gates_only == true }}` on the `Publish` step; the stop-switch paragraph and the variables table say `false` in any letter case
-- [ ] 1.5 Cases: a complete plan from a real compute run with `CASCADE_PUBLISH_GATES_ONLY=true` (verify and act refuse, no gh call, nothing pushed, no `publish=true`); the input empty, unset, `False`, `TRUE`; a gates-only compute run whose release head forges `action=push`/`ok=true` (outputs stay `action=gates-only`, `dry_run=true`); static checks of the action input, the two output expressions and the README caller; wiring suite green
-- [ ] 1.6 Gates green, then commit `fix(cascade): refuse to publish from a gates-only run`
+- [x] 1.1 `cascade-publish/action.yml`: add the required input `gates-only` (description names the caller expression) and pass it to `Verify the plan` and `Act` as `CASCADE_PUBLISH_GATES_ONLY` (D1 point 2)
+- [x] 1.2 `receive-publish.sh`: a `gates_only_switch` checked first in `verify` and `act`, before the dry-run input, the plan and any API call; `true` refuses with "a gates-only run never publishes", any value but `false` refuses; header documents the variable
+- [x] 1.3 `cascade-receive.yml`: `compute` outputs `action` and `ok` computed from `inputs.gates-only` (D1 point 3); the header comment says so; `receive-compute.sh init` records a gates-only run as a dry run
+- [x] 1.4 README receiver caller shape: `inputs.gates_only != true` in the `publish` `if:` and `gates-only: ${{ inputs.gates_only == true }}` on the `Publish` step; the stop-switch paragraph and the variables table say `false` in any letter case
+- [x] 1.5 Cases: a complete plan from a real compute run with `CASCADE_PUBLISH_GATES_ONLY=true` (verify and act refuse, no gh call, nothing pushed, no `publish=true`); the input empty, unset, `False`, `TRUE`; a gates-only compute run whose release head forges `action=push`/`ok=true` (outputs stay `action=gates-only`, `dry_run=true`); static checks of the action input, the two output expressions and the README caller; wiring suite green
+- [x] 1.6 Gates green, then commit `fix(cascade): refuse to publish from a gates-only run`
 
 ## 2. Repo code is cut off from the command files and tokens
 

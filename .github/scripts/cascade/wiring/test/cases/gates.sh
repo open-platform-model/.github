@@ -128,6 +128,7 @@ new_fx; mk_toy; fresh_checkout
 gh_fx 0 '[]' -- "${REL_LIST[@]}"
 CASCADE_GATES_ONLY=true compute init payload gates
 check "gates-only: the step stops the run with action gates-only" bash -c '[ "$1" = 0 ] && grep -qx "action=gates-only" "$2" && grep -q "gates only" "$3"' _ "$RC" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY"
+check "gates-only: the run is a dry run even with CASCADE_DRY_RUN false" bash -c 'grep -qx "dry_run=true" "$1" && ! grep -qx "dry_run=false" "$1"' _ "$GITHUB_OUTPUT"
 new_fx; mk_toy; fresh_checkout
 gh_fx_err 1 "HTTP 502" -- "${REL_LIST[@]}"
 compute init payload gates
