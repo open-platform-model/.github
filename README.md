@@ -570,16 +570,20 @@ says so.
 `compare`, then the contents read of the pinned file), so a GitHub outage, a secondary rate limit
 or the job token's hourly limit fails the required job on every PR with `cannot compare .github
 <SHA> with main` or `cannot fetch .github/scripts/cascade/wiring-check.sh at .github <SHA>`.
-Only those two messages are outages:
+Only those two messages can be outages, and `cannot compare` is also what a SHA GitHub does not
+know prints (the compare returns 404), which is a finding:
 
-1. Re-run the failed job (`gh run rerun <run id> --failed -R open-platform-model/<repo>`).
-2. Check <https://www.githubstatus.com> and `gh api rate_limit`; wait for the reset or the
+1. Confirm the SHA exists: `gh api repos/open-platform-model/.github/commits/<SHA> --jq .sha`
+   must print the SHA. A 404 or 422 is a pin to fix, never an outage; skip the steps below. If
+   this call fails for the outage itself, re-run it until it answers.
+2. Re-run the failed job (`gh run rerun <run id> --failed -R open-platform-model/<repo>`).
+3. Check <https://www.githubstatus.com> and `gh api rate_limit`; wait for the reset or the
    recovery and re-run again.
-3. If it lasts and a merge cannot wait, an admin may merge with admin bypass (`gh pr merge
-   --admin`) only a PR whose changed files (`gh pr diff <n> --name-only`) include nothing under
+4. If it lasts, step 1 printed the SHA and a merge cannot wait, an admin may merge with admin
+   bypass (`gh pr merge --admin`) only a PR whose changed files (`gh pr diff <n> --name-only`) include nothing under
    `.github/**` or `.tasks/**`, after every other required check passed and `task
    cascade:wiring:check` passed on the PR head. A PR touching those paths waits for the API.
-4. Never remove `--pin-on-main` from the step (the check refuses that shape anyway), and never
+5. Never remove `--pin-on-main` from the step (the check refuses that shape anyway), and never
    edit the copy to skip a request.
 
 `is not on .github main` and `differs from` are findings, not outages: fix the pin or the copy,

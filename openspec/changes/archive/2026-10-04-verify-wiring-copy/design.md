@@ -90,7 +90,9 @@ outright: no repo uses either.
 
 Both requests are needed for the required job, so an API outage, a secondary rate limit or a
 `GITHUB_TOKEN` hourly limit fails it with `cannot compare` or `cannot fetch`. The README runbook:
-re-run the failed job; check GitHub status and `gh api rate_limit`; if the failure persists, an
+first confirm the pinned SHA resolves (`gh api repos/open-platform-model/.github/commits/<sha>`),
+since a SHA GitHub does not know also prints `cannot compare` (added after review); re-run the
+failed job; check GitHub status and `gh api rate_limit`; if the failure persists, an
 admin MAY merge with `gh pr merge --admin` only a PR whose changed files include nothing under
 `.github/**` or `.tasks/**`, after every other required check passed and the offline
 `task cascade:wiring:check` passed on the PR head; never remove `--pin-on-main` from the step or

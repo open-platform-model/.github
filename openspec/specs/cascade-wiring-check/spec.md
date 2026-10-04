@@ -265,10 +265,18 @@ request when `BASH_ENV` or `ENV` is set.
 ### Requirement: Runbook for a failed API call
 
 The README SHALL tell an admin what to do when the required wiring step fails because a GitHub API
-request failed (`cannot compare` or `cannot fetch`): re-run the job; if the outage or rate limit
+request failed (`cannot compare` or `cannot fetch`): first confirm with
+`gh api repos/open-platform-model/.github/commits/<sha>` that GitHub knows the pinned SHA, since
+`cannot compare` is also printed for an unknown SHA, which is a finding and never an outage;
+re-run the job; if the outage or rate limit
 lasts, an admin MAY merge with admin bypass only a PR that changes nothing under `.github/**` or
 `.tasks/**`, after every other required check passed; `--pin-on-main` SHALL never be removed from
 the step. A `not on .github main` or `differs from` failure SHALL never be bypassed.
+
+#### Scenario: Unknown SHA
+
+- **WHEN** the wiring step fails with `cannot compare` and `gh api repos/open-platform-model/.github/commits/<sha>` returns 404
+- **THEN** the runbook treats it as a pin to fix and allows no admin bypass
 
 #### Scenario: GitHub API outage
 
