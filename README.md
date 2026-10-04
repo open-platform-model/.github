@@ -267,9 +267,10 @@ and action to a full commit SHA (owner decision 24 for the actions, extended to 
 Every job's and every action's first step, `Guard`, derives the repo name from
 `GITHUB_REPOSITORY` and refuses a repo outside `open-platform-model`.
 
-**Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (on `main` merged
-with `deps/cascade`) and, for G2, the task of every open `release-please--*` head; any write
-collaborator can push to either branch. Its two `Read` steps make every read that needs
+**Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (`main`'s, on
+`main` merged with `deps/cascade`), the new dependency code those tasks build or run, and, for
+G2, the task of every open `release-please--*` head; any write collaborator can push to either
+branch. Its two `Read` steps make every read that needs
 `GITHUB_TOKEN` (the release-PR list, the release heads' commits, the cascade PR, the branch
 tips and the upstream releases for the breaking check) before the first step that runs repo
 code, and no step from `Gates` on is given a token. Repo code also runs without `GITHUB_ENV`,
@@ -287,11 +288,69 @@ is untrusted:
 - `Post gates` posts only on the open release heads it lists itself, takes only G2 from
   `gates.json`, and evaluates G3 itself from the API. A release head can still choose its own
   G2 result, which is why G2 stays `warn`; it cannot choose G3.
-- `publish` takes its switches from the caller's inputs and re-derives the plan.
+- `publish` takes its switches from the caller's inputs and re-derives the plan: what the push
+  may change, who made its commits, and the PR's title, body and labels (below).
 - No job that publishes restores an Actions cache: `compute` installs Go with `cache: false`,
   and the wiring check (below) refuses a cache in every workflow a repo lists as publishing,
   because a cache entry written from `compute` (or any job on `main` that runs repo code) would
   otherwise reach a released binary or image.
+- On a branch a human merged into (merge mode), `compute` runs `main`'s task: when the branch
+  changed `.tasks/` or a root `Taskfile*`, it puts `main`'s versions in the work tree, runs the
+  task with `CASCADE_ALLOW_DIRTY=1` and leaves those paths out of its commit.
+- `compute` installs Task v3.53.1 and CUE with `wiring/install-tools.sh`: fixed release URLs,
+  HTTPS only, each archive checked against a sha256 held here. A `cue-version` without a row
+  there fails before any repo code runs; a new version is a change here first.
+
+**What `publish` accepts.** Before it mints the App token, `publish` (`receive-publish.sh
+verify`) bounds the push and writes the PR text itself:
+
+- *The increment.* The bot's own commits are the new tip's commits that neither `main` nor, for
+  a fast-forward, the old remote tip has: at most two (a merge of `main` and one task commit),
+  each authored and committed by the bot. A plain commit may change only paths on the
+  receiver's allow-list (`publish_paths` in `wiring/lib.sh`), in place: status `M`, no mode
+  change, no symlink and no gitlink. A merge commit must be git's own merge of its parents
+  (`git merge-tree --write-tree`), its second parent on `main`, except derived files carrying
+  `main`'s content. A deny-list always wins: `.github/**`, `.tasks/**`, any `Taskfile*`,
+  `hack/**` (but cli's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), any
+  `*.sh`, any `CODEOWNERS`, the release-please files, `.cascade-frozen` and `.cascade-hold`.
+- *Human commits.* A push that does not contain the old tip is refused when the old branch holds
+  a commit the bot did not make; `recreate` is exempt, and `close` keeps such a branch.
+- *The text.* `publish` checks the new tip out into a scratch worktree and runs the resolver's
+  own `title` and `body` there with a mirror of the receiver's `pins.sh` and `classes`
+  (`wiring/pins.sh` and `receiver_pins`/`receiver_classes` in `lib.sh`, which read only `git
+  show`), the trigger from the event, the live PR's Notes, and `compute`'s warnings after a
+  line filter (no HTML, link, URL, issue reference or mention; at most 100 lines of 500
+  bytes). The labels are `deps-cascade`, the pins' labels (`need-human-review` for library's
+  core) and `deps-cascade:breaking` from the mirrored pins and the releases `publish` reads
+  itself. `compute`'s `body.md` and titles are hints; a planned title that differs is a notice.
+  The bot never removes `need-human-review` or `deps-cascade:breaking`.
+
+| Receiver | Paths its bot commits may change (besides any `cue.mod/module.cue`) |
+| --- | --- |
+| catalog_opm | `.opm-cli-version` |
+| library | `opm/schema/loader.go`, `docs/getting-started.md`, `AGENTS.md` |
+| opm-operator | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
+| cli | `go.mod`, `go.sum`, `internal/operator/manifest.go`, `internal/operator/dist/install.yaml`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
+
+**Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
+receiver's `.tasks/cascade/` on its `main` (read 2026-10-04: catalog_opm `3288406`, library
+`93a892f`, opm-operator `6a14adb`, cli `5f00930`). A receiver change to what its task writes, to
+its `pins.sh` or to its `classes` needs the matching change here, merged and pinned, before the
+receiver's own change merges: otherwise `publish` refuses its plans (a new path) or renders a
+body without a new pin, and the title-mismatch notice in the publish log is the signal. To
+check a mirror, run the receiver's `pins.sh` and `CASCADE_PINS_REPO=<repo>
+.github/scripts/cascade/wiring/pins.sh` on the same commits of its checkout and compare.
+
+**What stays open (residual risk).**
+
+- G2 still runs every open release head's own task inside `compute`, which is a run on
+  `main`'s ref: that code can write `main`'s Actions cache scope. The sink is closed, not the
+  write: no publish workflow restores a cache (the wiring check's `publish-workflows` rule).
+- `compute` still chooses the action (push, close, conflict, too long). A hostile `compute` can
+  stall or relabel its own receiver's cascade PR as conflicted, but cannot publish anything
+  outside the bounds above.
+- `setup-go` installs Go from the receiver's `go.mod` version without a checksum held here.
+- The mirrors drift unless kept in step (above).
 
 **Pinning and bumps.** Owner decision 24 pins the two cascade actions by SHA in every repo,
 replacing `@main` (decision 13) for them; the supervisor extended it to the two reusable
@@ -567,7 +626,8 @@ so a dry run does not start a `cascade` Environment job; it reads them itself, n
 reusable job that ran repo code. `cascade-publish` also refuses any ref but `main` and a plan
 marked as a dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
 `labels-managed: true` (cli, an input of `cascade-publish`) only checks that the five cascade labels exist instead of
-creating them; `setup-cue` (default true) and `cue-version` (default `v0.17.1`) install CUE.
+creating them; `setup-cue` (default true) and `cue-version` (default `v0.17.1`, and only a version
+whose sha256 `wiring/install-tools.sh` holds) install CUE.
 
 **Per-PR gates caller** (`cascade-gates.yml` in the same four repos):
 

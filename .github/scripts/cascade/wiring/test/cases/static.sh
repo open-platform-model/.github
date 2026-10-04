@@ -154,6 +154,18 @@ expect "static: actions/cascade-publish mints for the calling repo only, after v
   $'${{ steps.guard.outputs.repo }}\nsteps.verify.outputs.publish == \'true\'' -- \
   yq -r '.runs.steps[] | select(.id == "mint") | (.with.repositories, .if)' "$ORG_ROOT/.github/actions/cascade-publish/action.yml"
 
+# Every workflow of this repo, the org required mention-guard included,
+# declares its permissions and runs actions only at a full commit SHA.
+for f in "$WORKFLOWS"/*.yml; do
+  n="${f##*/}"
+  expect "static: $n declares top-level permissions" 0 true -- yq -r 'has("permissions")' "$f"
+  expect "static: $n runs every action at a full SHA with a version comment" 0 "" -- \
+    yq -r '.. | select(tag == "!!map") | select(has("uses")) | .uses | select(test("^[^/]+/[^@]+@[0-9a-f]{40}$") | not)' "$f"
+  check "static: $n names the version after every SHA" bash -c '
+    ! grep -nE "^ *(- )?uses:" "$1" | grep -vE "uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]"' _ "$f"
+done
+check "static: CODEOWNERS names the owners of /.github/" grep -qxE '/\.github/ +@emil-jacero @orvis98' "$ORG_ROOT/.github/CODEOWNERS"
+
 # compute's tools come from wiring/install-tools.sh: fixed versions, sha256.
 expect "static: compute installs no tool through a version-range action" 0 "" -- \
   yq -r '.jobs.compute.steps[] | select(.uses // "" | test("setup-task|setup-cue")) | .uses' "$RECV"

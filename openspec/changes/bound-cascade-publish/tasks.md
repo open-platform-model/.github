@@ -38,7 +38,7 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 5. This repo's governance and the residual risk
 
-- [ ] 5.1 `.github/CODEOWNERS` (D8); `mention-guard.yml` at the `actions/github-script` SHA
-- [ ] 5.2 Static cases: every workflow of this repo has top-level `permissions:` and only SHA-pinned `uses:` with a version comment
-- [ ] 5.3 README: the increment bounds, the mirrors and how to keep them in step, tags on main, pinned tools, the release-key rule, the residual risk (D9); a workspace `RELEASING.md` patch for the supervisor
-- [ ] 5.4 Gates green, then commit `ci: add code owners, pin mention-guard and record the residual risk`
+- [x] 5.1 `.github/CODEOWNERS` (D8); `mention-guard.yml` at the `actions/github-script` SHA
+- [x] 5.2 Static cases: every workflow of this repo has top-level `permissions:` and only SHA-pinned `uses:` with a version comment
+- [x] 5.3 README: the increment bounds, the mirrors and how to keep them in step, tags on main, pinned tools, the release-key rule, the residual risk (D9); a workspace `RELEASING.md` patch for the supervisor
+- [x] 5.4 Gates green, then commit `ci: add code owners, pin mention-guard and record the residual risk`
