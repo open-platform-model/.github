@@ -30,6 +30,10 @@
 #   publish:                       # receivers only
 #     labels-managed: false        # a YAML boolean
 #
+# Beyond the cascade key it also binds the release App key: every job that
+# reads RELEASE_APP_PRIVATE_KEY declares `environment: release`, and only
+# those jobs do (owner decision 29). The rule needs no config key.
+#
 # Exit status: 0 the shapes match (prints "cascade wiring: ok, .github <sha>
 # (<pin comment>)"); 1 a mismatch, or with --pin-on-main a SHA not on
 # .github main or an API call that failed (every problem is printed on
@@ -265,6 +269,44 @@ done
 eq "secrets.CASCADE_APP_PRIVATE_KEY readers" "$want_key" "$(printf '%s' "$got_key" | sed '/^$/d' | sort)"
 eq "cascade Environment jobs" "$want_env" "$(printf '%s' "$got_env" | sed '/^$/d' | sort)"
 eq "calls into .github that pass secrets" "" "$(printf '%s' "$got_sec" | sed '/^$/d')"
+
+# --- the release key ----------------------------------------------------------
+
+# The release App key (RELEASE_APP_PRIVATE_KEY, owner decision 29) is an
+# Environment secret of the main-only Environment `release`. A job reads it
+# when any expression (a ${{ }} in a string, or a whole if:) names it in any
+# case, or when it passes `secrets: inherit`; each such job declares exactly
+# `environment: release`, and no other job declares `release` (any case, a
+# string or a map's name). A reusable-workflow call cannot declare an
+# Environment, so `secrets: inherit` always fails here. The other forms of
+# the secrets context are already refused above. A key read outside a job
+# (a workflow-level env) is refused too.
+rel_read="" rel_env=""
+for f in "$W"/*.yml "$W"/*.yaml; do
+  [ -e "$f" ] || continue
+  b=${f##*/}
+  rel_read+=$(yq -r '.. | select(tag == "!!str") | select(
+      ([match("(?s)\\$\\{\\{.*?\\}\\}"; "g") | .string] + [select((path | .[-1] | tostring) == "if")])
+      | map(select(test("(?i)secrets\\s*\\.\\s*release_app_private_key"))) | length > 0
+    ) | path | ((select(.[0] == "jobs") | .[1] | tostring) // ("<outside a job: " + join(".") + ">"))' "$f" | sed "s|^|$b:|")$'\n'
+  rel_read+=$(yq -r '.jobs // {} | to_entries[] | select((.value.secrets // "") == "inherit") | .key' "$f" | sed "s|^|$b:|")$'\n'
+  rel_env+=$(yq -r '.jobs // {} | to_entries[] | .key + "\t" + ((.value.environment | (select(tag == "!!map") | .name // "") // (select(tag == "!!str"))) // "") + "\t" + (.value.environment | tag)' "$f" | sed "s|^|$b:|")$'\n'
+done
+rel_read=$(printf '%s' "$rel_read" | sed '/^$/d' | sort -u)
+no_env="" stray_env=""
+while IFS= read -r j; do
+  [ -n "$j" ] || continue
+  e=$(printf '%s\n' "$rel_env" | awk -F'\t' -v j="$j" '$1 == j { print $2 "/" $3; exit }')
+  [ "$e" = 'release/!!str' ] || no_env+="$j "
+done <<<"$rel_read"
+while IFS=$'\t' read -r j e _; do
+  [ -n "$j" ] || continue
+  shopt -s nocasematch
+  if [[ $e == release ]] && ! grep -qxF -- "$j" <<<"$rel_read"; then stray_env+="$j "; fi
+  shopt -u nocasematch
+done <<<"$rel_env"
+eq "release key readers without environment: release" "" "${no_env% }"
+eq "environment: release on jobs that do not read the release key" "" "${stray_env% }"
 
 # --- publish workflows restore no cache ---------------------------------------
 

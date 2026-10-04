@@ -32,9 +32,9 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 4. The release key needs the release Environment
 
-- [ ] 4.1 `wiring-check.sh`: the release-key rule (D6); header and README list it
-- [ ] 4.2 Cases: a reader without the Environment, with it, the key in lower case and with spaces, `environment: Release` on a non-reader, a map Environment, `secrets: inherit`, the fixture's existing shapes still passing
-- [ ] 4.3 Gates green, then commit `feat(cascade): bind the release key to the release Environment in the wiring check`
+- [x] 4.1 `wiring-check.sh`: the release-key rule (D6); header and README list it
+- [x] 4.2 Cases: a reader without the Environment, with it, the key in lower case and with spaces, `environment: Release` on a non-reader, a map Environment, `secrets: inherit`, the fixture's existing shapes still passing
+- [x] 4.3 Gates green, then commit `feat(cascade): bind the release key to the release Environment in the wiring check`
 
 ## 5. This repo's governance and the residual risk
 

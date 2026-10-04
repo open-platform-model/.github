@@ -386,6 +386,10 @@ comment>)`; a bad config exits 2. It checks:
   `toJSON(secrets)` and any other function given the whole context); the cascade Environment
   (any case, a map, or an expression) only on them; and no call into `.github` (in any case)
   passing `secrets:`;
+- in every workflow: every job that reads the release App key `RELEASE_APP_PRIVATE_KEY` (an
+  expression naming it in any case, or `secrets: inherit`) declares exactly `environment:
+  release` (the main-only Environment that holds the key, owner decision 29), and no other job
+  declares `release`; a read outside a job is refused;
 - in every workflow the config's `publish-workflows` lists: no cache action (any action whose
   name says `cache`), `actions/setup-go` with `cache: false`, `actions/setup-node` with
   `package-manager-cache: false` and no `cache`, no other `cache*` input but `no-cache`, and no
