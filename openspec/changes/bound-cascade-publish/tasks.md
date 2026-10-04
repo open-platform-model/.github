@@ -24,11 +24,11 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 3. Compute: main's task in merge mode, payload tags, pinned tools
 
-- [ ] 3.1 `receive-compute.sh run`: the merge-mode overlay of `main`'s `.tasks/` and `Taskfile*`, `CASCADE_ALLOW_DIRTY=1`, the commit without those paths (D3)
-- [ ] 3.2 `lib.sh validate_payload`: control characters refused, tags checked NUL-delimited with `valid_tag` (D4)
-- [ ] 3.3 New `wiring/install-tools.sh` (D7); `cascade-receive.yml` runs it instead of `setup-cue` and `setup-task`
-- [ ] 3.4 Cases: a merge-mode branch whose human commit changes `.tasks/cascade/cascade.sh` runs `main`'s task and keeps the branch's file; the toy task honours `CASCADE_ALLOW_DIRTY`; a trailing-newline tag and a control character in `source` dropped; the installer against a fixture archive (good checksum, bad checksum, unknown CUE version, `setup-cue` off); static cases for the install step
-- [ ] 3.5 Gates green, then commit `fix(cascade): run main's task in merge mode and pin compute's tools`
+- [x] 3.1 `receive-compute.sh run`: the merge-mode overlay of `main`'s `.tasks/` and `Taskfile*`, `CASCADE_ALLOW_DIRTY=1`, the commit without those paths (D3)
+- [x] 3.2 `lib.sh validate_payload`: control characters refused, tags checked NUL-delimited with `valid_tag` (D4)
+- [x] 3.3 New `wiring/install-tools.sh` (D7); `cascade-receive.yml` runs it instead of `setup-cue` and `setup-task`
+- [x] 3.4 Cases: a merge-mode branch whose human commit changes `.tasks/cascade/cascade.sh` runs `main`'s task and keeps the branch's file; the toy task honours `CASCADE_ALLOW_DIRTY`; a trailing-newline tag and a control character in `source` dropped; the installer against a fixture archive (good checksum, bad checksum, unknown CUE version, `setup-cue` off); static cases for the install step
+- [x] 3.5 Gates green, then commit `fix(cascade): run main's task in merge mode and pin compute's tools`
 
 ## 4. The release key needs the release Environment
 

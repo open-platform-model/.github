@@ -495,7 +495,7 @@ git_read() {
 # joined) and P_EXPECT set, or exit 1 with P_REASON. Unknown keys are
 # ignored. Exit 2 when the receiver is not a cascade receiver.
 validate_payload() {
-  local recv="$1" json="$2" allowed src re n last
+  local recv="$1" json="$2" allowed src n last
   P_SOURCE="" P_TAGS="" P_EXPECT="" P_REASON=""
   allowed=$(receiver_sources "$recv") || return 2
   if ! jq -e 'type == "object"' <<<"$json" >/dev/null 2>&1; then
@@ -515,9 +515,19 @@ validate_payload() {
     P_REASON="tags is not an array of 1 to 8 strings"
     return 1
   fi
-  re=$(tag_re "$src")
-  n=$(jq --arg re "$re" --arg rre "$RESOLVER_TAG_RE" '[.tags[] | select((test($re) and test($rre)) | not)] | length' <<<"$json") \
-    || { P_REASON="tags cannot be checked"; return 1; }
+  # A control character anywhere (a newline above all) refuses the payload:
+  # jq's regex $ matches before a final newline, and command substitution
+  # drops trailing ones, so "v1.0.0\n" would otherwise pass as v1.0.0.
+  if ! jq -e '[.source, .tags[]] | all(explode | all(. >= 32 and . != 127))' <<<"$json" >/dev/null 2>&1; then
+    P_REASON="the source or a tag holds a control character"
+    return 1
+  fi
+  # Each tag whole, NUL-delimited, through valid_tag's anchored bash match.
+  local t
+  n=0
+  while IFS= read -r -d '' t; do
+    valid_tag "$src" "$t" || n=$((n + 1))
+  done < <(jq -j '.tags[] | ., "\u0000"' <<<"$json")
   if [ "$n" != 0 ]; then
     P_REASON="$n tag(s) do not match the $(safe_text "$src") tag shape"
     return 1

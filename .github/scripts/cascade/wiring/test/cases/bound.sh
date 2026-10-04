@@ -137,6 +137,7 @@ check "bound: merge mode with a human task-tree commit passes" test "$RC/$OUT" =
 
 # The same merge, with an extra change hidden in the merge commit.
 OLD=$(origin_tip deps/cascade)
+git -C "$WS/repo" reset -q --hard
 git -C "$WS/repo" checkout -q -B evil "$OLD"
 as_bot merge -q --no-commit origin/main >/dev/null 2>&1 || true
 printf 'hidden\n' >"$WS/repo/fixtures/data.txt"

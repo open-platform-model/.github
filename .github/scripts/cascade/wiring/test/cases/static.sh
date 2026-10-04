@@ -154,6 +154,41 @@ expect "static: actions/cascade-publish mints for the calling repo only, after v
   $'${{ steps.guard.outputs.repo }}\nsteps.verify.outputs.publish == \'true\'' -- \
   yq -r '.runs.steps[] | select(.id == "mint") | (.with.repositories, .if)' "$ORG_ROOT/.github/actions/cascade-publish/action.yml"
 
+# compute's tools come from wiring/install-tools.sh: fixed versions, sha256.
+expect "static: compute installs no tool through a version-range action" 0 "" -- \
+  yq -r '.jobs.compute.steps[] | select(.uses // "" | test("setup-task|setup-cue")) | .uses' "$RECV"
+expect "static: compute's install step runs the pinned installer with the cue input" 0 \
+  $'bash org-github/.github/scripts/cascade/wiring/install-tools.sh "$CUE_INPUT"\n${{ inputs.setup-cue && inputs.cue-version || \'none\' }}' -- \
+  yq -r '.jobs.compute.steps[] | select(.name == "Set up Task and CUE") | (.run, .env.CUE_INPUT)' "$RECV"
+check "static: compute installs its tools before Init" bash -c '
+  idx() { N="$1" yq ".jobs.compute.steps | to_entries | map(select(.value.name == strenv(N))) | .[0].key" "$2"; }
+  [ "$(idx "Set up Task and CUE" "$1")" -lt "$(idx Init "$1")" ]' _ "$RECV"
+INSTALL="$WIRING/install-tools.sh"
+mkdir -p "$FX/rel/go-task/task/releases/download/v3.53.1" "$FX/tbin"
+printf 'not task\n' >"$FX/tbin/task"
+tar -czf "$FX/rel/go-task/task/releases/download/v3.53.1/task_linux_amd64.tar.gz" -C "$FX/tbin" task
+inst() { # inst <cue> [<arch>]: the installer against the fixture releases
+  : >"$FX/gpath"
+  run env CASCADE_TOOLS_BASE="file://$FX/rel" CASCADE_TOOLS_DIR="$FX/tools/$1" CASCADE_TOOLS_ARCH="${2:-Linux x86_64}" \
+    GITHUB_PATH="$FX/gpath" bash "$INSTALL" "$1"
+}
+inst none
+check "install: an archive whose sha256 differs is refused, nothing on PATH" bash -c '
+  [ "$1" = 1 ] && [[ $2 == *"the sha256 of task_linux_amd64.tar.gz is not a54a408f"* ]] && [ ! -s "$3" ] && [ ! -e "$4/bin/task" ]' _ "$RC" "$ERR" "$FX/gpath" "$FX/tools/none"
+inst v0.18.0
+check "install: a cue-version without a checksum is exit 2 before any download" bash -c '
+  [ "$1" = 2 ] && [[ $2 == *"cue-version \`v0.18.0\` has no checksum in .github"* ]] && [ ! -e "$3/dl/task_linux_amd64.tar.gz" ]' _ "$RC" "$ERR" "$FX/tools/v0.18.0"
+inst v0.17.1 "Darwin arm64"
+check "install: another runner is exit 2" bash -c '[ "$1" = 2 ] && [[ $2 == *"only Linux x64"* ]]' _ "$RC" "$ERR"
+run env CASCADE_TOOLS_BASE=https://example.invalid CASCADE_TOOLS_DIR="$FX/tools" CASCADE_TOOLS_ARCH="Linux x86_64" bash "$INSTALL" none
+check "install: another download host is exit 2" bash -c '[ "$1" = 2 ] && [[ $2 == *"CASCADE_TOOLS_BASE must be"* ]]' _ "$RC" "$ERR"
+run bash "$INSTALL"
+check "install: no argument is usage" test "$RC" = 2
+check "install: Task is one fixed version with its sha256, never a range" bash -c '
+  grep -qx "TASK_VERSION=v3.53.1" "$1" && grep -qx "TASK_SHA256=a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7" "$1"' _ "$INSTALL"
+check "install: the CUE default has a checksum" bash -c '
+  d=$(yq -r ".on.workflow_call.inputs[\"cue-version\"].default" "$1"); grep -q "^    $d) echo [0-9a-f]\{64\} ;;" "$2"' _ "$RECV" "$INSTALL"
+
 if [ -n "$GUARD_TEXT" ]; then
   # guard <GITHUB_REPOSITORY>: runs the inline Guard step.
   guard() {
