@@ -263,32 +263,39 @@ sibling `.github` checkout as it stands. A repo whose `dependabot.yml` configure
 `github-actions` ecosystem ignores `open-platform-model/.github*`, so Dependabot never moves one
 reference on its own. To roll a change out:
 
-1. Before the `.github` PR merges, its `Resolver tests` job runs both offline suites (the
-   resolver and the wiring scripts) with the pinned `shellcheck` and `actionlint`. No sandbox
-   proves a change (owner decision 26), so a change of behavior comes with suite cases.
-2. Merge the `.github` PR, then take the full SHA of the squash commit it made on `main`
-   (`git rev-parse origin/main` right after fetching, or the PR's merge commit), and check it is
-   on `main`: `gh api repos/open-platform-model/.github/compare/<SHA>...main --jq .status` must
-   print `identical` or `ahead` (a branch commit that a squash merge left behind prints
-   `diverged`).
-3. Bump one receiver first (catalog_opm, library, opm-operator or cli) as a dry run: set its
-   repository variable `CASCADE_DRY_RUN` to `true`, merge its pin PR (step 4), run its
-   `Deps cascade` workflow by `workflow_dispatch` and read the run: the summary and the
-   `cascade-plan` artifact must show what the change intends, and `Publish` must be skipped.
-   Then set `CASCADE_DRY_RUN` back to its earlier value. A change to `cascade-notify` alone
-   shows only at the next release of a repo that pins it; read that release's `Notify
-   downstream` job the same way.
-4. Then, in each of the other repos among core, catalog_opm, library, opm-operator and cli, open
-   one PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the
-   SHA in every cascade reference and changes nothing else, unless the `.github` change altered
-   an input, in which case the caller edit rides the same PR. Find them with
+1. Merge the `.github` PR once its `Resolver tests` job is green (both offline suites, the static
+   checks, `shellcheck` and `actionlint`; no sandbox proves a change, owner decision 26, so a
+   change of behavior comes with suite cases). Then take the full SHA of the squash commit it
+   made on `main` (`git rev-parse origin/main` right after fetching, or the PR's merge commit),
+   and check it is on `main`: `gh api repos/open-platform-model/.github/compare/<SHA>...main
+   --jq .status` must print `identical` or `ahead`. This repo is squash-only, so a branch commit
+   left behind by the merge prints `diverged`.
+2. Canary: a dry-run pin bump in one receiver first (catalog_opm, library, opm-operator or cli;
+   core has no receiver). Set that repo's variable `CASCADE_DRY_RUN` to `true` if it is not
+   already, noting the old value; open and merge its pin PR as in steps 3 and 4; run
+   `gh workflow run deps-cascade.yml -R open-platform-model/<canary>` and check the run succeeds,
+   its `Compute` log shows `scripts from open-platform-model/.github <SHA>`, `Publish` is
+   skipped, and the summary's mode and action match `task -x deps:cascade` run locally on that
+   repo's `main`; check that the canary's next PR shows `cascade/freshness` and
+   `cascade/settled`, and that its `cascade-task.yml` (by `workflow_dispatch`) checks the
+   resolver out at `<SHA>` and passes. Then set `CASCADE_DRY_RUN` back. A dry run skips
+   `Publish` and notify runs only on a release, so a change to `cascade-publish` or
+   `cascade-notify` first meets real GitHub on the canary's next live run or the next release
+   of an upstream that pins it; watch that run and roll back (step 4) if it fails.
+3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
+   PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
+   every cascade reference and changes nothing else, unless the `.github` change altered an
+   input, in which case the caller edit rides the same PR. Find them with
    `grep -rn -A1 'open-platform-model/.github' .github/workflows`: the `uses:` lines and the
-   `ref:` under the `cascade-task.yml` checkout (comment lines also match and need no change).
-   All of a repo's cascade references carry the same SHA, and `task cascade:wiring:check` must
-   pass before the PR is opened.
-5. Merge each after its CI is green and the `compare` check of step 2 passes for the SHA it
-   pins; order does not matter, because a repo runs only its own pin. To roll back, move the
-   pins back the same way.
+   `repository:` line of the `cascade-task.yml` checkout, whose `ref:` the `-A1` prints on the
+   next line (comment lines also match and need no change). All of a repo's cascade references
+   carry the same SHA. Before the PR is opened, the `compare` check of step 1 passes for that
+   SHA and `task cascade:wiring:check` passes.
+4. Merge each after its CI is green, its "Verify the cascade wiring" step printed
+   `cascade wiring: ok, .github <SHA> (.github main)`, and the `compare` check passes for the
+   SHA it pins. After the canary the order does not matter, because a repo runs only its own
+   pin. To roll back, move the pins back the same way (no canary needed for a SHA the repo
+   already ran).
 
 `<sha>` in the shapes below stands for that full SHA.
 

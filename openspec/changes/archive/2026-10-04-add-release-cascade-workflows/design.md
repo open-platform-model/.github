@@ -1,6 +1,6 @@
 ## Context
 
-The interface is fixed by the Phase 3 wiring contract, version 2, committed verbatim with this
+The interface is fixed by the Phase 3 wiring contract, version 3.1 (changelog 3.1.1), committed verbatim with this
 change as `contract.md` and cited as "contract §N". It binds this change (contract §1 row A) and
 the five `join-release-cascade` changes (rows B1 to B5). This design does not reopen it; it
 records layout, script interfaces, network calls, the few points the contract leaves to this
@@ -441,22 +441,25 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   finding 3; since review M2 the scripts come from that same commit): a later push to the branch changes
   nothing a sandbox runs until a sandbox PR, merged by PR under the sandbox `main` ruleset, moves
   the pin. Owner decision 26 ended this reach before merge: the key left both sandbox
-  Environments, so a sandbox run can no longer mint a token; the branch is deleted when this PR
-  merges, and both sandboxes are archived after Phase 3 (Migration Plan step 4, task 5.8).
+  Environments, so a sandbox run can no longer mint a token. The sandbox callers keep `a2950ce`
+  until both sandboxes are archived after Phase 3, and the branch is deleted only then (Migration
+  Plan step 4, task 5.8).
 
 ## Migration Plan
 
 1. Sections 1 to 4 of `tasks.md` land the code and tests, each green and committed.
 2. The supervisor completes the sandbox preconditions (proposal "Depends on").
 3. Section 5 runs the sandbox cycle against this branch and records results here.
-4. The contract §14 workspace PR merges, then this PR, and `feat/add-release-cascade-workflows`
-   is deleted from `origin`. The sandboxes are dropped (owner decision 26, superseding decision
-   25): the production key and the client-id variable are already gone from both sandbox
-   Environments, `cascade-sandbox-up` is private again, no sandbox App exists, and both sandbox
-   repos are archived after Phase 3 (task 5.8). The sandbox callers are not moved to `main`. The
-   product callers pin a `.github` `main` SHA (owner decision 24) and move it by the README's
-   bump procedure: the offline suites on the `.github` PR, then a dry-run pin bump in one
-   receiver (`CASCADE_DRY_RUN=true` there), then the other repos.
+4. The contract §14 workspace PR merges, then this PR. The sandboxes are dropped (owner
+   decision 26, superseding decision 25): the production key and the client-id variable are
+   already gone from both sandbox Environments, `cascade-sandbox-up` is private again, no
+   sandbox App exists, and both sandbox repos are archived after Phase 3. The sandbox callers
+   are not moved to `main` and S1 is not rerun; they keep `a2950ce`, so
+   `feat/add-release-cascade-workflows` stays on `origin` until every join change has merged at
+   its `main` SHA and both sandboxes are archived (contract §11.3, task 5.8). The product
+   callers pin a `.github` `main` SHA (owner decision 24) and move it by the README's bump
+   procedure: the offline suites on the `.github` PR, then a dry-run pin bump in one receiver
+   (`CASCADE_DRY_RUN=true` there), then the other repos.
 5. B1 to B5 merge after this, each receiver behind `CASCADE_DRY_RUN=true`.
 
 Rollback: callers stop at once by stop switches (contract §9.2: `CASCADE_NOTIFY=off`,
@@ -599,8 +602,12 @@ can run a `main` job in any of them can mint a token for all seven repos. Rotati
 rotates it everywhere. During the cycle that reach also extended to whoever can push to
 `feat/add-release-cascade-workflows` in `.github` (Risks). It ended on 2026-10-04 under owner
 decision 26: the key and the client-id variable were deleted from both sandbox Environments and
-`cascade-sandbox-up` was made private again. The sandboxes are never re-armed; both are archived
-after Phase 3, and the seeds under `sandbox/` stay in this change as history. Future
+`cascade-sandbox-up` was made private again (read back 2026-10-04); deleting the key is the one
+disarm. Taking both sandboxes off the `opm-cascade` installation is an extra owner step (uncheck
+them in the App's installation settings; the supervisor reads the list back), not a disarm,
+because the App has one installation for the org and removing repos from it leaves the key in
+their Environments. The sandboxes are never re-armed; archiving both after Phase 3 ends their
+reach for good, and the seeds under `sandbox/` stay in this change as history. Future
 cascade-wiring changes are proven by the offline suites and a dry-run pin bump in one product
 repo first (README "Pinning and bumps").
 
@@ -608,10 +615,9 @@ repo first (README "Pinning and bumps").
 
 - **opm-operator under `sha_pinning_required` (E6): answered** by owner decision 24 (every repo
   pins by SHA), with the scripts at the pinned commit since review M2.
-- **Contract v3.** The five join changes cite contract v2, which still has `org-github-ref`,
-  `@main` callers, the reusable notify workflow and `publish` inside `cascade-receive.yml`; they
-  need the README caller shapes, the `dry-run` input and the bump procedure (review B2, a
-  supervisor step).
+- **Contract v3: answered.** `contract.md` is now version 3.1 (changelog 3.1.1), which the five
+  join changes cite; it carries the README caller shapes, the `dry-run` input and the bump
+  procedure (review B2).
 - **RELEASING.md** (contract §14, a workspace PR) must also describe the caller-owned
   `cascade` jobs, `tree`, and the S5/S6 findings above.
 
