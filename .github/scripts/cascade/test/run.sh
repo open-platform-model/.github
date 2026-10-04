@@ -13,7 +13,7 @@ set -euo pipefail
 files=(semver files stub lookups newest agreement prtext requests)
 [ $# -eq 0 ] || files=("$@")
 for f in "${files[@]}"; do
-  [ -f "$T_HERE/cases/$f.sh" ] || continue
+  [ -f "$T_HERE/cases/$f.sh" ] || { fail "case file $f" "test/cases/$f.sh not found"; continue; }
   # shellcheck source=/dev/null
   . "$T_HERE/cases/$f.sh"
 done

@@ -229,6 +229,8 @@ printf 'ping @octocat\nsecond line without newline' >"$FX/notes-mention"
 run env CASCADE_NOTES_FILE="$FX/notes-mention" bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 check "body: a mention in Notes passes through unchanged" bash -c '
   [ "$2" = 0 ] && [ "$(sed -n "/^<!-- cascade-notes:/,\$p" <<<"$1" | tail -n +2)" = "$(cat "$3")" ]' _ "$OUT" "$RC" "$FX/notes-mention"
+check "body: a mention in Notes adds no warning (contract 11 C1)" \
+  bash -c '[[ $1 == *$'"'"'## Warnings\n\n- None.\n'"'"'* ]] && [ -z "$2" ]' _ "$OUT" "$ERR"
 : >"$FX/notes-empty"
 run env CASCADE_NOTES_FILE="$FX/notes-empty" bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 check "body: empty notes end the body at the marker" bash -c '[ "$(tail -n 1 <<<"$1")" = "<!-- cascade-notes: the bot keeps everything below this line -->" ]' _ "$OUT"

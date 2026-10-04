@@ -30,7 +30,7 @@ prerelease, and `check-files` on an invalid file.
 ### Requirement: Offline test suite
 
 `.github/scripts/cascade/test/run.sh` SHALL run with no network access, print `PASS <case>` or
-`FAIL <case>: <reason>` per case, and exit 0 when all pass and 1 otherwise. It SHALL put
+`FAIL <case>: <reason>` per case, and exit 0 when all pass and 1 otherwise. A case file name given on the command line that does not exist SHALL be a failure. It SHALL put
 `test/shim/` first on `PATH` and set `CASCADE_FIXTURE_DIR`; the resolver SHALL have no fixture
 code path of its own. The `curl` shim SHALL accept only the resolver's curl shape (anything else
 is exit 2), log its argument vector to `$CASCADE_FIXTURE_DIR/curl.log`, and answer from

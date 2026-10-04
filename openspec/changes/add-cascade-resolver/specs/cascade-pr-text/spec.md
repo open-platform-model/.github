@@ -202,4 +202,4 @@ it MUST NOT be read as "no match".
 #### Scenario: Mention in Notes passes through
 
 - **WHEN** `CASCADE_NOTES_FILE` contains `ping @octocat`
-- **THEN** `body` exits 0 and the Notes text is byte-identical to the file
+- **THEN** `body` exits 0 and the Notes text is byte-identical to the file, with no warning added
