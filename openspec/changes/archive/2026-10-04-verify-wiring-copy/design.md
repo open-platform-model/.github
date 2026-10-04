@@ -53,7 +53,7 @@ same trust one file over, and it would change the CI step in five repos.
 
 Config key `extra-references` (optional; absent means `[]`): a list of maps with exactly the keys
 `file` (a workflow file name, `^[A-Za-z0-9._-]+\.ya?ml$`) and `kind`. The only kind is `resolver`:
-a step whose `with.repository` is `open-platform-model/.github` in any case. Each entry adds one
+a step whose `with.repository` is any owner's `.github` in any case, or an expression (D3). Each entry adds one
 `<file> resolver` to the expected reference list, so a declared reference is held to the same
 rules as the fixed ones: the one SHA across all references and the pin comment. One entry per
 reference; a missing or surplus reference fails `.github references`. Any other type, item key or
@@ -75,6 +75,13 @@ the `with` keys `path`, `persist-credentials`, `ref`, `repository`, with `persis
 the boolean `false`. That refuses `token`, `ssh-key` and `github-server-url`, so no secret
 reaches a `.github` checkout. All four receivers' `cascade-task.yml` and opm-operator's
 `module-deps.yml` on `main` already have this shape.
+
+After review, a `.github` checkout is any step whose `with.repository` ends in `/.github` (any
+owner, any case) or is an expression, since `${{ github.repository_owner }}/.github` with a
+token passed the literal match; such a step also counts as a `resolver` reference. An
+expression-valued `repository` on any step, and a `run:` step that names
+`open-platform-model/.github` (or `}}` or `repository_owner` followed by `/.github`), fail
+outright: no repo uses either.
 
 ### D4: Runbook for a failed API call
 

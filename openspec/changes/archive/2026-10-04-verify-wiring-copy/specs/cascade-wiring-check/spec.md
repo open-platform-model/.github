@@ -65,8 +65,8 @@ compares it)` and make no request.
 ### Requirement: Declared extra references
 
 Each `extra-references` item SHALL add one expected `.github` reference of its kind in its file.
-A `resolver` reference is a step whose `with.repository` is `open-platform-model/.github` in any
-case. A declared reference SHALL be held to the rules of the fixed references: the one full SHA
+A `resolver` reference is a step whose `with.repository` ends in `/.github` in any case, or is an
+expression. A declared reference SHALL be held to the rules of the fixed references: the one full SHA
 shared by every `.github` reference and the config's pin comment. A reference neither fixed nor
 declared, and a declared one that is missing, SHALL fail `.github references` with exit 1.
 
@@ -90,12 +90,25 @@ declared, and a declared one that is missing, SHALL fail `.github references` wi
 Every resolver checkout of `.github`, fixed or declared, SHALL use `actions/checkout` at a full
 SHA with exactly the `with` keys `path`, `persist-credentials`, `ref` and `repository`, and
 `persist-credentials` SHALL be the boolean `false`. Anything else SHALL fail with exit 1 naming
-the file and step.
+the file and step. A step counts as a `.github` checkout when its `with.repository` ends in
+`/.github` (any owner, any case) or contains `${{`. A step whose `repository` input is an
+expression, and a `run:` step that names `open-platform-model/.github` (or `}}` or
+`repository_owner` followed by `/.github`), SHALL fail with exit 1.
 
 #### Scenario: A token on the resolver checkout
 
 - **WHEN** a resolver checkout passes `token: ${{ secrets.GITHUB_TOKEN }}`
 - **THEN** the check exits 1 naming that checkout
+
+#### Scenario: A checkout through repository_owner
+
+- **WHEN** `cascade-task.yml` gains `actions/checkout@v4` with `repository: ${{ github.repository_owner }}/.github`, `ref: main` and a token
+- **THEN** the check exits 1 naming the expression, the checkout and the unexpected reference
+
+#### Scenario: A clone in a run step
+
+- **WHEN** a `run:` step runs `git clone https://github.com/open-platform-model/.github`
+- **THEN** the check exits 1 naming that step
 
 ### Requirement: Nothing reaches the CI wiring step
 

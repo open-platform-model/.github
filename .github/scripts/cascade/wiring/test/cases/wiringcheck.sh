@@ -461,6 +461,20 @@ for m in '.jobs.compute.steps[0].with.token = "${{ secrets.GITHUB_TOKEN }}"' \
   wc_run
   check "wiring check refuses a resolver checkout: $m" bash -c '[ "$1" = 1 ] && [[ $2 == *".github checkouts not actions/checkout@<sha>"*"got [module-deps.yml:compute.steps.0]"* ]]' _ "$RC" "$ERR"
 done
+# A .github checkout by any spelling the literal name misses, and a clone in a run: step.
+OWNER_CO='{"name": "x", "uses": "actions/checkout@v4", "with": {"repository": "${{ github.repository_owner }}/.github", "ref": "main", "token": "${{ secrets.GITHUB_TOKEN }}"}}'
+wc_mut "an undeclared .github checkout through repository_owner" cascade-task.yml ".jobs.test.steps += [$OWNER_CO]" "steps whose repository input is an expression"
+wc_mut "a repository_owner checkout is held to the checkout rule" cascade-task.yml ".jobs.test.steps += [$OWNER_CO]" "got [cascade-task.yml:test.steps.1]"
+wc_mut "a repository_owner checkout is an unexpected reference" cascade-task.yml ".jobs.test.steps += [$OWNER_CO]" ".github references"
+wc_mut "a pinned checkout of another owner's .github" ci.yml \
+  '.jobs.ci.steps += [{"uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "with": {"repository": "someone/.github", "ref": "main", "token": "${{ github.token }}"}}]' ".github checkouts not actions/checkout@<sha>"
+wc_mut "a git clone of .github in a run: step" cascade-task.yml \
+  '.jobs.test.steps += [{"run": "git clone https://github.com/open-platform-model/.github org"}]' "run: steps that fetch .github outside the pinned checkouts: expected [], got [cascade-task.yml:test.steps.1]"
+wc_mut "a clone of the owner's .github in a run: step" ci.yml \
+  '.jobs.ci.steps += [{"run": "git clone \"https://github.com/${{ github.repository_owner }}/.github\""}]' "run: steps that fetch .github"
+wc_fresh
+yq -i '.jobs.ci.steps += [{"run": "bash ${{ github.workspace }}/.github/scripts/x.sh .github/y"}]' "$WCD/.github/workflows/ci.yml"
+wc_ok "a run: step using the repo's own .github/ paths passes"
 wc_fresh
 yq -i '.jobs.test.steps[0].with.token = "${{ github.token }}"' "$WCD/.github/workflows/cascade-task.yml"
 wc_run

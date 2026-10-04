@@ -476,9 +476,12 @@ bad config exits 2. It checks:
 - one full SHA and the pin comment on every `.github` reference, matched in any case (the four
   `uses:`, the `cascade-task.yml` resolver `ref:`, and each resolver checkout the config's
   `extra-references` declares), and no other reference;
-- every checkout of `.github` (a step whose `with.repository` names it) is
-  `actions/checkout@<full SHA>` with exactly `repository`, `ref`, `path` and
-  `persist-credentials: false`, so no token or SSH key reaches it;
+- every checkout of `.github` (a step whose `with.repository` is any owner's `.github` in any
+  case) is `actions/checkout@<full SHA>` with exactly `repository`, `ref`, `path` and
+  `persist-credentials: false`, so no token or SSH key reaches it; no step's `repository` input
+  is an expression (`${{ github.repository_owner }}/.github` would name `.github` unseen), and
+  no `run:` step names `open-platform-model/.github` or an expression or owner variable followed
+  by `/.github` (a `git clone` past the pinned checkouts);
 - that the config's CI job runs it as exactly the step above on every pull request: no path
   filter, no `if:` or `continue-on-error`, no `shell` or `working-directory` of its own or from
   `defaults`;

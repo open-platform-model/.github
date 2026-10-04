@@ -385,15 +385,19 @@ done <<<"$PUBLISH_WFS"
 
 # Every .github reference (the uses: lines and the cascade-task.yml resolver
 # ref), in any letter case, carries one full SHA and the pin comment; a
-# reference spelled in another case shows up as an unexpected one.
+# reference spelled in another case shows up as an unexpected one. A checkout
+# counts as one of .github when its repository is any owner's .github or an
+# expression (which could name it, ${{ github.repository_owner }}/.github),
+# so it is held to the pin and the checkout rule below.
+GH_CO_RE='(?i)(^|/)\.github$|\$\{\{'
 refs=""
 for f in "$W"/*.yml "$W"/*.yaml; do
   [ -e "$f" ] || continue
   b=${f##*/}
-  refs+=$(R="$GH_REF_RE" yq -r '
+  refs+=$(R="$GH_REF_RE" CO="$GH_CO_RE" yq -r '
     (.jobs // {} | to_entries[] | select((.value.uses // "") | test(strenv(R))) | .value.uses + " " + (.value.uses | line_comment)),
     (.jobs // {} | to_entries[] | (.value.steps // [])[] | select((.uses // "") | test(strenv(R))) | .uses + " " + (.uses | line_comment)),
-    (.jobs // {} | to_entries[] | (.value.steps // [])[] | select((.with.repository // "") | test("(?i)^open-platform-model/\\.github$")) | "resolver@" + (.with.ref // "") + " " + ((.with.ref // "") | line_comment))
+    (.jobs // {} | to_entries[] | (.value.steps // [])[] | select((.with.repository // "") | tostring | test(strenv(CO))) | "resolver@" + (.with.ref // "") + " " + ((.with.ref // "") | line_comment))
   ' "$f" | sed "s|^|$b |")$'\n'
 done
 refs=$(printf '%s' "$refs" | sed '/^$/d' | sort)
@@ -423,8 +427,8 @@ bad_co=""
 for f in "$W"/*.yml "$W"/*.yaml; do
   [ -e "$f" ] || continue
   b=${f##*/}
-  bad_co+=$(yq -r '.jobs // {} | to_entries[] | .key as $j | (.value.steps // []) | to_entries[]
-    | select((.value.with.repository // "") | test("(?i)^open-platform-model/\\.github$"))
+  bad_co+=$(CO="$GH_CO_RE" yq -r '.jobs // {} | to_entries[] | .key as $j | (.value.steps // []) | to_entries[]
+    | select((.value.with.repository // "") | tostring | test(strenv(CO)))
     | select(((.value.uses // "") | test("^actions/checkout@[0-9a-f]{40}$") | not)
       or ((.value.with | keys | sort | join(",")) != "path,persist-credentials,ref,repository")
       or ((.value.with["persist-credentials"] | tag) != "!!bool")
@@ -433,6 +437,23 @@ for f in "$W"/*.yml "$W"/*.yaml; do
 done
 eq ".github checkouts not actions/checkout@<sha> with only repository, ref, path and persist-credentials: false" \
   "" "$(printf '%s' "$bad_co" | sed '/^$/d' | tr '\n' ' ' | sed 's/ $//')"
+
+# A repository input that is an expression could name .github while the
+# pinned references above cannot tell; and a run: step that clones or
+# downloads .github bypasses the checkout rule. No repo needs either.
+expr_repo="" run_fetch=""
+for f in "$W"/*.yml "$W"/*.yaml; do
+  [ -e "$f" ] || continue
+  b=${f##*/}
+  expr_repo+=$(yq -r '.jobs // {} | to_entries[] | .key as $j | (.value.steps // []) | to_entries[]
+    | select((.value.with.repository // "") | tostring | test("\\$\\{\\{")) | $j + ".steps." + (.key | tostring)' "$f" | sed "s|^|$b:|")$'\n'
+  run_fetch+=$(yq -r '.jobs // {} | to_entries[] | .key as $j | (.value.steps // []) | to_entries[]
+    | select((.value.run // "") | tostring
+      | test("(?i)open-platform-model/\\.github|(\\}\\}|repository_owner\\}?)\\s*/\\.github(\\.git)?([^A-Za-z0-9_./-]|$)"))
+    | $j + ".steps." + (.key | tostring)' "$f" | sed "s|^|$b:|")$'\n'
+done
+eq "steps whose repository input is an expression" "" "$(printf '%s' "$expr_repo" | sed '/^$/d' | tr '\n' ' ' | sed 's/ $//')"
+eq "run: steps that fetch .github outside the pinned checkouts" "" "$(printf '%s' "$run_fetch" | sed '/^$/d' | tr '\n' ' ' | sed 's/ $//')"
 
 # --- the check runs on every PR -----------------------------------------------
 
