@@ -87,8 +87,9 @@ docs. The org rulesets prevent it;
 [`.github/workflows/tag-ledger.yml`](.github/workflows/tag-ledger.yml) detects
 it if prevention ever fails or is switched off.
 
-Scope: `core`, `library`, `catalog_opm`, `cli`, `opm-operator` (the repos that
-release). `modules` is out of scope. The list is `REPOS` in the workflow.
+Scope: `core`, `library`, `catalog_opm`, `cli`, `opm-operator`, `opm` (the
+repos that release). `modules` is out of scope. The list is `REPOS` in the
+workflow.
 
 It runs daily at 04:17 UTC and on manual dispatch. Each run:
 

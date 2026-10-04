@@ -10,12 +10,12 @@ Never dispatch `tag-ledger.yml` from this branch (`design.md`, D4).
 
 ## 1. Scan the opm repo
 
-- [ ] 1.1 In `.github/workflows/tag-ledger.yml`, change `REPOS` to `core library catalog_opm cli opm-operator opm`. Change no other line in the workflow, `tag-ledger.sh` or `ledger-integrity.sh`, and confirm with `git diff --stat` that those three files show only this one line.
-- [ ] 1.2 In `README.md`, add `opm` to the tag-ledger "Scope:" list after `opm-operator`, wording per `design.md` D3.
-- [ ] 1.3 Write the PATH shims and recording wrappers of `design.md` D4 into the scratchpad: recording `git` and `curl` wrappers for V2, and replaying `git`, `curl` and `date` shims for V1 (`date` prints a fixed `2026-10-04T00:00:00Z`). Save `git show origin/tag-ledger:ledger.tsv` as the starting ledger.
-- [ ] 1.4 Run V2 once, recording: first require `rate.remaining` of at least 40 from `https://api.github.com/rate_limit`, then run the six repos with `GH_TOKEN` unset against a scratch copy of the ledger. It must exit 0 with empty FINDINGS, and its appended rows must include `opm` `v1.0.0-beta.1`. The recording is the V1 fixture tree for all six repos.
-- [ ] 1.5 Run V1 cases E-old, E-new, E-moved, E-deleted, E-revert and E-ruleset offline against the recorded fixtures with the worktree's `tag-ledger.sh`. Each case must hold as tabled in `design.md` D4. Record the outputs and a result table for the PR body in the scratchpad.
-- [ ] 1.6 Gates green, then commit `ci(tag-ledger): scan the opm repo for tag drift`.
+- [x] 1.1 In `.github/workflows/tag-ledger.yml`, change `REPOS` to `core library catalog_opm cli opm-operator opm`. Change no other line in the workflow, `tag-ledger.sh` or `ledger-integrity.sh`, and confirm with `git diff --stat` that those three files show only this one line.
+- [x] 1.2 In `README.md`, add `opm` to the tag-ledger "Scope:" list after `opm-operator`, wording per `design.md` D3.
+- [x] 1.3 Write the PATH shims and recording wrappers of `design.md` D4 into the scratchpad: recording `git` and `curl` wrappers for V2, and replaying `git`, `curl` and `date` shims for V1 (`date` prints a fixed `2026-10-04T00:00:00Z`). Save `git show origin/tag-ledger:ledger.tsv` as the starting ledger.
+- [x] 1.4 Run V2 once, recording: first require `rate.remaining` of at least 40 from `https://api.github.com/rate_limit`, then run the six repos with `GH_TOKEN` unset against a scratch copy of the ledger. It must exit 0 with empty FINDINGS, and its appended rows must include `opm` `v1.0.0-beta.1`. The recording is the V1 fixture tree for all six repos.
+- [x] 1.5 Run V1 cases E-old, E-new, E-moved, E-deleted, E-revert and E-ruleset offline against the recorded fixtures with the worktree's `tag-ledger.sh`. Each case must hold as tabled in `design.md` D4. Record the outputs and a result table for the PR body in the scratchpad.
+- [x] 1.6 Gates green, then commit `ci(tag-ledger): scan the opm repo for tag drift`.
 
 ## 2. Mention-guard Limits paragraph
 
