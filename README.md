@@ -203,6 +203,17 @@ only). Versions are always `v`-prefixed SemVer.
 | 1 | error: network after retries, an unexpected status, a malformed `.cascade-*` file, a missing tool, the mention lint; never a guessed version |
 | 2 | usage error |
 
+`newest` proposes only a version whose release tag is on its repo's `main`,
+for every pin whose versions are tags of an org repo (`go
+github.com/open-platform-model/<repo>`, `release`, `opm-cli`, and the `cue`
+modules `opmodel.dev/core` and `opmodel.dev/catalogs/opm`, whose tags are
+`opm-v*`). A tag made on a commit `main` never had (the release App can create
+one) is still served by the Go proxy and listed by git, so `newest` clones the
+repo once per run, bare and without trees, fetches each probed tag and skips,
+with a warning, one whose commit is not an ancestor of `main`. Release branches
+(`release/*`) are not accepted yet; the release-branch automation extends this
+check when it lands.
+
 It needs `bash`, `curl`, `jq`, `git` and mikefarah `yq` v4, and no
 credentials: it never sends a token anywhere but GHCR's own anonymous pull
 token to `ghcr.io`, and never calls `api.github.com`.

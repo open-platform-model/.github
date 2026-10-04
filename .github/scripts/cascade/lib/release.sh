@@ -13,10 +13,20 @@ GH=https://github.com/open-platform-model
 # actions/checkout tree's persisted AUTHORIZATION extraheader or a laptop's
 # helper never reaches github.com, and it never prompts for a username.
 ls_remote_tags() {
+  git_isolated "$WORK" ls-remote --tags --refs "$GH/$1" 'refs/tags/v*'
+}
+
+# git_isolated <dir> <git args...>: git in <dir> with no system, global or
+# environment config, no credential helper, no prompt, and a stalled
+# transfer aborted after 60 seconds. ls-remote and the tag-on-main check run
+# through it.
+git_isolated() {
+  local d="$1"
+  shift
   (
     unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_ASKPASS SSH_ASKPASS
     export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="${WORK%/*}"
-    exec git -C "$WORK" -c credential.helper= -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 ls-remote --tags --refs "$GH/$1" 'refs/tags/v*'
+    exec git -C "$d" -c credential.helper= -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 "$@"
   )
 }
 
@@ -54,4 +64,75 @@ release_published() {
     esac
   done
   PUB=1
+}
+
+# tag_source <pin key>: prints "<repo> <tag prefix>" when the pin's versions
+# are release tags of an org repo (a Go module at the repo root, with or
+# without /vN, a release repo, core and the opm catalog on GHCR); exit 1 for
+# any other pin (fixtures, templates, oci), which has no tag to check.
+tag_source() {
+  local k="$1" r rest
+  case "$k" in
+    opmodel.dev/core@v[0-9]*) echo "core " ;;
+    opmodel.dev/catalogs/opm@v[0-9]*) echo "catalog_opm opm-" ;;
+    github.com/open-platform-model/*)
+      r="${k#github.com/open-platform-model/}"
+      rest=""
+      if [[ $r == */* ]]; then rest="${r#*/}"; r="${r%%/*}"; fi
+      [[ $r =~ $REPO_RE ]] || return 1
+      [ -z "$rest" ] || [[ $rest =~ ^v[0-9]+$ ]] || return 1
+      echo "$r "
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# on_main <repo> <tag>: sets ONMAIN to 1 when the tag exists and its commit
+# is reachable from the repo's main, else 0. The repo is cloned once per run,
+# bare and without trees (commits only), and each tag is fetched on its own;
+# a failed clone or fetch is retried like ls-remote (4 attempts in all), then
+# exit 1. A forged tag, made with the release App on a commit main never had,
+# is still served by the Go proxy and git; this keeps it from becoming a
+# cascade PR.
+declare -A ONMAIN_DIR=()
+on_main() {
+  local repo="$1" tag="$2" dir attempt rc delays=(2 4 8)
+  need_tools git
+  work_dir
+  dir="${ONMAIN_DIR[$repo]:-}"
+  if [ -z "$dir" ]; then
+    dir="$WORK/onmain-$repo.git"
+    attempt=1
+    until git_isolated "$WORK" clone --bare --quiet --filter=tree:0 --no-tags --single-branch --branch main \
+      "$GH/$repo" "$dir" 2>"$WORK/git.err"; do
+      rm -rf "$dir"
+      if [ "$attempt" -ge 4 ]; then
+        die "cannot clone \`$repo\` to check its tags against main (failed after 4 attempts: $(head -c 200 "$WORK/git.err"))"
+      fi
+      note "the clone of \`$repo\` failed; retrying in ${delays[attempt - 1]}s"
+      "${CASCADE_SLEEP:-sleep}" "${delays[attempt - 1]}"
+      attempt=$((attempt + 1))
+    done
+    ONMAIN_DIR[$repo]="$dir"
+  fi
+  attempt=1
+  until git_isolated "$dir" fetch --quiet --no-tags origin "+refs/tags/$tag:refs/tags/$tag" 2>"$WORK/git.err"; do
+    if grep -qi "couldn't find remote ref" "$WORK/git.err"; then
+      ONMAIN=0
+      return 0
+    fi
+    if [ "$attempt" -ge 4 ]; then
+      die "cannot fetch the tag \`$tag\` of \`$repo\` (failed after 4 attempts: $(head -c 200 "$WORK/git.err"))"
+    fi
+    note "the fetch of \`$tag\` from \`$repo\` failed; retrying in ${delays[attempt - 1]}s"
+    "${CASCADE_SLEEP:-sleep}" "${delays[attempt - 1]}"
+    attempt=$((attempt + 1))
+  done
+  rc=0
+  git_isolated "$dir" merge-base --is-ancestor "refs/tags/$tag^{commit}" refs/heads/main 2>"$WORK/git.err" || rc=$?
+  case "$rc" in
+    0) ONMAIN=1 ;;
+    1) ONMAIN=0 ;;
+    *) die "cannot compare the tag \`$tag\` of \`$repo\` with main: $(head -c 200 "$WORK/git.err")" ;;
+  esac
 }

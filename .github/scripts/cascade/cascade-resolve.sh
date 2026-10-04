@@ -34,6 +34,12 @@
 #      file, missing tool, mention lint); never a guessed or older version
 #   2  usage error (unknown subcommand or flag, missing or malformed argument)
 #
+# newest answers a version whose release tag is on its repo's main only, for
+# a pin whose versions are tags of an org repo (Go modules at a repo root,
+# release repos and the opm CLI, core and the opm catalog on GHCR): it clones
+# that repo once, bare and without trees, and skips with a warning a
+# published version whose tag is missing or off main.
+#
 # Tools: bash, coreutils, curl, jq, git, mikefarah yq v4. No credentials: GHCR
 # is read with its anonymous pull token, GitHub through git and anonymous
 # downloads, never api.github.com.

@@ -7,10 +7,10 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 1. The resolver refuses tags that are not on main
 
-- [ ] 1.1 `lib/release.sh`: `on_main <repo> <tag>` (tree-less bare clone once per repo per run, fetch of the one tag, `merge-base --is-ancestor`, the `ls_remote_tags` isolation, four attempts) and `tag_source` (pin key to repo and tag prefix) (D5)
-- [ ] 1.2 `lib/newest.sh` `probe_first`: skip a published candidate whose tag is not on main, with the warning; the script header and README name the check
-- [ ] 1.3 Test shim `git`: `clone` and `fetch` of a `https://github.com/open-platform-model/<repo>` URL answer from a fixture repo `$CASCADE_FIXTURE_DIR/git/<repo>.git` (fail when absent); every existing case that walks a tagged kind gets a fixture repo with its tags on main; new cases: a forged go tag skipped for the older one, a catalog tag with `opm-`, a tag missing, a clone failing four times (exit 1), no credentials or config reaching the clone
-- [ ] 1.4 Gates green, then commit `fix(cascade): propose only upstream tags that are on their repo's main`
+- [x] 1.1 `lib/release.sh`: `on_main <repo> <tag>` (tree-less bare clone once per repo per run, fetch of the one tag, `merge-base --is-ancestor`, the `ls_remote_tags` isolation, four attempts) and `tag_source` (pin key to repo and tag prefix) (D5)
+- [x] 1.2 `lib/newest.sh` `probe_first`: skip a published candidate whose tag is not on main, with the warning; the script header and README name the check
+- [x] 1.3 Test shim `git`: `clone` and `fetch` of a `https://github.com/open-platform-model/<repo>` URL answer from a fixture repo `$CASCADE_FIXTURE_DIR/git/<repo>.git` (fail when absent); every existing case that walks a tagged kind gets a fixture repo with its tags on main; new cases: a forged go tag skipped for the older one, a catalog tag with `opm-`, a tag missing, a clone failing four times (exit 1), no credentials or config reaching the clone
+- [x] 1.4 Gates green, then commit `fix(cascade): propose only upstream tags that are on their repo's main`
 
 ## 2. Publish bounds the increment and renders the PR text
 
