@@ -25,7 +25,7 @@ are committed first as `docs(openspec): plan harden-cascade-publish`.
 
 ## 3. The canonical wiring check
 
-- [ ] 3.1 Add `.github/scripts/cascade/wiring-check.sh` and its config format (D4)
-- [ ] 3.2 Add `wiring/test/cases/wiringcheck.sh` (run by the wiring suite): a fixture repo built from the README caller shapes plus a `release.yml`, `cascade-task.yml` and CI workflow passes for a receiver and for core; one mutation per check refuses (keys, names, timeouts, needs as string and list, `if:`, `tag`, env allow-list and a non-map env, `runs-on`, permissions, triggers, concurrency, extra `with` keys, gates-only `if:` and input, `labels-managed: "false"`, every variant spelling of the key and the Environment, `secrets: inherit`, two SHAs, a missing pin comment, a CI path filter, a CI `if:` and `continue-on-error`); config errors exit 2 (unknown key, `BASH_ENV` and `GITHUB_TOKEN` in `env-allow`, `publish` on core, a string `receiver`)
-- [ ] 3.3 README: "The wiring check" lists what the script checks, the config with each repo's values, and how a repo syncs and compares its copy (D5); the pin-bump steps name the copy
-- [ ] 3.4 Gates green, then commit `feat(cascade): add the canonical wiring check`
+- [x] 3.1 Add `.github/scripts/cascade/wiring-check.sh` and its config format (D4)
+- [x] 3.2 Add `wiring/test/cases/wiringcheck.sh` (run by the wiring suite): a fixture repo built from the README caller shapes plus a `release.yml`, `cascade-task.yml` and CI workflow passes for a receiver and for core; one mutation per check refuses (keys, names, timeouts, needs as string and list, `if:`, `tag`, env allow-list and a non-map env, `runs-on`, permissions, triggers, concurrency, extra `with` keys, gates-only `if:` and input, `labels-managed: "false"`, every variant spelling of the key and the Environment, `secrets: inherit`, two SHAs, a missing pin comment, a CI path filter, a CI `if:` and `continue-on-error`); config errors exit 2 (unknown key, `BASH_ENV` and `GITHUB_TOKEN` in `env-allow`, `publish` on core, a string `receiver`)
+- [x] 3.3 README: "The wiring check" lists what the script checks, the config with each repo's values, and how a repo syncs and compares its copy (D5); the pin-bump steps name the copy
+- [x] 3.4 Gates green, then commit `feat(cascade): add the canonical wiring check`

@@ -170,6 +170,12 @@ that makes a shell, node, git or the loader run code (`BASH_ENV`, `ENV`, `NODE_O
 `GITHUB_*`, `ACTIONS_*`, `RUNNER_*` and `CASCADE_*` name) are config errors (exit 2), so a
 config edit cannot widen the allow-list to a code-running variable.
 
+Checked on 2026-10-04 against each product repo's `origin/main` workflows (core `98c1877`,
+catalog_opm `3288406`, library `93a892f`, opm-operator `81a640d`, cli `dc3f77a1`) with the
+configs in the README table: after the D1 caller edit all five print `cascade wiring: ok`; as
+they are, core passes and each receiver fails on exactly three lines (the publish `with` keys,
+its `if:` and its `gates-only` input).
+
 ### D5. Keeping the copies identical
 
 The script is pinned like the actions: a repo's copy is the file at the `.github` SHA its

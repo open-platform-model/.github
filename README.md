@@ -319,8 +319,9 @@ reference on its own. To roll a change out:
    checks.
 3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
    PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
-   every cascade reference and changes nothing else, unless the `.github` change altered an
-   input, in which case the caller edit rides the same PR. Find them with
+   every cascade reference and the copy of the wiring check (below) and changes nothing else,
+   unless the `.github` change altered an input or a caller shape, in which case the caller edit
+   and the `.tasks/cascade/wiring-check.yaml` edit ride the same PR. Find them with
    `grep -rn -A1 'open-platform-model/.github' .github/workflows`: the `uses:` lines and the
    `repository:` line of the `cascade-task.yml` checkout, whose `ref:` the `-A1` prints on the
    next line (comment lines also match and need no change). All of a repo's cascade references
@@ -333,15 +334,76 @@ reference on its own. To roll a change out:
    repo runs only its own pin. To roll back, move the pins back the same way (no canary needed for a SHA the repo
    already ran).
 
-**The wiring check.** Each product repo's `task cascade:wiring:check` runs in its required CI
-job and checks the caller shapes below: one SHA and the pin comment on every cascade reference,
-exact key sets on the key-holding jobs (`notify-downstream`, `publish`) and their one step,
-`runs-on: ubuntu-latest` on those jobs, no `secrets: inherit`, the key only where the contract
-puts it, and `release.yml`'s top-level `env` keys from a per-repo allow-list (core
-`CUE_VERSION`, `CUE_REGISTRY`; catalog_opm `OPM_REGISTRY`, `CUE_REGISTRY`; opm-operator
-`REGISTRY`, `IMAGE_NAME`, `CUE_VERSION`; library and cli none). The script lives in the repo's
-own tree, so a PR can change it along with the workflows: it guards against mistakes, and
-review plus the `main` ruleset guard against a deliberate edit.
+**The wiring check.** One script,
+[`.github/scripts/cascade/wiring-check.sh`](.github/scripts/cascade/wiring-check.sh), checks
+every product repo's caller shapes against the shapes below; each repo runs a byte-identical copy
+at `.tasks/cascade/wiring-check.sh` through `task cascade:wiring:check`, a step of its required CI
+job, with its own values in `.tasks/cascade/wiring-check.yaml`. It prints every mismatch and
+exits 1, or prints `cascade wiring: ok, .github <SHA> (<pin comment>)`; a bad config exits 2.
+It checks:
+
+- the key-holding jobs (`notify-downstream`, `publish`): exact job and step keys, names,
+  timeouts (20 and 15 minutes), `environment: cascade`, `runs-on: ubuntu-latest`, permissions,
+  one SHA-pinned cascade action with exact inputs, the client id and the key; notify's `needs`,
+  `if:` and `tag` from the config; publish's `needs`, `if:` (with the gates-only clause),
+  `dry-run`, `gates-only` and `labels-managed` (a YAML boolean, from the config);
+- `release.yml`'s top-level `env`: a map whose keys are all on the config's `env-allow`;
+- for a receiver: the triggers, permissions, concurrency and jobs of `deps-cascade.yml` and
+  `cascade-gates.yml`, and that the `cascade` job passes only inputs `cascade-receive.yml` takes;
+- in every workflow: the App key read only by the key-holding jobs (matched without case, and as
+  `secrets['…']` or `toJSON(secrets)`), the cascade Environment (any case, a map, or an
+  expression) only on them, and no call into `.github` passing `secrets:`;
+- one full SHA and the pin comment on every `.github` reference (the four `uses:` and the
+  `cascade-task.yml` resolver `ref:`);
+- that the config's CI job runs it as a plain step on every pull request (no path filter, no
+  `if:`, no `continue-on-error`).
+
+The config is data, read with `yq`, never run. An `env-allow` entry that names a variable which
+makes a shell, node, git or the loader run code (`BASH_ENV`, `ENV`, `NODE_OPTIONS`, `SHELLOPTS`,
+`PS4`, `LD_PRELOAD`, `PATH` and others) or any `GITHUB_*`, `ACTIONS_*`, `RUNNER_*` or `CASCADE_*`
+name is a config error, so the allow-list cannot be widened to one. Each repo's values:
+
+| Repo | `receiver` | `env-allow` | `ci` (workflow, job) | `notify.needs` | `labels-managed` |
+| --- | --- | --- | --- | --- | --- |
+| core | `false` | `CUE_VERSION`, `CUE_REGISTRY` | `ci.yml`, `ci` | `release-please`, `publish-cue` | (none) |
+| catalog_opm | `true` | `OPM_REGISTRY`, `CUE_REGISTRY` | `ci.yml`, `ci` | `release-please`, `publish-cue` | `false` |
+| library | `true` | (none) | `test.yml`, `test` | `release-please` | `false` |
+| opm-operator | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
+| cli | `true` | (none) | `pr.yml`, `lint` | `release-please`, `goreleaser` | `true` |
+
+`pin-comment` is `.github main` everywhere; `notify.if` and `notify.tag` are each repo's own
+`release.yml` values. catalog_opm's file, for example:
+
+```yaml
+pin-comment: .github main
+receiver: true
+env-allow: [OPM_REGISTRY, CUE_REGISTRY]
+ci:
+  workflow: ci.yml
+  job: ci
+notify:
+  needs: [release-please, publish-cue]
+  if: ${{ !cancelled() && needs.publish-cue.outputs.published == 'true' && vars.CASCADE_NOTIFY != 'off' }}
+  tag: ${{ needs.release-please.outputs.opm_tag_name }}
+publish:
+  labels-managed: false
+```
+
+**Keeping the copy in sync.** A repo's copy is the file at the `.github` SHA its cascade
+references pin, and it moves only with the pin: the pin-bump PR (step 3 above) replaces it with
+
+```sh
+sha=<the new .github SHA>
+gh api "repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=$sha" \
+  -H 'Accept: application/vnd.github.raw' >.tasks/cascade/wiring-check.sh
+```
+
+so the PR's diff of the copy is exactly `.github`'s change between the two SHAs, and a reviewer
+confirms it with the same `gh api` call piped to `cmp - .tasks/cascade/wiring-check.sh`. A change
+to the check is made here, never in a copy. The script cannot verify its own provenance offline,
+so this is the review's job. The copy and the config live in the repo's own tree, so a PR can
+change them along with the workflows: the check guards against mistakes, and review plus the
+`main` ruleset guard against a deliberate edit.
 
 `<sha>` in the shapes below stands for that full SHA.
 
