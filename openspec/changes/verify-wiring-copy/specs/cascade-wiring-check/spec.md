@@ -1,0 +1,111 @@
+## MODIFIED Requirements
+
+### Requirement: Per-repo wiring config
+
+Each product repo's values SHALL live in `.tasks/cascade/wiring-check.yaml`, read as data and
+never sourced, with exactly the keys `pin-comment` (words), `receiver` (boolean), `env-allow`
+(list of upper-case variable names), `publish-workflows` (list of workflow file names, including
+`release.yml`), `ci` (`workflow`, `job`), `notify` (`needs`, `if`, `tag`), for a receiver
+only, `publish` (`labels-managed`, boolean), and optionally `extra-references` (a list of maps
+with exactly the keys `file`, a workflow file name, and `kind`, whose only value is `resolver`).
+The check SHALL refuse, as a config error, an unknown key, a wrong type, a `publish-workflows`
+list without `release.yml`, an `extra-references` item with another key, file name or kind, and an
+`env-allow` entry that is not `CUE_*`, `OPM_*`, `REGISTRY` or `IMAGE_NAME`: the names are allowed
+rather than denied, because too many variables make a shell, git, gh, node, curl or the dynamic
+loader run code, read other config or redirect traffic (`BASH_ENV`, `GIT_*`, `GH_*`, `NODE_*`,
+`LD_*`, `XDG_*`, `SSL_*`, `CURL_*`, `*_PROXY` and more).
+
+#### Scenario: Allow-list widened to a code-running variable
+
+- **WHEN** a repo adds `BASH_ENV` to `env-allow` and to `release.yml`'s `env`
+- **THEN** the check exits 2 naming the entry
+
+#### Scenario: Allow-list widened to a proxy or a git hook directory
+
+- **WHEN** a repo adds `HTTPS_PROXY` or `GIT_TEMPLATE_DIR` to `env-allow`
+- **THEN** the check exits 2 naming the entry
+
+#### Scenario: An extra reference of an unknown kind
+
+- **WHEN** a repo lists `extra-references: [{file: module-deps.yml, kind: action}]`, or an item with a third key, or a `file` with a path
+- **THEN** the check exits 2 naming the item
+
+### Requirement: Byte-identical copies
+
+Each product repo SHALL keep the script at `.tasks/cascade/wiring-check.sh` byte-identical to
+`.github/scripts/cascade/wiring-check.sh` at the `.github` SHA its cascade references pin, and
+SHALL replace it in the same PR that moves the pin. The README SHALL give the command that
+fetches the copy at a SHA and the command that compares it. With `--pin-on-main`, after the pin
+was found on `.github` `main`, the check SHALL fetch that file at the pinned SHA
+(`gh api -H 'Accept: application/vnd.github.raw'
+repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=<sha>`)
+and compare it byte for byte with the script file it is running; a difference SHALL print
+`differs from .github/scripts/cascade/wiring-check.sh at .github <sha>` and exit 1, and a failed
+request SHALL print `cannot fetch` and exit 1. Without the flag, the check SHALL print after its
+ok line `cascade wiring: the copy was not compared with .github <sha> (offline; --pin-on-main
+compares it)` and make no request.
+
+#### Scenario: Pin bump
+
+- **WHEN** a repo moves its cascade pin to a new `.github` SHA
+- **THEN** the same PR replaces `.tasks/cascade/wiring-check.sh` with the file at that SHA, and `cmp` against it reports no difference
+
+#### Scenario: A copy that drifted
+
+- **WHEN** the CI step runs a copy that differs by one byte from the file at the pinned SHA
+- **THEN** the check exits 1 naming the copy and the SHA
+
+#### Scenario: Offline run
+
+- **WHEN** `task cascade:wiring:check` runs the check without `--pin-on-main` on matching shapes
+- **THEN** it prints the ok line and then that the copy was not compared, makes no request, and exits 0
+
+## ADDED Requirements
+
+### Requirement: Declared extra references
+
+Each `extra-references` item SHALL add one expected `.github` reference of its kind in its file.
+A `resolver` reference is a step whose `with.repository` is `open-platform-model/.github` in any
+case. A declared reference SHALL be held to the rules of the fixed references: the one full SHA
+shared by every `.github` reference and the config's pin comment. A reference neither fixed nor
+declared, and a declared one that is missing, SHALL fail `.github references` with exit 1.
+
+#### Scenario: opm-operator's module dependency bot
+
+- **WHEN** opm-operator's config lists `extra-references: [{file: module-deps.yml, kind: resolver}]` and `module-deps.yml` checks out `.github` at the same SHA with `# .github main`
+- **THEN** the check passes
+
+#### Scenario: The extra reference at another SHA
+
+- **WHEN** the declared `module-deps.yml` checkout names a different SHA from the other references
+- **THEN** the check exits 1 with `one .github SHA`
+
+#### Scenario: An undeclared second resolver
+
+- **WHEN** a workflow checks out `.github` and the config does not declare it
+- **THEN** the check exits 1 with `.github references`
+
+### Requirement: Resolver checkouts pass no credentials
+
+Every resolver checkout of `.github`, fixed or declared, SHALL use `actions/checkout` at a full
+SHA with exactly the `with` keys `path`, `persist-credentials`, `ref` and `repository`, and
+`persist-credentials` SHALL be the boolean `false`. Anything else SHALL fail with exit 1 naming
+the file and step.
+
+#### Scenario: A token on the resolver checkout
+
+- **WHEN** a resolver checkout passes `token: ${{ secrets.GITHUB_TOKEN }}`
+- **THEN** the check exits 1 naming that checkout
+
+### Requirement: Runbook for a failed API call
+
+The README SHALL tell an admin what to do when the required wiring step fails because a GitHub API
+request failed (`cannot compare` or `cannot fetch`): re-run the job; if the outage or rate limit
+lasts, an admin MAY merge with admin bypass only a PR that changes nothing under `.github/**` or
+`.tasks/**`, after every other required check passed; `--pin-on-main` SHALL never be removed from
+the step. A `not on .github main` or `differs from` failure SHALL never be bypassed.
+
+#### Scenario: GitHub API outage
+
+- **WHEN** the wiring step fails with `cannot compare` on a PR that changes only Go code, and re-runs keep failing
+- **THEN** the runbook allows an admin bypass merge once every other required check is green, and forbids it for a PR touching `.tasks/cascade/wiring-check.sh`
