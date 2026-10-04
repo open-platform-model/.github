@@ -31,7 +31,7 @@ jobs:
       contents: read
       pull-requests: read
       statuses: write
-    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@d5d47bb4ab397fb53f6b598f325d5ee772ab48c7 # feat/add-release-cascade-workflows
+    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@038da125256b80e308d57903a468fa1bd462ecdc # feat/add-release-cascade-workflows
     with:
       dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
       gates-only: ${{ inputs.gates_only == true }}
@@ -39,7 +39,7 @@ jobs:
       g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
       setup-go: false
       setup-cue: false
-      org-github-ref: d5d47bb4ab397fb53f6b598f325d5ee772ab48c7
+      org-github-ref: 038da125256b80e308d57903a468fa1bd462ecdc
 
   # The caller owns the cascade-Environment job and passes the key to the
   # composite action (a reusable workflow would not see the Environment
@@ -64,9 +64,9 @@ jobs:
       pull-requests: read
     steps:
       - name: Publish
-        uses: open-platform-model/.github/.github/actions/cascade-publish@d5d47bb4ab397fb53f6b598f325d5ee772ab48c7 # feat/add-release-cascade-workflows
+        uses: open-platform-model/.github/.github/actions/cascade-publish@038da125256b80e308d57903a468fa1bd462ecdc # feat/add-release-cascade-workflows
         with:
-          org-github-ref: d5d47bb4ab397fb53f6b598f325d5ee772ab48c7
+          org-github-ref: 038da125256b80e308d57903a468fa1bd462ecdc
           labels-managed: false
           client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
           private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}

@@ -31,8 +31,11 @@ BODY_MAX=65000
 # Which pushes the bot makes when main changed workflow files: strict pushes
 # only updates that are no workflow change against main's tip nor against
 # the old branch tip; tree only checks main's tip. A constant, never read
-# from the environment. The sandbox cycle (E4c) decides it.
-WF_GUARD_RULE=strict
+# from the environment. The sandbox cycle (E4c, 2026-10-04) decided tree:
+# GitHub accepted an App push without the Workflows permission both for an
+# in-place lease update across a workflow change on main and for a merge
+# commit bringing main's workflow change in.
+WF_GUARD_RULE=tree
 
 # The five labels the bot may set or create, with RELEASING.md's colours and
 # descriptions ("Labels").

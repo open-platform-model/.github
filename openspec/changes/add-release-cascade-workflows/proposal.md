@@ -54,7 +54,7 @@ and the variable `CASCADE_APP_CLIENT_ID`.
   them). Run E1, E1b, E2 to E7 (E6 with the supervisor toggling the setting
   during the cycle, before merge) and S3 to S11, and record every run URL, PR URL and outcome in
   `design.md` under "Sandbox cycle" and in the scratchpad file `p3-gh-workflows-sandbox.md`.
-  E4c decides `WF_GUARD_RULE` (`strict` stays unless E4c proves `tree` safe). The owner's
+  E4c decides `WF_GUARD_RULE` (`strict` stays unless E4c proves `tree` safe; E4c accepted both pushes, so it ships as `tree`). The owner's
   pull-request-only bypass is not exercised; its manual check goes to the scratchpad file
   `p3-gh-workflows-owner-checks.md` for the PR notes.
 

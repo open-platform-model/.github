@@ -171,7 +171,7 @@ expect "guard strict: rebuild, D2 set becomes recreate" 0 recreate -- wg strict 
 expect "guard tree: rebuild, D2 set pushes in place" 0 push -- wg tree rebuild "" ".github/workflows/touch.yml"
 expect "guard strict: merge, D2 set is a conflict" 0 conflict -- wg strict merge "" ".github/workflows/touch.yml"
 expect "guard tree: merge, D2 set pushes" 0 push -- wg tree merge "" ".github/workflows/touch.yml"
-expect "guard: the shipped rule is strict" 0 strict -- bash -c '. "$1"; WF_GUARD_RULE=x; . "$1"; echo "$WF_GUARD_RULE"' _ "$WIRING/lib.sh"
+expect "guard: the shipped rule is tree (E4c)" 0 tree -- bash -c '. "$1"; WF_GUARD_RULE=x; . "$1"; echo "$WF_GUARD_RULE"' _ "$WIRING/lib.sh"
 
 # --- the action table ---------------------------------------------------------
 act() { in_lib action_for "$@"; }

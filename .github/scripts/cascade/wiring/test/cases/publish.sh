@@ -119,6 +119,11 @@ gh_prs '[]'
 publish verify
 check "refuse: a new tip that changes workflow files" bash -c '[ "$1" = 1 ] && [[ $2 == *"differs from main in workflow files: .github/workflows/touch.yml"* ]]' _ "$RC" "$ERR"
 
+# Recreate and the workflows conflict happen only under strict, which is not
+# shipped (E4c chose tree): these run a copy of the scripts with strict.
+SHIPPED_COMPUTE="$COMPUTE" SHIPPED_PUBLISH="$PUBLISH"
+COMPUTE="$(rule_copy strict)/receive-compute.sh" PUBLISH="$(rule_copy strict)/receive-publish.sh"
+
 # --- recreate end to end ------------------------------------------------------
 new_fx; mk_toy
 bot_branch v0.2.0
@@ -182,6 +187,31 @@ gh_prs "[$PR2]"
 publish verify
 publish act
 check "conflict: a second run posts no second comment" bash -c '[ "$1" = 0 ] && ! grep -q "^pr comment" "$2" && ! grep -q "^pr edit" "$2"' _ "$RC" "$GHFX/log"
+
+COMPUTE="$SHIPPED_COMPUTE" PUBLISH="$SHIPPED_PUBLISH"
+
+# --- tree: an in-place update across a workflow change on main ---------------
+new_fx; mk_toy
+bot_branch v0.2.0
+OLD=$(origin_tip deps/cascade)
+body_with "fix(deps): bump up to v0.2.0" "kept notes"
+PR=$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/body.in" deps-cascade)
+seed_commit main human .github/workflows/touch.yml "name: touched" "ci: touch"
+fresh_checkout
+printf 'v0.3.0\n' >"$TOY_TARGET"
+gh_prs "[$PR]"
+gh_fx 0 "$(printf '%s' "$NO_BREAK")" -- "${REL_ARGS[@]}"
+compute "${COMPUTE_STEPS[@]}"
+publish_job
+gh_prs "[$PR]"
+publish verify
+check "tree: verify accepts an in-place push whose old tip predates main's workflow change" test "$RC/$OUT" = "0/plan verified: push"
+gh_accept "label create * --force"
+gh_accept "pr edit 5 -R $SBX *"
+publish act
+check "tree: the same PR is updated in place under the lease" bash -c '
+  [ "$1" = 0 ] && [ "$2" = "$(jq -r .new_tip "$3")" ] && ! grep -qE "^pr (create|close)" "$4"' _ "$RC" "$(origin_tip deps/cascade)" "$PWS/t/plan/plan.json" "$GHFX/log"
+check "tree: the old tip is replaced, not merged" bash -c '! git --git-dir="$1" merge-base --is-ancestor "$2" "$3"' _ "$ORIGIN" "$OLD" "$(origin_tip deps/cascade)"
 
 # --- too long -----------------------------------------------------------------
 new_fx; mk_toy

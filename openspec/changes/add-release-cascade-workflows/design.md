@@ -432,7 +432,14 @@ branches deleted, after the cycle.
 | S10 | retitle to `feat(deps): sandbox`, release | title kept, marker computed, no title-rise comment | | | not run |
 | S11 | push to the S7 PR while a dispatch run is pending | gates-only run in `deps-cascade-gates`; pending run not replaced | | | not run |
 
-**`WF_GUARD_RULE`:** `strict` (default; to be confirmed or changed by E4c).
+**`WF_GUARD_RULE`: `tree`**, decided by E4c (contract §7.6). With an App token scoped to
+`cascade-sandbox-down` and only `contents: write`, after `main` had changed three workflow files
+(`cascade-gates.yml`, `deps-cascade.yml`, `touch.yml`) since the probe branches were built,
+GitHub accepted both the in-place `--force-with-lease` update of `probe/inplace` to `main` plus
+one commit (D1 empty, D2 the three files) and the push of a merge commit bringing `main` into
+`probe/merge` (same D2). So GitHub compares the pushed tree to the default branch, not the
+update to the old tip. `strict` stays implemented and tested through a rule-swapped copy of the
+scripts, should GitHub tighten the rule.
 
 **Shared-key reach:** the seven `cascade` Environments hold one App key (contract Facts); whoever
 can run a `main` job in any of them can mint a token for all seven repos. Rotating the key

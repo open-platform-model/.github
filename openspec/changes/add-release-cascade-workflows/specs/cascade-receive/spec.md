@@ -206,7 +206,10 @@ change when the tip is unchanged.
 The bot SHALL push only updates GitHub cannot read as a workflow change. With
 `D1 = git diff --name-only origin/main NEW -- .github/workflows/` and
 `D2 = git diff --name-only OLD NEW -- .github/workflows/` (in-place updates only), and the rule
-constant `WF_GUARD_RULE` set to `strict` (default) or `tree`:
+constant `WF_GUARD_RULE`, which ships as `tree` (sandbox cycle E4c: GitHub accepted, from the
+App without the Workflows permission, both an in-place lease update across a workflow change on
+`main` and a pushed merge commit bringing that change in); `strict` stays implemented for the
+case GitHub tightens the rule:
 
 | Mode | Push allowed (`strict`) | Push allowed (`tree`) | Otherwise |
 | --- | --- | --- | --- |
@@ -216,6 +219,16 @@ constant `WF_GUARD_RULE` set to `strict` (default) or `tree`:
 | `merge` | `D1` and `D2` empty | `D1` empty | action `conflict`, reason `workflows` |
 
 The bot SHALL never call the update-branch API or a server-side merge.
+
+#### Scenario: Main changed a workflow under a bot-only PR, shipped rule
+
+- **WHEN** `WF_GUARD_RULE` is `tree`, the PR has only bot commits, and `main` changed `.github/workflows/touch.yml` since the branch was built
+- **THEN** the action is `push`: the same PR is rebuilt in place under the lease, Notes and labels unchanged
+
+#### Scenario: Main changed a workflow under a human commit, shipped rule
+
+- **WHEN** `WF_GUARD_RULE` is `tree`, the PR has a human commit, and `main` changed a workflow file
+- **THEN** the action is `push`: `main` is merged into the branch, the human commit stays an ancestor, and the merge commit is pushed
 
 #### Scenario: Main changed a workflow under a bot-only PR
 

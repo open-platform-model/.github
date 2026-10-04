@@ -153,6 +153,20 @@ in_lib() {
   )
 }
 
+# rule_copy <strict|tree>: a copy of the wiring scripts whose WF_GUARD_RULE
+# is the given rule, so cases can exercise the rule that is not shipped.
+rule_copy() {
+  # The same depth as in the repo: check_scratch treats four levels up as
+  # the org .github checkout.
+  local d="$T_ROOT/rule-$1/.github/scripts/cascade/wiring"
+  if [ ! -d "$d" ]; then
+    mkdir -p "$d"
+    cp "$WIRING"/*.sh "$d/"
+    sed -i "s/^WF_GUARD_RULE=.*/WF_GUARD_RULE=$1/" "$d/lib.sh"
+  fi
+  printf '%s' "$d"
+}
+
 # yaml_run <workflow file> <job> <step name>: a step's run: text.
 yaml_run() {
   J="$2" S="$3" yq -r '.jobs[strenv(J)].steps[] | select(.name == strenv(S)) | .run' "$1"

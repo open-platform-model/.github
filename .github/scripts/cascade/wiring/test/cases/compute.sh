@@ -282,6 +282,9 @@ check "too long: a body over 65000 bytes" bash -c '[ "$2" = 0 ] && [ "$(jq -r .a
 check "too long: the Notes are never truncated" bash -c '[ "$(wc -c <"$1")" -gt 70000 ]' _ "$CASCADE_T/body.md"
 
 # --- the workflows guard ------------------------------------------------------
+# Under strict (not shipped; a copy of the scripts with the rule swapped).
+SHIPPED_COMPUTE="$COMPUTE"
+COMPUTE="$(rule_copy strict)/receive-compute.sh"
 new_fx; mk_toy
 bot_branch v0.2.0
 body_with "fix(deps): bump up to v0.2.0" "carried"
@@ -292,9 +295,9 @@ printf 'v0.3.0\n' >"$TOY_TARGET"
 gh_prs "[$PR]"
 gh_rels "$NO_BREAK"
 compute "${COMPUTE_STEPS[@]}"
-check "guard: main changed a workflow under a bot-only PR gives recreate" \
+check "guard strict: main changed a workflow under a bot-only PR gives recreate" \
   test "$(plan '[.mode, .action, (.carry_labels | join(","))] | join("/")')" = "rebuild/recreate/deps-cascade:breaking,need-human-review"
-check "guard: recreate keeps the Notes" bash -c '[ "$(sed -n "/^<!-- cascade-notes:/,\$p" "$1" | tail -n +2)" = carried ]' _ "$CASCADE_T/body.md"
+check "guard strict: recreate keeps the Notes" bash -c '[ "$(sed -n "/^<!-- cascade-notes:/,\$p" "$1" | tail -n +2)" = carried ]' _ "$CASCADE_T/body.md"
 
 new_fx; mk_toy
 bot_branch v0.2.0
@@ -307,8 +310,39 @@ printf 'v0.3.0\n' >"$TOY_TARGET"
 gh_prs "[$PR]"
 gh_rels "$NO_BREAK"
 compute "${COMPUTE_STEPS[@]}"
-check "guard: main changed a workflow under a human commit gives a workflows conflict" \
+check "guard strict: main changed a workflow under a human commit gives a workflows conflict" \
   test "$(plan '[.mode, .action, .conflict_reason, (.conflict_files | join(","))] | join("/")')" = "merge/conflict/workflows/.github/workflows/touch.yml"
+
+COMPUTE="$SHIPPED_COMPUTE"
+# Under the shipped rule, tree: both updates push (E4c).
+new_fx; mk_toy
+bot_branch v0.2.0
+body_with "fix(deps): bump up to v0.2.0" "carried"
+PR=$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/body.in" "deps-cascade,deps-cascade:breaking,need-human-review,deps-cascade:conflict")
+seed_commit main human .github/workflows/touch.yml "name: touched" "ci: touch"
+fresh_checkout
+printf 'v0.3.0\n' >"$TOY_TARGET"
+gh_prs "[$PR]"
+gh_rels "$NO_BREAK"
+compute "${COMPUTE_STEPS[@]}"
+check "guard tree: main changed a workflow under a bot-only PR rebuilds in place" \
+  test "$(plan '[.mode, .action, .pr_number] | join("/")')" = "rebuild/push/5"
+check "guard tree: the in-place rebuild keeps the Notes" bash -c '[ "$(sed -n "/^<!-- cascade-notes:/,\$p" "$1" | tail -n +2)" = carried ]' _ "$CASCADE_T/body.md"
+
+new_fx; mk_toy
+bot_branch v0.2.0
+seed_commit deps/cascade human fixtures/human.txt "human" "test: human"
+body_with "fix(deps): bump up to v0.2.0" ""
+PR=$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/body.in")
+seed_commit main human .github/workflows/touch.yml "name: touched" "ci: touch"
+fresh_checkout
+printf 'v0.3.0\n' >"$TOY_TARGET"
+gh_prs "[$PR]"
+gh_rels "$NO_BREAK"
+compute "${COMPUTE_STEPS[@]}"
+check "guard tree: main changed a workflow under a human commit merges and pushes" \
+  test "$(plan '[.mode, .action] | join("/")')" = "merge/push"
+check "guard tree: the merge keeps the human commit" bash -c 'git -C "$1" merge-base --is-ancestor "$(git -C "$1" rev-parse origin/deps/cascade)" HEAD' _ "$WS/repo"
 
 new_fx; mk_toy
 seed_commit deps/cascade bot fixtures/left.txt "left" "left behind"
