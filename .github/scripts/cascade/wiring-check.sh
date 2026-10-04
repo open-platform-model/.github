@@ -11,12 +11,17 @@
 # tree, so a PR can change them along with the workflows; review and the main
 # ruleset guard against a deliberate edit.
 #
-# Usage, from the repo root (task cascade:wiring:check):
-#   bash .tasks/cascade/wiring-check.sh [<config>]
+# Usage, from the repo root:
+#   bash .tasks/cascade/wiring-check.sh [--pin-on-main] [<config>]
+# Offline by default (task cascade:wiring:check). --pin-on-main, which the
+# required CI step passes, also asks the GitHub API (gh, GH_TOKEN) that the
+# one .github SHA is on .github's main, so a commit that exists only in a
+# fork of .github (an "imposter commit") is refused.
 # <config> defaults to .tasks/cascade/wiring-check.yaml:
 #   pin-comment: .github main      # the comment after every .github SHA
 #   receiver: true                 # false: notify only (core)
 #   env-allow: [CUE_REGISTRY]      # release.yml workflow env keys allowed
+#   publish-workflows: [release.yml, docs.yml]  # restore no Actions cache
 #   ci: {workflow: ci.yml, job: ci}  # the required job that runs this check
 #   notify:                        # this repo's notify-downstream values
 #     needs: [release-please, publish-cue]
@@ -26,15 +31,19 @@
 #     labels-managed: false        # a YAML boolean
 #
 # Exit status: 0 the shapes match (prints "cascade wiring: ok, .github <sha>
-# (<pin comment>)"); 1 a mismatch (every mismatch is printed on stderr);
-# 2 usage, a missing tool or a bad config.
+# (<pin comment>)"); 1 a mismatch, or with --pin-on-main a SHA not on
+# .github main or an API call that failed (every problem is printed on
+# stderr); 2 usage, a missing tool or a bad config.
 #
-# Tools: bash, coreutils, sed, grep, mikefarah yq v4.
+# Tools: bash, coreutils, sed, grep, mikefarah yq v4; gh with --pin-on-main
+# (through "${CASCADE_GH:-gh}").
 # shellcheck disable=SC2016 # the single-quoted ${{ }} strings are GitHub expressions, compared literally
 set -euo pipefail
 
 usage_err() { echo "cascade wiring: $*" >&2; exit 2; }
-[ $# -le 1 ] || usage_err "usage: wiring-check.sh [<config>]"
+PIN_ON_MAIN=false
+if [ "${1:-}" = --pin-on-main ]; then PIN_ON_MAIN=true; shift; fi
+[ $# -le 1 ] && [[ ${1:-} != -* ]] || usage_err "usage: wiring-check.sh [--pin-on-main] [<config>]"
 CONFIG=${1:-.tasks/cascade/wiring-check.yaml}
 W=.github/workflows
 yq --version 2>/dev/null | grep -q mikefarah || usage_err "mikefarah yq v4 is required"
@@ -52,16 +61,17 @@ yj() { yq -o=json -I=0 "$1" "$2"; }
 
 # --- the config ---------------------------------------------------------------
 
-# Variables a workflow-level env could use to make bash, node or the dynamic
-# loader run code in a step that holds the App token, or to redirect the
-# runner's own files. They are refused even when the config allows them.
-ENV_DENY=" BASH_ENV ENV NODE_OPTIONS SHELLOPTS BASHOPTS PS4 PROMPT_COMMAND IFS PATH HOME
-  LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_PARAMETERS
-  GIT_CONFIG_COUNT GIT_EXEC_PATH GIT_SSH GIT_SSH_COMMAND GIT_ASKPASS PYTHONSTARTUP PYTHONPATH
-  PERL5OPT PERL5LIB RUBYOPT JAVA_TOOL_OPTIONS "
+# The only names env-allow may list. A workflow-level env reaches the notify
+# action's steps, which hold the App token, and too many variables make bash,
+# git, gh, node, curl or the loader run code, read other config or send
+# traffic elsewhere (BASH_ENV, GIT_*, GH_*, NODE_*, LD_*, XDG_*, SSL_*,
+# CURL_*, *_PROXY and more) for a deny-list to be safe. So the names are
+# allowed, not denied: the registry settings the five release workflows use,
+# which none of those tools reads.
+ENV_ALLOW_RE='^(CUE|OPM)_[A-Z0-9_]+$|^REGISTRY$|^IMAGE_NAME$'
 
 cfg_err() { usage_err "$CONFIG: $*"; }
-want_cfg=$(printf '%s' '["ci","env-allow","notify","pin-comment","publish","receiver"]')
+want_cfg=$(printf '%s' '["ci","env-allow","notify","pin-comment","publish","publish-workflows","receiver"]')
 [ "$(y 'type' "$CONFIG")" = '!!map' ] || cfg_err "not a YAML map"
 for k in $(y 'keys | .[]' "$CONFIG"); do
   [[ $want_cfg == *"\"$k\""* ]] || cfg_err "unknown key $k"
@@ -75,10 +85,17 @@ ENV_ALLOW=" "
 while IFS= read -r k; do
   [ -n "$k" ] || continue
   [[ $k =~ ^[A-Z][A-Z0-9_]*$ ]] || cfg_err "env-allow entry [$k] is not an upper-case variable name"
-  case "$k" in GITHUB_* | ACTIONS_* | RUNNER_* | CASCADE_*) cfg_err "env-allow may not allow $k" ;; esac
-  [[ $ENV_DENY != *" $k "* ]] || cfg_err "env-allow may not allow $k"
+  [[ $k =~ $ENV_ALLOW_RE ]] || cfg_err "env-allow may not allow $k (only CUE_*, OPM_*, REGISTRY and IMAGE_NAME)"
   ENV_ALLOW+="$k "
 done < <(y '.["env-allow"][] | tostring' "$CONFIG")
+[ "$(y '.["publish-workflows"] | type' "$CONFIG")" = '!!seq' ] || cfg_err "publish-workflows must be a list"
+PUBLISH_WFS=""
+while IFS= read -r k; do
+  [ -n "$k" ] || continue
+  [[ $k =~ ^[A-Za-z0-9._-]+\.ya?ml$ ]] || cfg_err "publish-workflows entry [$k] is not a workflow file name"
+  PUBLISH_WFS+="$k"$'\n'
+done < <(y '.["publish-workflows"][] | tostring' "$CONFIG")
+grep -qx release.yml <<<"$PUBLISH_WFS" || cfg_err "publish-workflows must list release.yml"
 CI_WF=$(y '.ci.workflow // ""' "$CONFIG")
 CI_JOB=$(y '.ci.job // ""' "$CONFIG")
 [[ $CI_WF =~ ^[A-Za-z0-9._-]+\.ya?ml$ ]] || cfg_err "ci.workflow must be a workflow file name"
@@ -135,6 +152,17 @@ key_job() {
   eq "$n client-id" '${{ vars.CASCADE_APP_CLIENT_ID }}' "$(J="$j" y '.jobs[strenv(J)].steps[0].with["client-id"]' "$f")"
   eq "$n private-key" '${{ secrets.CASCADE_APP_PRIVATE_KEY }}' "$(J="$j" y '.jobs[strenv(J)].steps[0].with["private-key"]' "$f")"
 }
+
+# --- YAML anchors -------------------------------------------------------------
+
+# GitHub resolves anchors and aliases in workflow files, and every check
+# below reads the text a key holds: `environment: *e` would read as the
+# string "*e". So no workflow file may use either (a merge key `<<: *m` is an
+# alias too).
+for f in "$W"/*.yml "$W"/*.yaml; do
+  [ -e "$f" ] || continue
+  eq "${f##*/} YAML anchors and aliases" 0 "$(yq '[.. | select(kind == "alias" or anchor != "")] | length' "$f")"
+done
 
 # --- notify -------------------------------------------------------------------
 
@@ -207,40 +235,80 @@ fi
 
 # Only the caller-owned jobs above read the key or declare the cascade
 # Environment, and no call into .github passes secrets (inherit included).
-# GitHub matches secret and Environment names without regard to case, so the
-# key match is case-insensitive and also catches secrets['...'] and
-# toJSON(secrets); an environment (string or map) that mentions cascade in any
-# case, or is an expression, counts as declaring the cascade Environment.
+# GitHub matches secret, Environment, owner and repo names without regard to
+# case, so every match here ignores case. A key reader is any expression (a
+# ${{ }} in any string, or a whole if: value) that names
+# secrets.CASCADE_APP_PRIVATE_KEY, or that uses the secrets context any other
+# way than secrets.<name>: secrets[...] (whatever the index, format() too),
+# secrets.* and secrets passed whole to a function such as toJSON(secrets).
+# An environment (string or map) that mentions cascade in any case, or is an
+# expression, counts as declaring the cascade Environment.
 want_key="release.yml:jobs.notify-downstream.steps.0.with.private-key"
 want_env="release.yml:notify-downstream"
 if [ "$RECEIVER" = true ]; then
   want_key=$(printf '%s\n%s' "deps-cascade.yml:jobs.publish.steps.0.with.private-key" "$want_key")
   want_env=$(printf '%s\n%s' "deps-cascade.yml:publish" "$want_env")
 fi
+GH_REF_RE='(?i)^open-platform-model/\.github/'
 got_key="" got_env="" got_sec=""
 for f in "$W"/*.yml "$W"/*.yaml; do
   [ -e "$f" ] || continue
   b=${f##*/}
-  got_key+=$(yq -r '.. | select(tag == "!!str" and test("(?i)secrets(\\.|\\[\\s*.)cascade_app_private_key|tojson\\(\\s*secrets\\s*\\)")) | path | join(".")' "$f" | sed "s|^|$b:|")$'\n'
+  got_key+=$(yq -r '.. | select(tag == "!!str") | select(
+      ([match("(?s)\\$\\{\\{.*?\\}\\}"; "g") | .string] + [select((path | .[-1] | tostring) == "if")])
+      | ((map(select(test("(?i)secrets\\s*\\.\\s*cascade_app_private_key"))) | length)
+        + (map(sub("(?i)secrets\\s*\\.\\s*[A-Za-z_][A-Za-z0-9_-]*"; "")) | map(select(test("(?i)(^|[^A-Za-z0-9_.])secrets([^A-Za-z0-9_-]|$)"))) | length)) > 0
+    ) | path | join(".")' "$f" | sed "s|^|$b:|")$'\n'
   got_env+=$(yq -r '.jobs // {} | to_entries[] | select(.value.environment // "" | tostring | test("(?i)cascade|\\$\\{\\{")) | .key' "$f" | sed "s|^|$b:|")$'\n'
-  got_sec+=$(yq -r '.jobs // {} | to_entries[] | select((.value.uses // "") | test("^open-platform-model/\\.github/")) | select(.value | has("secrets")) | .key' "$f" | sed "s|^|$b:|")$'\n'
+  got_sec+=$(R="$GH_REF_RE" yq -r '.jobs // {} | to_entries[] | select((.value.uses // "") | test(strenv(R))) | select(.value | has("secrets")) | .key' "$f" | sed "s|^|$b:|")$'\n'
 done
 eq "secrets.CASCADE_APP_PRIVATE_KEY readers" "$want_key" "$(printf '%s' "$got_key" | sed '/^$/d' | sort)"
 eq "cascade Environment jobs" "$want_env" "$(printf '%s' "$got_env" | sed '/^$/d' | sort)"
 eq "calls into .github that pass secrets" "" "$(printf '%s' "$got_sec" | sed '/^$/d')"
 
+# --- publish workflows restore no cache ---------------------------------------
+
+# Repo code that runs on main (compute, any CI job) can write the Actions
+# cache of main's scope: a setup-go or buildx cache step saves after it ran,
+# and the artifact runtime token it can read also allows cache writes. A
+# publish job that restores that cache builds from it. So in every workflow
+# the config lists as publishing: no cache action (any action whose name
+# says cache), setup-go with cache: false, setup-node with
+# package-manager-cache: false and no cache, no other cache input but
+# no-cache, and no type=gha anywhere (buildx cache-from/cache-to). A
+# reusable workflow called from there is not checked; docs-kit's sets
+# cache: false.
+while IFS= read -r pw; do
+  [ -n "$pw" ] || continue
+  f=$W/$pw
+  if [ ! -f "$f" ]; then bad "publish workflow $pw is missing"; continue; fi
+  eq "$pw cache use" "" "$(yq -r '
+    (.jobs[]?.steps[]? | select(.uses // "" | sub("@.*$"; "") | test("(?i)cache")) | (path | join(".")) + " uses " + .uses),
+    (.jobs[]?.steps[]? | select(.uses // "" | sub("@.*$"; "") | test("(?i)^actions/setup-go$"))
+      | select((.with.cache | tostring) != "false") | (path | join(".")) + " setup-go without cache: false"),
+    (.jobs[]?.steps[]? | select(.uses // "" | sub("@.*$"; "") | test("(?i)^actions/setup-node$"))
+      | select((.with["package-manager-cache"] | tostring) != "false" or (.with.cache // "") != "")
+      | (path | join(".")) + " setup-node without package-manager-cache: false, or with cache"),
+    (.jobs[]?.steps[]? | select(.uses // "" | sub("@.*$"; "") | test("(?i)^actions/setup-(go|node)$") | not)
+      | .with[]? | select(path | .[-1] | tostring | test("(?i)cache")) | select(path | .[-1] | tostring | test("(?i)^no-cache$") | not)
+      | path | join(".")),
+    (.. | select(tag == "!!str") | select(test("(?i)type\\s*=\\s*gha")) | "type=gha at " + (path | join(".")))
+  ' "$f" | sort -u | tr '\n' ';' | sed 's/;$//')"
+done <<<"$PUBLISH_WFS"
+
 # --- the pin ------------------------------------------------------------------
 
 # Every .github reference (the uses: lines and the cascade-task.yml resolver
-# ref) carries one full SHA and the pin comment.
+# ref), in any letter case, carries one full SHA and the pin comment; a
+# reference spelled in another case shows up as an unexpected one.
 refs=""
 for f in "$W"/*.yml "$W"/*.yaml; do
   [ -e "$f" ] || continue
   b=${f##*/}
-  refs+=$(yq -r '
-    (.jobs // {} | to_entries[] | select((.value.uses // "") | test("^open-platform-model/\\.github/")) | .value.uses + " " + (.value.uses | line_comment)),
-    (.jobs // {} | to_entries[] | (.value.steps // [])[] | select((.uses // "") | test("^open-platform-model/\\.github/")) | .uses + " " + (.uses | line_comment)),
-    (.jobs // {} | to_entries[] | (.value.steps // [])[] | select(.with.repository == "open-platform-model/.github") | "resolver@" + (.with.ref // "") + " " + ((.with.ref // "") | line_comment))
+  refs+=$(R="$GH_REF_RE" yq -r '
+    (.jobs // {} | to_entries[] | select((.value.uses // "") | test(strenv(R))) | .value.uses + " " + (.value.uses | line_comment)),
+    (.jobs // {} | to_entries[] | (.value.steps // [])[] | select((.uses // "") | test(strenv(R))) | .uses + " " + (.uses | line_comment)),
+    (.jobs // {} | to_entries[] | (.value.steps // [])[] | select((.with.repository // "") | test("(?i)^open-platform-model/\\.github$")) | "resolver@" + (.with.ref // "") + " " + ((.with.ref // "") | line_comment))
   ' "$f" | sed "s|^|$b |")$'\n'
 done
 refs=$(printf '%s' "$refs" | sed '/^$/d' | sort)
@@ -264,22 +332,49 @@ done <<<"$refs"
 
 # --- the check runs on every PR -----------------------------------------------
 
-# The required CI job runs this check as a plain step: on every pull request
-# (no path filter, which would leave the required check unreported), with no
-# if: or continue-on-error that would let a failure pass.
+# The required CI job runs this check, online, as a plain step: on every pull
+# request (no path filter, which would leave the required check unreported),
+# with no if: or continue-on-error that would let a failure pass, and with no
+# shell or working directory of its own or from defaults that would run
+# something else.
+CI_RUN='bash .tasks/cascade/wiring-check.sh --pin-on-main'
+CI_ENV='{"GH_TOKEN":"${{ github.token }}"}'
 ci=$W/$CI_WF
 if [ -f "$ci" ]; then
   eq "$CI_WF runs on pull_request" true "$(y '.on | has("pull_request")' "$ci")"
   eq "$CI_WF pull_request path filters" '[]' "$(yj '[.on.pull_request // {} | keys | .[] | select(. == "paths" or . == "paths-ignore")]' "$ci")"
   eq "$CI_WF:$CI_JOB exists" true "$(J="$CI_JOB" y '.jobs | has(strenv(J))' "$ci")"
   eq "$CI_WF:$CI_JOB if and continue-on-error" '[]' "$(J="$CI_JOB" yj '[.jobs[strenv(J)] // {} | keys | .[] | select(. == "if" or . == "continue-on-error")]' "$ci")"
-  eq "$CI_WF:$CI_JOB steps running task cascade:wiring:check" 1 \
-    "$(J="$CI_JOB" y '[.jobs[strenv(J)].steps // [] | .[] | select(.run == "task cascade:wiring:check")] | length' "$ci")"
-  eq "$CI_WF:$CI_JOB wiring step if and continue-on-error" '[]' \
-    "$(J="$CI_JOB" yj '[.jobs[strenv(J)].steps // [] | .[] | select(.run == "task cascade:wiring:check") | keys | .[] | select(. == "if" or . == "continue-on-error")]' "$ci")"
+  eq "$CI_WF defaults.run" '[]' "$(J="$CI_JOB" yj '[(.defaults.run // {} | keys | .[]), (.jobs[strenv(J)].defaults.run // {} | keys | .[])]' "$ci")"
+  eq "$CI_WF:$CI_JOB steps running [$CI_RUN]" 1 \
+    "$(J="$CI_JOB" C="$CI_RUN" y '[.jobs[strenv(J)].steps // [] | .[] | select(.run == strenv(C))] | length' "$ci")"
+  eq "$CI_WF:$CI_JOB wiring step keys" '["env","name","run"]' \
+    "$(J="$CI_JOB" C="$CI_RUN" yj '[.jobs[strenv(J)].steps // [] | .[] | select(.run == strenv(C))][0] // {} | keys | sort' "$ci")"
+  eq "$CI_WF:$CI_JOB wiring step env" "$CI_ENV" \
+    "$(J="$CI_JOB" C="$CI_RUN" yj '[.jobs[strenv(J)].steps // [] | .[] | select(.run == strenv(C))][0].env' "$ci")"
 else
   bad "$CI_WF is missing"
 fi
 
 [ "$fail" = 0 ] || exit 1
+
+# --- the pin is on .github main -------------------------------------------------
+
+# A SHA GitHub resolves under open-platform-model/.github may exist only in a
+# fork of it. Comparing it with main proves it is main or one of main's
+# ancestors: identical or ahead (main is ahead of it); behind or diverged is
+# a commit main never had.
+if [ "$PIN_ON_MAIN" = true ]; then
+  st=$("${CASCADE_GH:-gh}" api "repos/open-platform-model/.github/compare/$shas...main" --jq .status) || {
+    echo "cascade wiring: cannot compare .github $shas with main" >&2
+    exit 1
+  }
+  case "$st" in
+    identical | ahead) ;;
+    *)
+      echo "cascade wiring: .github $shas is not on .github main (compare status [$st])" >&2
+      exit 1
+      ;;
+  esac
+fi
 echo "cascade wiring: ok, .github $shas ($PIN_COMMENT)"

@@ -2,8 +2,8 @@
 # shellcheck disable=SC2016 # yq programs and ${{ }} expressions are literal
 # The canonical wiring check (.github/scripts/cascade/wiring-check.sh) against
 # a fixture repo built from the README's caller shapes: it passes for a
-# receiver and for core, refuses one mutation per check, and exits 2 on a bad
-# config.
+# receiver and for core, refuses one mutation per check, exits 2 on a bad
+# config, and with --pin-on-main asks the compare API about the SHA.
 
 WCHECK="$ORG_ROOT/.github/scripts/cascade/wiring-check.sh"
 WC_SHA=0123456789abcdef0123456789abcdef01234567
@@ -42,12 +42,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify the cascade wiring
-        run: task cascade:wiring:check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .tasks/cascade/wiring-check.sh --pin-on-main
 YAML
   cat >"$WCD/.tasks/cascade/wiring-check.yaml" <<'YAML'
 pin-comment: .github main
 receiver: true
 env-allow: [CUE_VERSION, CUE_REGISTRY]
+publish-workflows: [release.yml]
 ci:
   workflow: ci.yml
   job: ci
@@ -232,9 +235,17 @@ wc_mut "a CI workflow only on push" ci.yml 'del(.on.pull_request)' "ci.yml runs 
 wc_mut "a CI path filter" ci.yml '.on.pull_request = {"paths": [".github/**"]}' "ci.yml pull_request path filters"
 wc_mut "a CI job if:" ci.yml '.jobs.ci.if = "false"' "ci.yml:ci if and continue-on-error"
 wc_mut "a CI job continue-on-error" ci.yml '.jobs.ci.continue-on-error = true' "ci.yml:ci if and continue-on-error"
-wc_mut "a CI step continue-on-error" ci.yml '.jobs.ci.steps[1].continue-on-error = true' "ci.yml:ci wiring step if and continue-on-error"
-wc_mut "a CI step if:" ci.yml '.jobs.ci.steps[1].if = "false"' "ci.yml:ci wiring step if and continue-on-error"
-wc_mut "no wiring step" ci.yml 'del(.jobs.ci.steps[1])' "ci.yml:ci steps running task cascade:wiring:check"
+wc_mut "a CI step continue-on-error" ci.yml '.jobs.ci.steps[1].continue-on-error = true' "ci.yml:ci wiring step keys"
+wc_mut "a CI step if:" ci.yml '.jobs.ci.steps[1].if = "false"' "ci.yml:ci wiring step keys"
+wc_mut "no wiring step" ci.yml 'del(.jobs.ci.steps[1])' "ci.yml:ci steps running [bash .tasks/cascade/wiring-check.sh --pin-on-main]"
+wc_mut "the old offline task step" ci.yml '.jobs.ci.steps[1].run = "task cascade:wiring:check"' "ci.yml:ci steps running"
+wc_mut "the wiring step without the pin check" ci.yml '.jobs.ci.steps[1].run = "bash .tasks/cascade/wiring-check.sh"' "ci.yml:ci steps running"
+wc_mut "a wiring step without the token" ci.yml 'del(.jobs.ci.steps[1].env)' "ci.yml:ci wiring step keys"
+wc_mut "a wiring step with more env" ci.yml '.jobs.ci.steps[1].env.BASH_ENV = "x"' "ci.yml:ci wiring step env"
+wc_mut "a wiring step with a shell of its own" ci.yml '.jobs.ci.steps[1].shell = "true {0}"' "ci.yml:ci wiring step keys"
+wc_mut "a wiring step in another directory" ci.yml '.jobs.ci.steps[1].working-directory = "other"' "ci.yml:ci wiring step keys"
+wc_mut "a workflow default shell" ci.yml '.defaults.run.shell = "true {0}"' "ci.yml defaults.run"
+wc_mut "a job default working directory" ci.yml '.jobs.ci.defaults.run.working-directory = "other"' "ci.yml defaults.run"
 wc_mut "the config naming another job" config '.ci.job = "other"' "ci.yml:other exists"
 
 # --- the config ---------------------------------------------------------------
@@ -256,3 +267,97 @@ check "wiring config refuses: a missing config" bash -c '[ "$1" = 2 ] && [[ $2 =
 wc_fresh
 run env -C "$T_ROOT" bash "$WCHECK" "$WCD/.tasks/cascade/wiring-check.yaml"
 check "wiring check: outside a repo root exits 2" bash -c '[ "$1" = 2 ] && [[ $2 == *"run from the repo root"* ]]' _ "$RC" "$ERR"
+
+# --- YAML anchors and aliases ---------------------------------------------------
+# The review's bypass: the cascade Environment through an alias, the key
+# through secrets[format()]. Both the alias and the reader are refused.
+wc_fresh
+sed -i 's/^    environment: cascade$/    environment: \&e cascade/' "$WCD/.github/workflows/release.yml"
+cat >>"$WCD/.github/workflows/release.yml" <<'YAML'
+  leak:
+    runs-on: ubuntu-latest
+    environment: *e
+    steps:
+      - run: echo "${{ secrets[format('CASCADE_APP_{0}', 'PRIVATE_KEY')] }}" | base64
+YAML
+wc_run
+check "wiring check refuses: an aliased Environment and a format() key" bash -c '
+  [ "$1" = 1 ] && [[ $2 == *"release.yml YAML anchors and aliases: expected [0], got [2]"* ]] && [[ $2 == *"secrets.CASCADE_APP_PRIVATE_KEY readers"*"release.yml:jobs.leak.steps.0.run"* ]]' _ "$RC" "$ERR"
+wc_sed "a merge key" ci.yml 's/^    runs-on: ubuntu-latest$/    <<: \&d {timeout-minutes: 5}\n    runs-on: ubuntu-latest/' "ci.yml YAML anchors and aliases"
+
+# --- every other use of the secrets context ------------------------------------
+wc_mut "the key by format()" release.yml ".jobs.leak = $JOB | .jobs.leak.steps[0].env.K = \"\${{ secrets[format('{0}', vars.N)] }}\"" "secrets.CASCADE_APP_PRIVATE_KEY readers"
+wc_mut "every secret by secrets.*" release.yml ".jobs.leak = $JOB | .jobs.leak.steps[0].env.K = \"\${{ join(secrets.*, ',') }}\"" "secrets.CASCADE_APP_PRIVATE_KEY readers"
+wc_mut "every secret by join()" ci.yml '.jobs.ci.steps[0].with.x = "${{ join(secrets) }}"' "secrets.CASCADE_APP_PRIVATE_KEY readers"
+wc_mut "a secrets index in an if:" ci.yml '.jobs.ci.steps[0].if = "secrets[vars.N] != '"''"'"' "secrets.CASCADE_APP_PRIVATE_KEY readers"
+wc_mut "the key with spaces" ci.yml '.jobs.ci.steps[0].with.x = "${{ secrets . CASCADE_APP_PRIVATE_KEY }}"' "secrets.CASCADE_APP_PRIVATE_KEY readers"
+wc_fresh
+yq -i '.jobs.ci.steps[0].with.token = "${{ secrets.GITHUB_TOKEN }}" | .jobs.ci.steps[0].with.note = "no secrets here, ${{ inputs.secrets_dir }}"' "$WCD/.github/workflows/ci.yml"
+wc_ok "another named secret, and secrets in plain text, are no key readers"
+
+# --- .github references in any letter case -------------------------------------
+wc_mut "secrets: inherit into .github in mixed case" ci.yml \
+  '.jobs.x = {"uses": "Open-Platform-Model/.github/.github/workflows/cascade-receive.yml@main", "secrets": "inherit"}' "calls into .github that pass secrets"
+wc_mut "a .GitHub action reference" ci.yml '.jobs.ci.steps += [{"uses": "open-platform-model/.GitHub/.github/actions/cascade-publish@main"}]' ".github references"
+wc_mut "a .GITHUB resolver checkout" ci.yml '.jobs.ci.steps += [{"uses": "actions/checkout@v7", "with": {"repository": "OPEN-PLATFORM-MODEL/.GITHUB"}}]' ".github references"
+
+# --- env-allow names ------------------------------------------------------------
+for v in GIT_TEMPLATE_DIR GIT_PROXY_COMMAND GIT_EXTERNAL_DIFF XDG_CONFIG_HOME NODE_EXTRA_CA_CERTS HTTPS_PROXY \
+  SSL_CERT_FILE GIT_SSL_NO_VERIFY GH_DEBUG GIT_TRACE_CURL GCONV_PATH CURL_CA_BUNDLE LD_PRELOAD BASH_ENV CASCADE_X; do
+  wc_cfg "$v in env-allow" ".[\"env-allow\"] += [\"$v\"]" "env-allow may not allow $v"
+done
+wc_fresh
+yq -i '.env = {"OPM_REGISTRY": "a", "CUE_REGISTRY": "b", "REGISTRY": "ghcr.io", "IMAGE_NAME": "x"}' "$WCD/.github/workflows/release.yml"
+yq -i '.["env-allow"] = ["OPM_REGISTRY", "CUE_REGISTRY", "REGISTRY", "IMAGE_NAME"]' "$WCD/.tasks/cascade/wiring-check.yaml"
+wc_ok "the registry names the five repos use are allowed"
+
+# --- publish workflows restore no cache ----------------------------------------
+GO='{"uses": "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", "with": {"go-version-file": "go.mod"}}'
+wc_mut "setup-go with its default cache" release.yml ".jobs.release-please.steps += [$GO]" "release.yml cache use"
+wc_mut "setup-go with cache: true" release.yml ".jobs.release-please.steps += [$GO] | .jobs.release-please.steps[-1].with.cache = true" "setup-go without cache: false"
+wc_mut "actions/cache" release.yml '.jobs.release-please.steps += [{"uses": "actions/cache@v5", "with": {"path": "x", "key": "k"}}]' "uses actions/cache@v5"
+wc_mut "actions/cache/restore" release.yml '.jobs.release-please.steps += [{"uses": "actions/cache/restore@v5"}]' "uses actions/cache/restore@v5"
+wc_mut "another cache action" release.yml '.jobs.release-please.steps += [{"uses": "Swatinem/rust-cache@v2"}]' "uses Swatinem/rust-cache@v2"
+wc_mut "buildx cache-from type=gha" release.yml '.jobs.release-please.steps += [{"uses": "docker/build-push-action@v7", "with": {"push": true, "cache-from": "type=gha"}}]' "with.cache-from"
+wc_mut "type=gha in a run" release.yml '.jobs.release-please.steps += [{"run": "docker buildx build --cache-to type=gha,mode=max ."}]' "type=gha at jobs.release-please.steps.1.run"
+wc_mut "setup-node without package-manager-cache: false" release.yml '.jobs.release-please.steps += [{"uses": "actions/setup-node@v6"}]' "setup-node without package-manager-cache"
+wc_mut "setup-node with cache: npm" release.yml '.jobs.release-please.steps += [{"uses": "actions/setup-node@v6", "with": {"package-manager-cache": false, "cache": "npm"}}]' "setup-node without package-manager-cache"
+wc_mut "setup-python with cache: pip" release.yml '.jobs.release-please.steps += [{"uses": "actions/setup-python@v6", "with": {"cache": "pip"}}]' "with.cache"
+wc_mut "a listed publish workflow that is missing" config '.["publish-workflows"] += ["publish-fixtures.yml"]' "publish workflow publish-fixtures.yml is missing"
+wc_fresh
+yq -i '.jobs.release-please.steps += [{"uses": "actions/setup-go@v7", "with": {"go-version": "1.26.0", "cache": false}},
+  {"uses": "actions/setup-node@v6", "with": {"package-manager-cache": false}},
+  {"uses": "docker/build-push-action@v7", "with": {"no-cache": true}}]' "$WCD/.github/workflows/release.yml"
+yq -i '.jobs.ci.steps += [{"uses": "actions/setup-go@v7"}, {"uses": "actions/cache@v5"}]' "$WCD/.github/workflows/ci.yml"
+wc_ok "no cache in a publish workflow, and a cache in CI, pass"
+wc_cfg "no publish-workflows" 'del(.["publish-workflows"])' "publish-workflows must be a list"
+wc_cfg "publish-workflows without release.yml" '.["publish-workflows"] = ["docs.yml"]' "publish-workflows must list release.yml"
+wc_cfg "a publish-workflows path" '.["publish-workflows"] += ["../x.yml"]' "is not a workflow file name"
+
+# --- --pin-on-main ----------------------------------------------------------------
+COMPARE=(api "repos/open-platform-model/.github/compare/$WC_SHA...main" --jq .status)
+for st in identical ahead; do
+  wc_fresh; gh_reset
+  gh_fx 0 "$st" -- "${COMPARE[@]}"
+  run env -C "$WCD" bash "$WCHECK" --pin-on-main
+  check "pin on main: $st passes" bash -c '[ "$1" = 0 ] && [ "$2" = "cascade wiring: ok, .github $3 (.github main)" ]' _ "$RC" "$OUT" "$WC_SHA"
+done
+for st in behind diverged; do
+  wc_fresh; gh_reset
+  gh_fx 0 "$st" -- "${COMPARE[@]}"
+  run env -C "$WCD" bash "$WCHECK" --pin-on-main
+  check "pin on main: $st (a commit main never had) is refused" bash -c '[ "$1" = 1 ] && [ -z "$2" ] && [[ $3 == *"is not on .github main (compare status [$4])"* ]]' _ "$RC" "$OUT" "$ERR" "$st"
+done
+wc_fresh; gh_reset
+gh_fx_err 1 "HTTP 404" -- "${COMPARE[@]}"
+run env -C "$WCD" bash "$WCHECK" --pin-on-main
+check "pin on main: a failed compare is refused" bash -c '[ "$1" = 1 ] && [[ $2 == *"cannot compare .github"* ]]' _ "$RC" "$ERR"
+wc_fresh; gh_reset
+yq -i '.jobs.notify-downstream.timeout-minutes = 30' "$WCD/.github/workflows/release.yml"
+run env -C "$WCD" bash "$WCHECK" --pin-on-main
+check "pin on main: a shape mismatch fails before any API call" bash -c '[ "$1" = 1 ] && [ ! -s "$2" ]' _ "$RC" "$GHFX/log"
+wc_fresh
+run env -C "$WCD" bash "$WCHECK" --pin-on-main other.yaml extra
+check "pin on main: two arguments after the flag are usage" test "$RC" = 2
+run env -C "$WCD" bash "$WCHECK" --online
+check "an unknown flag is usage" bash -c '[ "$1" = 2 ] && [[ $2 == *"usage: wiring-check.sh [--pin-on-main] [<config>]"* ]]' _ "$RC" "$ERR"
