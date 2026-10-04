@@ -482,6 +482,13 @@ bad config exits 2. It checks:
 - that the config's CI job runs it as exactly the step above on every pull request: no path
   filter, no `if:` or `continue-on-error`, no `shell` or `working-directory` of its own or from
   `defaults`;
+- that nothing reaches that step from around it: the CI workflow's and job's `env` are plain
+  maps whose names are only `CUE_*`, `OPM_*`, `REGISTRY` or `IMAGE_NAME` (so no `BASH_ENV`,
+  `CASCADE_GH` or `PATH`), the job has no `container` or `services`, and every step before the
+  wiring step is an action from another repo at a full SHA with only `id`, `name`, `uses` and
+  `with` (no `run:` step that could write `GITHUB_ENV` or `GITHUB_PATH` or leave a process
+  behind). With `--pin-on-main` the check also exits 1 when `BASH_ENV` or `ENV` is set, a
+  tripwire only, since bash reads `BASH_ENV` before the script runs;
 - with `--pin-on-main`, after every shape matched:
   `gh api repos/open-platform-model/.github/compare/<SHA>...main --jq .status` prints
   `identical` or `ahead`, so a commit that exists only in a fork of `.github` (which GitHub also
@@ -543,11 +550,14 @@ so the PR's diff of the copy is exactly `.github`'s change between the two SHAs,
 confirms it with the same `gh api` call piped to `cmp - .tasks/cascade/wiring-check.sh`. A change
 to the check is made here, never in a copy. The required CI step makes the same comparison
 (`--pin-on-main`), so a copy that differs from the file at the pin fails CI on every PR. The
-comparison runs from the copy under test, though: a PR can edit the copy and delete the
-comparison together. It catches drift and a copy left behind at a bump, and forces a deliberate
-edit to show in the diff, but it does not replace review. The copy and the config live in the
-repo's own tree, so a PR can change them along with the workflows: the check guards against
-mistakes, and review (CODEOWNERS on `/.tasks/`) plus the `main` ruleset guard against a
+comparison runs from the copy under test, though, so it catches drift and a copy left behind at a
+bump but does not replace review. A PR can pass an edited copy by also deleting the comparison,
+or by changing what runs around the CI step. The shape rule above refuses the plain routes (env,
+a container or service, a `run:` step before the wiring step), but an earlier SHA-pinned action
+can still set the step's environment through `GITHUB_ENV` or `GITHUB_PATH`, so a reviewer reads
+any change to the CI workflow, and to the copy, as a change to the check. The copy and the
+config live in the repo's own tree, so a PR can change them along with the workflows: the check
+guards against mistakes, and review (CODEOWNERS on `/.tasks/`) plus the `main` ruleset guard against a
 deliberate edit. Offline (`task cascade:wiring:check`) the copy is not compared, and the check
 says so.
 

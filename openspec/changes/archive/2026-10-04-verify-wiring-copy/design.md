@@ -36,9 +36,14 @@ Without the flag the check makes no request and prints, after the ok line, `casc
 copy was not compared with .github <sha> (offline; --pin-on-main compares it)`. The ok line stays
 first and unchanged, so the README's "printed `cascade wiring: ok, …`" instructions still hold.
 
-Limit, stated in the README: the comparison runs from the copy under test. A PR that edits the
-copy can also delete the comparison, so it catches drift and stale copies, and makes a deliberate
-edit visible in the diff (it has to remove the comparison too), but it does not replace review.
+Limit, stated in the README: the comparison runs from the copy under test, so it catches drift
+and stale copies but does not replace review. An edited copy passes when the same PR also deletes
+the comparison, or changes what runs around the CI step: a workflow or job `env` with `BASH_ENV`
+(a sourced file that redefines `cmp`) or `CASCADE_GH` (a fake gh that returns the running copy),
+an earlier step that writes either to `GITHUB_ENV`, or a process left behind that swaps the file
+after bash opened it. The CI shape rule refuses those routes (D5); an earlier SHA-pinned action
+can still write `GITHUB_ENV` or `GITHUB_PATH`, so any change to the CI workflow is reviewed as a
+change to the check.
 CODEOWNERS on `/.tasks/` and the `main` ruleset (owner decision 28) remain the guard against a
 deliberate edit. Running the canonical file fetched by the CI step instead of the copy was
 considered and rejected here: the CI step's shape is itself enforced by the copy, so it moves the
@@ -81,6 +86,22 @@ admin MAY merge with `gh pr merge --admin` only a PR whose changed files include
 `task cascade:wiring:check` passed on the PR head; never remove `--pin-on-main` from the step or
 edit the copy to skip a request. `not on .github main` and `differs from` are findings, never
 outages, and never bypassed.
+
+### D5: Nothing reaches the CI wiring step from around it
+
+Added after review. In the config's CI workflow and job: `env` (workflow and job) is absent or a
+plain map whose names match the fixed env-allow pattern (`CUE_*`, `OPM_*`, `REGISTRY`,
+`IMAGE_NAME`), not the repo's `env-allow` list, since library and cli set `CUE_REGISTRY` and
+`OPM_REGISTRY` there with an empty list; the job has no `container` or `services` (a service can
+mount the workspace); and every step before the wiring step is `uses:` of another repo's action
+at a full SHA (`owner/repo[/path]@<40 hex>`) with only `id`, `name`, `uses` and `with`. A `run:`
+step, a local action, a tag ref, or a step `env`, `if` or `shell` before it fails. Steps after
+it are free. Under `--pin-on-main` the script also exits 1 when `BASH_ENV` or `ENV` is set; that
+is a tripwire, since bash sources `BASH_ENV` before the script runs and that file can unset it.
+`CASCADE_GH` stays (the tests use it); the env rule keeps it out of CI.
+
+core, library and cli `main` pass. catalog_opm `main` runs a step before the wiring step that
+writes `OPM_CLI_VERSION` to `GITHUB_ENV`, so its re-pin PR moves the wiring step above it.
 
 ## Risks / Trade-offs
 

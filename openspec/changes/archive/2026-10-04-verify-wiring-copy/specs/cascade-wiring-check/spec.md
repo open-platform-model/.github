@@ -97,6 +97,30 @@ the file and step.
 - **WHEN** a resolver checkout passes `token: ${{ secrets.GITHUB_TOKEN }}`
 - **THEN** the check exits 1 naming that checkout
 
+### Requirement: Nothing reaches the CI wiring step
+
+In the CI workflow and job the config names, the wiring check SHALL refuse with exit 1: a
+workflow or job `env` that is not absent or a plain map, or that names a variable outside `CUE_*`,
+`OPM_*`, `REGISTRY` and `IMAGE_NAME`; a `container` or `services` on the job; and any step before
+the wiring step that is not `uses:` of another repository's action at a full 40-hex SHA with only
+the keys `id`, `name`, `uses` and `with`. With `--pin-on-main`, the check SHALL exit 1 before any
+request when `BASH_ENV` or `ENV` is set.
+
+#### Scenario: BASH_ENV in the CI job env
+
+- **WHEN** the CI job sets `env: {BASH_ENV: ./x}`, or the CI workflow sets `CASCADE_GH`
+- **THEN** the check exits 1 naming the env keys outside the allowed names
+
+#### Scenario: A run step before the wiring step
+
+- **WHEN** a `run:` step that writes to `$GITHUB_ENV` comes before the wiring step
+- **THEN** the check exits 1 naming that step
+
+#### Scenario: Pinned setup actions before the wiring step
+
+- **WHEN** only `actions/checkout`, `actions/setup-go` and `go-task/setup-task` at full SHAs come before the wiring step, and `run:` steps follow it
+- **THEN** that part of the check passes
+
 ### Requirement: Runbook for a failed API call
 
 The README SHALL tell an admin what to do when the required wiring step fails because a GitHub API

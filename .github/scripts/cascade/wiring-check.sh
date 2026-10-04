@@ -11,9 +11,14 @@
 # tree, so a PR can change them along with the workflows; review and the main
 # ruleset guard against a deliberate edit. Online it also compares itself with
 # the canonical file at the pinned SHA: that catches a copy that drifted or was
-# not replaced at a pin bump, and makes an edit to the copy fail unless the
-# edit also removes this comparison, which the diff shows. It is no substitute
-# for review, since the copy under test runs the comparison.
+# not replaced at a pin bump. It is no substitute for review, since the copy
+# under test runs the comparison: an edited copy passes if the same PR also
+# removes the comparison, or changes what runs around the CI step. The CI
+# shape rule refuses the plain routes (env, container or services on the CI
+# job or workflow, a run: step before the wiring step); an earlier SHA-pinned
+# action can still change the step's environment (GITHUB_ENV, GITHUB_PATH),
+# so a reviewer reads every change to the CI workflow as a change to this
+# check.
 #
 # Usage, from the repo root:
 #   bash .tasks/cascade/wiring-check.sh [--pin-on-main] [<config>]
@@ -61,6 +66,12 @@ PIN_ON_MAIN=false
 if [ "${1:-}" = --pin-on-main ]; then PIN_ON_MAIN=true; shift; fi
 [ $# -le 1 ] && [[ ${1:-} != -* ]] || usage_err "usage: wiring-check.sh [--pin-on-main] [<config>]"
 CONFIG=${1:-.tasks/cascade/wiring-check.yaml}
+# A tripwire only: bash sources BASH_ENV before this line runs, and that file
+# can unset it. The CI shape rule below is what keeps both out of the step.
+if [ "$PIN_ON_MAIN" = true ] && { [ -n "${BASH_ENV+x}" ] || [ -n "${ENV+x}" ]; }; then
+  echo "cascade wiring: BASH_ENV or ENV is set; --pin-on-main runs without them" >&2
+  exit 1
+fi
 W=.github/workflows
 yq --version 2>/dev/null | grep -q mikefarah || usage_err "mikefarah yq v4 is required"
 [ -f "$CONFIG" ] || usage_err "no config at $CONFIG"
@@ -445,6 +456,27 @@ if [ -f "$ci" ]; then
     "$(J="$CI_JOB" C="$CI_RUN" yj '[.jobs[strenv(J)].steps // [] | .[] | select(.run == strenv(C))][0] // {} | keys | sort' "$ci")"
   eq "$CI_WF:$CI_JOB wiring step env" "$CI_ENV" \
     "$(J="$CI_JOB" C="$CI_RUN" yj '[.jobs[strenv(J)].steps // [] | .[] | select(.run == strenv(C))][0].env' "$ci")"
+  # Nothing reaches the step from around it. The workflow's and the job's env
+  # (plain maps, names from the fixed env-allow names only) would hand it
+  # BASH_ENV, CASCADE_GH, PATH and the rest; a container or a service (which
+  # can mount the workspace) runs it elsewhere or beside it; and a run: step
+  # before it could write GITHUB_ENV or GITHUB_PATH, or leave a process behind
+  # that swaps the file. So the steps before it are only SHA-pinned actions
+  # from another repo, with no env, if or shell of their own.
+  for scope in "" "jobs[strenv(J)]."; do
+    lbl="$CI_WF${scope:+:$CI_JOB} env"
+    re "$lbl type" '^!!(null|map)$' "$(J="$CI_JOB" y ".${scope}env | tag" "$ci")"
+    eq "$lbl keys outside CUE_*, OPM_*, REGISTRY and IMAGE_NAME" "" \
+      "$(J="$CI_JOB" y ".${scope}env // {} | select(tag == \"!!map\") | keys | .[]" "$ci" | grep -vE "$ENV_ALLOW_RE" | tr '\n' ' ' | sed 's/ $//' || true)"
+  done
+  eq "$CI_WF:$CI_JOB container and services" '[]' "$(J="$CI_JOB" yj '[.jobs[strenv(J)] // {} | keys | .[] | select(. == "container" or . == "services")]' "$ci")"
+  eq "$CI_WF:$CI_JOB steps before the wiring step that are not a pinned action with only id, name, uses and with" "" \
+    "$(J="$CI_JOB" C="$CI_RUN" yq -r '.jobs[strenv(J)].steps // [] | to_entries
+      | (map(select(.value.run == strenv(C))) | .[0].key // 0) as $w
+      | .[] | select(.key < $w)
+      | select(((.value.uses // "") | test("^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9_./-]+@[0-9a-f]{40}$") | not)
+        or ([.value | keys | .[] | select(. != "id" and . != "name" and . != "uses" and . != "with")] | length > 0))
+      | "steps." + (.key | tostring)' "$ci" | tr '\n' ' ' | sed 's/ $//')"
 else
   bad "$CI_WF is missing"
 fi

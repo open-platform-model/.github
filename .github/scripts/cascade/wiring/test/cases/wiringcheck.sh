@@ -280,6 +280,30 @@ wc_mut "a workflow default shell" ci.yml '.defaults.run.shell = "true {0}"' "ci.
 wc_mut "a job default working directory" ci.yml '.jobs.ci.defaults.run.working-directory = "other"' "ci.yml defaults.run"
 wc_mut "the config naming another job" config '.ci.job = "other"' "ci.yml:other exists"
 
+# Nothing reaches the wiring step from around it (the review's routes: env,
+# an earlier step writing GITHUB_ENV, a container or a service).
+BEFORE="ci.yml:ci steps before the wiring step that are not a pinned action"
+wc_mut "BASH_ENV in the CI job env" ci.yml '.jobs.ci.env.BASH_ENV = "x"' "ci.yml:ci env keys outside"
+wc_mut "CASCADE_GH in the CI workflow env" ci.yml '.env.CASCADE_GH = "./gh"' "ci.yml env keys outside"
+wc_mut "PATH in the CI workflow env" ci.yml '.env.PATH = "."' "ci.yml env keys outside"
+wc_mut "the CI job env as an expression" ci.yml '.jobs.ci.env = "${{ fromJSON(vars.E) }}"' "ci.yml:ci env type"
+wc_mut "a container on the CI job" ci.yml '.jobs.ci.container = "node:20"' "ci.yml:ci container and services"
+wc_mut "a service on the CI job" ci.yml '.jobs.ci.services.s = {"image": "busybox", "volumes": ["/home/runner/work:/w"]}' "ci.yml:ci container and services"
+wc_mut "a run: step writing GITHUB_ENV before the wiring step" ci.yml \
+  '.jobs.ci.steps = [.jobs.ci.steps[0], {"run": "echo BASH_ENV=x >> \"$GITHUB_ENV\""}, .jobs.ci.steps[1]]' "$BEFORE"
+wc_mut "an action at a tag before the wiring step" ci.yml \
+  '.jobs.ci.steps = [.jobs.ci.steps[0], {"uses": "actions/setup-go@v7"}, .jobs.ci.steps[1]]' "$BEFORE"
+wc_mut "a local action before the wiring step" ci.yml \
+  '.jobs.ci.steps = [.jobs.ci.steps[0], {"uses": "./.github/actions/x@3d3c42e5aac5ba805825da76410c181273ba90b1"}, .jobs.ci.steps[1]]' "$BEFORE"
+wc_mut "an earlier action with an env of its own" ci.yml '.jobs.ci.steps[0].env.BASH_ENV = "x"' "$BEFORE"
+wc_mut "an earlier action with an if:" ci.yml '.jobs.ci.steps[0].if = "always()"' "$BEFORE"
+wc_fresh
+yq -i '.env = {"CUE_REGISTRY": "a", "OPM_REGISTRY": "b"} | .jobs.ci.env = {"CUE_VERSION": "v0"}
+  | .jobs.ci.steps = [.jobs.ci.steps[0] | .id = "co" | .with = {"fetch-depth": 0},
+    {"name": "Go", "uses": "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", "with": {"cache": false}},
+    .jobs.ci.steps[1], {"run": "echo after"}]' "$WCD/.github/workflows/ci.yml"
+wc_ok "registry env, pinned actions before and run: steps after the wiring step pass"
+
 # --- the config ---------------------------------------------------------------
 wc_cfg "an unknown key" '.extra = 1' "unknown key extra"
 wc_cfg "BASH_ENV in env-allow" '.["env-allow"] += ["BASH_ENV"]' "env-allow may not allow BASH_ENV"
@@ -472,6 +496,11 @@ gh_fx_err 1 "HTTP 404" -- "${COMPARE[@]}"
 run env -C "$WCD" bash "$WCHECK" --pin-on-main
 check "pin on main: a failed compare is refused" bash -c '[ "$1" = 1 ] && [[ $2 == *"cannot compare .github"* ]]' _ "$RC" "$ERR"
 check "pin on main: a failed compare fetches no copy" test "$(gh_count "api -H *")" = 0
+for v in BASH_ENV ENV; do
+  wc_fresh; gh_reset
+  run env -C "$WCD" "$v=" bash "$WCHECK" --pin-on-main
+  check "pin on main: $v set is refused before any API call" bash -c '[ "$1" = 1 ] && [[ $2 == *"BASH_ENV or ENV is set"* ]] && [ ! -s "$3" ]' _ "$RC" "$ERR" "$GHFX/log"
+done
 
 # --- the copy is the file at the pin ---------------------------------------------
 # As CI runs it: the copy at .tasks/cascade/wiring-check.sh, from the repo root.
