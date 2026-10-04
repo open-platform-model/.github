@@ -32,8 +32,9 @@ in a file this change already edits.
     filters.
   - Org history agrees: on core#86, modules#28 and modules#43, a body edit was followed by no
     run, and only a close and reopen produced a fresh one.
-  - The guard reads `context.payload.pull_request` (`mention-guard.yml:101`), so "Re-run jobs"
-    rescans the old text.
+  - The guard reads the title and body from `context.payload.pull_request`
+    (`mention-guard.yml:101`, `:118-119`), so "Re-run jobs" rescans the old title and body. Commit
+    messages are listed fresh through `pulls.listCommits` (`mention-guard.yml:120`).
 - Workspace RELEASING.md, section "Owner settings" (lines 477-478), already states this as the
   premise of the `BLANK` squash decision.
 
@@ -49,12 +50,14 @@ in a file this change already edits.
 - **README, tag-ledger.** `README.md:90-91` gains `opm` in the scope list.
 - **README, mention-guard Limits.** The paragraph at `README.md:70-73` states that:
   - a ruleset-required run does not re-fire on `edited`;
-  - a re-run of the job rescans the text from the original event;
+  - a re-run reads the title and body from the original event, while commit messages are listed
+    fresh;
   - the way to get a fresh scan after editing a title or body is to close and reopen the PR, or
     push a commit.
-- **Verification**, not committed: an offline equivalence run of `tag-ledger.sh` with `git` and
-  `curl` PATH shims, plus a read-only live run against a scratch copy of the ledger
-  (`design.md`, "Verification").
+- **Verification**, not committed: a read-only live run of `tag-ledger.sh` against a scratch copy
+  of the ledger that records every response, then an offline equivalence run that replays those
+  responses through `git`, `curl` and `date` PATH shims (`design.md`, D4). The six-case result
+  table and the live-run summary go into the PR body.
 
 Not in this change:
 
@@ -64,12 +67,28 @@ Not in this change:
   workflow also runs as a normal workflow, where `edited` does fire.
 - `release-flow-sandbox`. `AGENTS.md` lists it in the immutable-tag scope, but it is private,
   and `tag-ledger.sh:73` lists tags with an anonymous `git ls-remote`, which cannot read it
-  (`design.md`, "Research & Decisions").
+  (`design.md`, "Research & Decisions"). Whether it is covered is an open owner decision; until
+  then it is excluded by name, not by an access rule.
 - A committed offline test suite for `tag-ledger.sh`, and a CI job to run it. That is a follow-up
   (`design.md`, "Research & Decisions").
-- The README intro (`README.md:3-4`, "hosts two things"), which no longer mentions the
-  `cascade` section, and the workspace `.claude/skills/commit/SKILL.md` "five releasing repos"
-  line. Both are separate follow-ups.
+- Follow-ups, each its own change or PR:
+  - The README intro (`README.md:3-4`, "hosts two things"), which no longer mentions the
+    `cascade` section.
+  - The workspace `.claude/skills/commit/SKILL.md` "five releasing repos" line.
+  - The guard's own failure hint, `mention-guard.yml:145` ("**Fix:** edit the PR title in the web
+    UI"), which names exactly the action that does not rescan. A separate PR changes it to edit
+    the title, then push a commit or close and reopen the PR. It is separate because the org
+    ruleset reads that file by path from `main`.
+  - Workspace `AGENTS.md:206-210` ("Pending for `opm`", checked 2026-10-03) says `opm` is outside
+    `tags-immutable` and `tags-create-app-only` with immutable releases off. Live on 2026-10-04,
+    rulesets 24307318 and 24306688 apply to `opm` and immutable releases are on. A workspace PR
+    moves `opm` to the active controls, as `AGENTS.md:213` asks.
+  - Stale tag-ledger docs: `README.md:127-130` says bypass assertions are listed under "Not
+    verified", but the summary heading is "Warnings (not verified, pending or acknowledged)"
+    (`tag-ledger.yml:183`). `README.md:116-119` and the header comment at `tag-ledger.yml:14-16`
+    still call `tags-create-app-only` and `release-branches` planned, although all three
+    rulesets exist.
+  - A committed offline test suite for `tag-ledger.sh` (see above).
 
 ## Capabilities
 
@@ -93,8 +112,8 @@ None.
   - `mention-guard.yml`, which every org repo runs through ruleset 20657243, is not edited.
 - **Network:** each run makes one more anonymous `git ls-remote --tags` to
   `github.com/open-platform-model/opm.git`, and three more ruleset listings to `api.github.com`
-  with up to three detail reads. All of these use the workflow token, retried anonymously on
-  401/403 (`tag-ledger.sh:158-166`).
+  with up to three detail reads. The `ls-remote` is anonymous; the API calls use the workflow
+  token, retried anonymously on 401/403 (`tag-ledger.sh:158-166`).
 - **First run after merge:** the next scheduled run appends `opm`'s tags (one today) as new rows,
   reports "New tags recorded: N" in the job summary and opens no issue. No bootstrap is needed.
   The anchor and integrity logic (`ledger-integrity.sh`) does not depend on `REPOS`.

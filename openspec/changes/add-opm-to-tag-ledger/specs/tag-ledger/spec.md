@@ -9,10 +9,11 @@ workspace `AGENTS.md`, section "Release Tags Are Immutable", and workspace RELEA
 
 ### Requirement: Scanned repos
 
-The `tag-ledger` workflow SHALL scan exactly the `open-platform-model` repos that release and
-that an anonymous `git ls-remote` can read: `core`, `library`, `catalog_opm`, `cli`,
-`opm-operator` and `opm`. Each of them SHALL get the same treatment, with no per-repo
-exceptions:
+The `tag-ledger` workflow SHALL scan exactly these `open-platform-model` repos: `core`,
+`library`, `catalog_opm`, `cli`, `opm-operator` and `opm`. `release-flow-sandbox`, which is in
+the workspace immutable-tag scope, SHALL stay excluded until the owner decides whether the ledger
+covers it. A scanned repo that cannot be read SHALL fail the run, not drop out of the scan. Each
+scanned repo SHALL get the same treatment, with no per-repo exceptions:
 
 - every tag is recorded in the ledger;
 - a recorded tag that is deleted or changed is a finding;

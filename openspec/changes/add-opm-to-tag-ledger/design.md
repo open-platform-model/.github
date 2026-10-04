@@ -96,32 +96,58 @@ in this substance:
 
 > A run required by the org ruleset fires only on `opened`, `synchronize` and `reopened`.
 > GitHub ignores the `edited` type that `mention-guard.yml` lists, so editing a title or body
-> after a run does not rescan it. "Re-run jobs" rescans the text from the original event, not
-> the edit. For a fresh scan, push a commit, or close and reopen the PR.
+> after a run does not rescan it. A re-run reads the title and body from the original event;
+> commit messages are listed fresh. For a fresh scan, push a commit, or close and reopen the PR.
 
 The exact sentences are written at apply time. They MUST NOT contain a bare `@word` and MUST
 stay consistent with workspace RELEASING.md, section "Owner settings" (lines 477-478).
 
 ### D4. Verification
 
-Verification MUST run before each section's commit, from the scratchpad
+Verification MUST run before section 1's commit, from the scratchpad
 (`p3-gh-ledger-*`). It MUST NOT dispatch `tag-ledger.yml` from the feature branch. Such a run
 would find `main`'s anchor, push rows to the shared `tag-ledger` branch from an untrusted ref,
 and upload an anchor artifact that the next `main` run ignores. Its rows would then show up as
 "not written by a trusted run" notices and open the drift issue.
 
-**V1, offline equivalence.** Run `tag-ledger.sh` from the worktree with PATH shims:
+There is a single network pass (V2). It records every response, and V1 replays the recording
+offline, so V1 needs no network and V2's budget is the only one.
+
+**V2, read-only live run, recording.** Run `tag-ledger.sh` once with the six repos against the
+real services:
+
+- **Budget check first.** Read `curl -s https://api.github.com/rate_limit`, which does not count
+  against the limit, and require `rate.remaining` of at least 40. The run makes 36 anonymous API
+  calls (per repo: the tag listing twice, the branch listing once, three ruleset reads). Other
+  agents share the IP, so below 40 the run waits for the reset instead of starting.
+- **`GH_TOKEN` unset.** Never set it to the owner's token as a workaround: that token can see
+  bypass lists and `current_user_can_bypass`, which changes what the run reports.
+- **Recording wrappers.** PATH wrappers for `git` and `curl` call the real binaries and copy each
+  `git ls-remote --tags` output to `<fixtures>/<repo>.refs`, and each API body and status to
+  `<fixtures>/api/<encoded path>.body` and `.status`, where the encoded path is the URL path and
+  query after the API host with `/` as `_` and `?`, `&`, `=` kept. The recording makes no
+  extra request.
+- **Ledger.** A scratch copy of `git show origin/tag-ledger:ledger.tsv`.
+
+It MUST exit 0 with an empty FINDINGS file. The appended rows MUST include
+`opm v1.0.0-beta.1 83a4756d…` and otherwise only tags the remote gained after the ledger's last
+row. It writes nothing outside the scratch directory.
+
+**V1, offline equivalence, replaying V2.** Run `tag-ledger.sh` from the worktree with PATH shims:
 
 - **`git` shim.** Answers only `ls-remote --tags https://github.com/open-platform-model/<repo>.git`
   from `<fixtures>/<repo>.refs`, and exits 2 on anything else.
 - **`curl` shim.** Accepts the `api_get` shape (`-sS -o <file> -w '%{http_code}' -H … <url>`). It
-  writes the body from `<fixtures>/api/<path with ? as %3F>` and prints the status, defaulting to
-  200 when the body exists and 404 when it does not.
-- **Fixtures.** Captured once, read-only:
-  - `git ls-remote --tags` for the six repos;
-  - the tag and branch ruleset listings and the three ruleset bodies, read anonymously for
-    `core` and `opm`.
-- **Starting ledger.** `git show origin/tag-ledger:ledger.tsv`.
+  writes the recorded body to `<file>` and prints the recorded status, or 404 when nothing was
+  recorded for that URL (which only the E-ruleset case relies on, through an edited body).
+- **`date` shim.** Prints a fixed `2026-10-04T00:00:00Z` for every call, so the `first_seen_utc`
+  column of appended rows (`tag-ledger.sh:50`, `:109`) is the same in every case. Without it,
+  rows the five repos gained since the ledger's last row would differ between two runs only by
+  their timestamp.
+- **Fixtures.** The V2 recording for all six repos: their tag listings, both ruleset listings
+  and the three ruleset bodies each. Cases that need a variation copy the fixture tree and edit
+  the copy.
+- **Starting ledger.** The same `git show origin/tag-ledger:ledger.tsv` as V2.
 - **Environment.** `GH_TOKEN` unset, `ACK_FILE=tag-ledger/acknowledged.tsv`, and separate
   `FINDINGS` and `WARNINGS` files per run.
 
@@ -134,15 +160,8 @@ and upload an anchor artifact that the next `main` run ignores. Its rows would t
 | E-revert | old five | ledger B (with `opm` rows) | empty FINDINGS; `opm` rows still present |
 | E-ruleset | new six | B | with `tags-immutable` removed from the `opm` tag listing: a finding naming `opm` and `tags-immutable` |
 
-**V2, read-only live run.** Run `tag-ledger.sh` once with the six repos against the real
-services:
-
-- use a scratch copy of the live ledger, with `GH_TOKEN` unset;
-- the run makes at most 36 anonymous API calls, under the anonymous limit of 60 per hour.
-
-It MUST exit 0 with an empty FINDINGS file. The appended rows MUST include
-`opm v1.0.0-beta.1 83a4756d…` and otherwise only tags the remote gained after the ledger's last
-row. It writes nothing outside the scratch directory.
+The six-case result table and the V2 summary (exit status, rows appended, FINDINGS and WARNINGS
+line counts) go into the PR body, not only the scratchpad.
 
 **V3, after merge.** The supervisor reads the first scheduled run's job summary. It MUST show
 `Repos: core library catalog_opm cli opm-operator opm.`, `New tags recorded:` at least 1, no
@@ -156,7 +175,10 @@ Drift section, and no new issue. This step is outside `tasks.md`, because it nee
 - **Section 2, mention-guard Limits paragraph.** Commit
   `docs(mention-guard): say a ruleset run ignores edited`.
 
-The archive is not part of this run. Per the repo config it rides the implementing PR later.
+- **Section 3, archive.** `openspec archive add-opm-to-tag-ledger`, committed as
+  `docs(openspec): archive add-opm-to-tag-ledger` on this branch. Per the repo config and the
+  owner rule of 2026-10-01, the archive commit rides the implementing PR and lands before it
+  merges. It runs after review, so the apply run leaves it open.
 
 ## Research & Decisions
 
@@ -166,7 +188,10 @@ The archive is not part of this run. Per the repo config it rides the implementi
 - **Options:**
   1. Add `opm` only.
   2. Add `opm` and `release-flow-sandbox`.
-- **Decision:** add `opm` only.
+- **Decision:** add `opm` only, and exclude `release-flow-sandbox` by name pending an owner
+  decision (Open Questions, 1). The spec names the six repos; it does not define the scope as
+  "what an anonymous `ls-remote` can read", so a scanned repo that turns private fails the run
+  instead of silently dropping out.
 - **Rationale.** `release-flow-sandbox` is private (`gh api repos/open-platform-model/release-flow-sandbox`
   reports `private`).
   - `tag-ledger.sh:73` reads tags anonymously, and a failed listing aborts the whole scan by
@@ -188,10 +213,11 @@ The archive is not part of this run. Per the repo config it rides the implementi
 - **Rationale.**
   - The change moves no script line, so the property worth proving is "same output for the five,
     and `opm` treated like them". V1 proves that against the real script and live-captured data.
-  - Option 2 would add new files under `.github/scripts/`. It would also need a CI job, either
-    inside `Resolver tests` (the wrong owner) or a new one that the owner would have to add to the
-    `main` ruleset. And `.github` `add-release-cascade-workflows` is editing the same CI surface
-    in parallel.
+  - Option 2 is cheap to wire: a suite at `.github/scripts/tag-ledger/test/run.sh` would already
+    run under validation gate 3, and a CI job that is not required needs no owner step. The
+    reason to defer it is scope: designing reusable fixtures and shims for both scripts is a
+    change of its own, and `.github` `add-release-cascade-workflows` is editing the CI surface in
+    parallel.
   - A committed suite is worth having as its own change.
 
 ### Finding 4 is a real defect
@@ -203,8 +229,8 @@ The archive is not part of this run. Per the repo config it rides the implementi
     filters are disregarded.
   - The org runs on core#86, modules#28 and modules#43 (from the Phase 1 review): a body edit
     was followed by no run, and only a reopen gave a fresh one.
-  - `mention-guard.yml:101` reads `context.payload.pull_request`, so a re-run rescans stale
-    text.
+  - `mention-guard.yml:101` reads the title and body from `context.payload.pull_request`, so a
+    re-run rescans the stale title and body (commit messages are listed fresh, `:120`).
   - Workspace RELEASING.md lines 477-478 rely on the same fact.
 - **Decision:** fix it here as section 2.
 - **Rationale.** A reader of `mention-guard.yml:34` is misled today. The fix is one paragraph of
@@ -223,3 +249,10 @@ The archive is not part of this run. Per the repo config it rides the implementi
 - **The README wording about GitHub's `edited` handling relies on documented behaviour and org
   history, not on a GitHub guarantee.** → The wording describes what happens and how to get a
   fresh scan, which stays correct even if GitHub later starts honouring `edited`.
+
+## Open Questions
+
+1. **Owner:** should `release-flow-sandbox` be covered by the ledger? It is in the
+   `AGENTS.md` immutable-tag scope but private, so covering it needs a token that can read it,
+   which changes the workflow's trust model (README "Token"). Until the owner decides, it stays
+   excluded by name.
