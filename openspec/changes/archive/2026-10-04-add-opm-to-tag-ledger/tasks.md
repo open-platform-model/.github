@@ -29,4 +29,4 @@ Never dispatch `tag-ledger.yml` from this branch (`design.md`, D4).
 
 ## 3. Archive
 
-- [ ] 3.1 After review, run `openspec archive add-opm-to-tag-ledger`, check `openspec validate --all --strict` is green, then commit `docs(openspec): archive add-opm-to-tag-ledger` on this branch, so the archive rides the implementing PR.
+- [x] 3.1 After review, run `openspec archive add-opm-to-tag-ledger`, check `openspec validate --all --strict` is green, then commit `docs(openspec): archive add-opm-to-tag-ledger` on this branch, so the archive rides the implementing PR.
