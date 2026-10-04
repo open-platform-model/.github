@@ -162,6 +162,9 @@ rule_copy() {
   if [ ! -d "$d" ]; then
     mkdir -p "$d"
     cp "$WIRING"/*.sh "$d/"
+    # publish runs the resolver beside the wiring scripts.
+    cp "$WIRING/../cascade-resolve.sh" "$d/.."
+    cp -r "$WIRING/../lib" "$d/.."
     sed -i "s/^WF_GUARD_RULE=.*/WF_GUARD_RULE=$1/" "$d/lib.sh"
   fi
   printf '%s' "$d"

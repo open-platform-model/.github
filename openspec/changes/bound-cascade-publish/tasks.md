@@ -14,13 +14,13 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 2. Publish bounds the increment and renders the PR text
 
-- [ ] 2.1 `lib.sh`: `publish_paths`, `publish_path_ok`, the deny-list, `receiver_classes`, `receiver_pins` for catalog_opm, library, opm-operator, cli and cascade-sandbox-down (D1, D2); new `wiring/pins.sh`
-- [ ] 2.2 `receive-publish.sh verify`: the increment range, the drop check, the per-commit checks (D1); the scratch worktree, filtered warnings, payload from the event, Notes from the live PR, the resolver's `title` and `body`, the final title, the body limits and the derived labels with the publish-side breaking check (D2); `close` keeps a branch with human commits
-- [ ] 2.3 `receive-compute.sh text`: copy the task's warnings to `$CASCADE_T/warnings.tsv`; `cascade-receive.yml` uploads it; `cascade-publish/action.yml` passes `CASCADE_EVENT` and `CASCADE_PAYLOAD` to verify
-- [ ] 2.4 Cases: the refusals of D1 (a bundle touching `.tasks/cascade/pins.sh`, `Taskfile.yml`, a symlink, a mode change, an added file, a non-bot author, a non-bot committer, three commits, a merge whose tree differs, a rebuild over a human commit, `close` keeping a human branch); merge mode with a human commit accepted; derived text (a forged plan title ignored, planted body text gone, Notes from the live PR, warnings filtered); labels (a plan without `need-human-review` or `deps-cascade:breaking` gets them, a failed release read keeps the plan's claim, act never removes them); the existing publish cases adapted
-- [ ] 2.5 Cases: `publish_path_ok` per receiver (each allowed path, the deny-list over the allow-list, cli's two hack paths); `receiver_pins` per receiver against fixture trees copied from each receiver's `origin/main` files
-- [ ] 2.6 Gates green, then commit `fix(cascade): bound what publish accepts from compute`
-- [ ] 2.7 Proof outside the suite (recorded in the PR body, not committed): each receiver's real `pins.sh` and the mirror agree on its `origin/main` history; each receiver's offline cascade suite leaves only paths `publish_path_ok` accepts
+- [x] 2.1 `lib.sh`: `publish_paths`, `publish_path_ok`, the deny-list, `receiver_classes`, `receiver_pins` for catalog_opm, library, opm-operator, cli and cascade-sandbox-down (D1, D2); new `wiring/pins.sh`
+- [x] 2.2 `receive-publish.sh verify`: the increment range, the drop check, the per-commit checks (D1); the scratch worktree, filtered warnings, payload from the event, Notes from the live PR, the resolver's `title` and `body`, the final title, the body limits and the derived labels with the publish-side breaking check (D2); `close` keeps a branch with human commits
+- [x] 2.3 `receive-compute.sh text`: copy the task's warnings to `$CASCADE_T/warnings.tsv`; `cascade-receive.yml` uploads it; `cascade-publish/action.yml` passes `CASCADE_EVENT` and `CASCADE_PAYLOAD` to verify
+- [x] 2.4 Cases: the refusals of D1 (a bundle touching `.tasks/cascade/pins.sh`, `Taskfile.yml`, a symlink, a mode change, an added file, a non-bot author, a non-bot committer, three commits, a merge whose tree differs, a rebuild over a human commit, `close` keeping a human branch); merge mode with a human commit accepted; derived text (a forged plan title ignored, planted body text gone, Notes from the live PR, warnings filtered); labels (a plan without `need-human-review` or `deps-cascade:breaking` gets them, a failed release read keeps the plan's claim, act never removes them); the existing publish cases adapted
+- [x] 2.5 Cases: `publish_path_ok` per receiver (each allowed path, the deny-list over the allow-list, cli's two hack paths); `receiver_pins` per receiver against fixture trees copied from each receiver's `origin/main` files
+- [x] 2.6 Gates green, then commit `fix(cascade): bound what publish accepts from compute`
+- [x] 2.7 Proof outside the suite (recorded in the PR body, not committed): each receiver's real `pins.sh` and the mirror agree on its `origin/main` history; each receiver's offline cascade suite leaves only paths `publish_path_ok` accepts
 
 ## 3. Compute: main's task in merge mode, payload tags, pinned tools
 

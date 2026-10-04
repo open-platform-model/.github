@@ -69,7 +69,7 @@ Deny-list: `.github/*`, `.tasks/*`, any path whose basename starts with `Taskfil
 `.cascade-frozen`, `.cascade-hold`.
 
 Allow-lists, read from each receiver's `.tasks/cascade/cascade.sh` on `origin/main` (2026-10-04:
-catalog_opm `3288406`, library `93a892f`, opm-operator `4eebece`, cli `5f00930`):
+catalog_opm `3288406`, library `93a892f`, opm-operator `6a14adb`, cli `5f00930`):
 
 | Receiver | Paths (ERE, anchored) | From |
 | --- | --- | --- |

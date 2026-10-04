@@ -93,6 +93,10 @@ runs:
         CASCADE_PUBLISH_GATES_ONLY: ${{ inputs.gates-only }}
         CASCADE_PUBLISH_DRY_RUN: ${{ inputs.dry-run }}
         CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+        # The trigger, from the event itself: publish renders the PR body's
+        # triggering releases from it, never from the plan.
+        CASCADE_EVENT: ${{ github.event_name }}
+        CASCADE_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
         GH_TOKEN: ${{ github.token }}
         CASCADE_READ_TOKEN: ${{ github.token }}
       run: bash "$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/receive-publish.sh" verify

@@ -293,6 +293,7 @@ jobs:
           path: |
             ${{ runner.temp }}/cascade/plan.json
             ${{ runner.temp }}/cascade/body.md
+            ${{ runner.temp }}/cascade/warnings.tsv
             ${{ runner.temp }}/cascade/cascade.bundle
             ${{ runner.temp }}/cascade/diff.patch
           if-no-files-found: error

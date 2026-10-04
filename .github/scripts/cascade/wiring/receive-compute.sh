@@ -391,6 +391,11 @@ step_text() {
   [ -z "$(st_get extra)" ] || benv+=("CASCADE_EXTRA_SOURCES=$(st_get extra)")
   [ ! -f "$T/notes.md" ] || benv+=("CASCADE_NOTES_FILE=$T/notes.md")
   repo_task deps:cascade:body "${benv[@]}" >"$T/body.md" || die "task -x deps:cascade:body failed"
+  # The task's warnings travel with the plan: publish renders the body
+  # itself and filters them line by line.
+  local wf
+  wf="$(g rev-parse --absolute-git-dir)/cascade/warnings"
+  if [ -f "$wf" ]; then cp -- "$wf" "$T/warnings.tsv"; else : >"$T/warnings.tsv"; fi
   if [ "$(wc -c <"$T/body.md")" -gt "$BODY_MAX" ]; then st_set too_long 1; else st_set too_long 0; fi
 
   local has_pr=0 old_title=""
