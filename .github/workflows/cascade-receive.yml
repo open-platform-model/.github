@@ -5,7 +5,17 @@ name: Cascade receive
 # (workspace RELEASING.md, section "The receiver"). Two jobs:
 #   compute  runs the repo's `task -x deps:cascade` on the rolling
 #            deps/cascade branch and plans the result; it runs repo code,
-#            so it holds no secret and only read permissions
+#            so it holds no secret and only read permissions. Its two Read
+#            steps make every read that needs GITHUB_TOKEN; they run before
+#            the first step that runs repo code (Gates), and no step from
+#            Gates on gets a token. Repo code also gets no GITHUB_ENV,
+#            GITHUB_PATH, GITHUB_OUTPUT, GITHUB_STEP_SUMMARY or GITHUB_STATE
+#            variable (run_repo_code). That is no boundary inside the job:
+#            repo code can find the runner's command files on disk, leave a
+#            process running into later steps, rewrite the scripts, and with
+#            the runner's sudo read the job's read-only token. So everything
+#            compute writes from Gates on is untrusted, and the jobs after it
+#            re-derive what they act on
 #   gates    posts G2 cascade/freshness and G3 cascade/settled on open
 #            release PRs with GITHUB_TOKEN
 # The third job, publish, is the caller's own: it declares `environment:
@@ -173,15 +183,35 @@ jobs:
           CASCADE_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
         run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh payload
 
-      # Before any pin work, so a later failure still leaves gate results.
-      # Runs the release heads' own task: no token reaches that task.
-      - name: Gates
-        id: gates
+      # Every read that needs the token, before any repo code runs. The
+      # release-PR list, G3 and the release heads' commits.
+      - name: Read gates
+        id: gates-read
         env:
           CASCADE_REPO: ${{ steps.guard.outputs.repo }}
-          CASCADE_GATES_ONLY: ${{ inputs.gates-only }}
           GH_TOKEN: ${{ github.token }}
           CASCADE_READ_TOKEN: ${{ github.token }}
+        run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh gates-read
+
+      # The cascade PR, the branch tips, the mode and the upstream releases
+      # the breaking check reads.
+      - name: Read state
+        id: state
+        if: '!inputs.gates-only'
+        env:
+          CASCADE_REPO: ${{ steps.guard.outputs.repo }}
+          GH_TOKEN: ${{ github.token }}
+          CASCADE_READ_TOKEN: ${{ github.token }}
+        run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh state
+
+      # G2 runs the release heads' own task: the first step that runs repo
+      # code, so no token from here on. Before any pin work, and also when
+      # Read state failed, so the gate results are uploaded either way.
+      - name: Gates
+        id: gates
+        if: ${{ !cancelled() && steps.gates-read.outcome == 'success' }}
+        env:
+          CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh gates
 
       - name: Upload the gate results
@@ -192,15 +222,6 @@ jobs:
           path: ${{ runner.temp }}/cascade/gates.json
           if-no-files-found: ignore
           retention-days: 1
-
-      - name: PR state
-        id: state
-        if: '!inputs.gates-only'
-        env:
-          CASCADE_REPO: ${{ steps.guard.outputs.repo }}
-          GH_TOKEN: ${{ github.token }}
-          CASCADE_READ_TOKEN: ${{ github.token }}
-        run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh state
 
       - name: Prepare the branch
         id: prepare
@@ -224,12 +245,13 @@ jobs:
           CASCADE_REPO: ${{ steps.guard.outputs.repo }}
         run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh run
 
+      # Runs the repo's body task and pins.sh: no token reaches this step;
+      # the breaking check reads the releases Read state fetched.
       - name: Body, title and labels
         id: text
         if: '!inputs.gates-only'
         env:
           CASCADE_REPO: ${{ steps.guard.outputs.repo }}
-          GH_TOKEN: ${{ github.token }}
         run: bash org-github/.github/scripts/cascade/wiring/receive-compute.sh text
 
       - name: Action

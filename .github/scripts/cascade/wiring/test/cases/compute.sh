@@ -93,6 +93,51 @@ check "tokens: the task never sees a token" test "$RC" = 0
 run env -C "$WS/repo" GH_TOKEN=x bash .tasks/cascade/cascade.sh
 check "tokens: the toy task refuses a visible token (control)" test "$RC" = 9
 
+# The task cannot write the step's command files: the toy appends forged
+# lines to every one whose path it is given (control below).
+new_fx; mk_toy; fresh_checkout
+printf 'v0.2.0\n' >"$TOY_TARGET"
+gh_prs '[]'
+gh_rels "$NO_BREAK"
+for f in env path state; do : >"$FX/$f"; done
+GITHUB_ENV="$FX/env" GITHUB_PATH="$FX/path" GITHUB_STATE="$FX/state" compute "${COMPUTE_STEPS[@]}"
+check "command files: the task's forged lines reach no command file" bash -c '
+  [ "$1" = 0 ] && ! grep -q forged "$2" "$3" "$4/env" "$4/path" "$4/state" && [ "$(grep -c "^action=" "$2")" = 1 ] && grep -qx action=push "$2"' \
+  _ "$RC" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" "$FX"
+run env -C "$WS/repo" GITHUB_OUTPUT="$FX/control" bash .tasks/cascade/cascade.sh
+check "command files: the toy task writes a command file it is given (control)" grep -qx forged=GITHUB_OUTPUT "$FX/control"
+
+# The text step runs repo code with no token and makes no API call: the
+# breaking check reads the releases state fetched.
+new_fx; mk_toy; fresh_checkout
+printf 'v0.2.0\n' >"$TOY_TARGET"
+gh_prs '[]'
+gh_rels $'v0.2.0\ttrue\nv0.1.0\tfalse'
+compute init payload state prepare notes run
+check "no token after repo code: state fetched the releases before the task ran" \
+  test "$(cat "$CASCADE_T/releases/cascade-sandbox-up.tsv")" = $'v0.2.0\ttrue\nv0.1.0\tfalse'
+: >"$GHFX/log"
+compute text action plan
+check "no token after repo code: text needs no token and calls no gh" bash -c '[ "$1" = 0 ] && [ ! -s "$2" ]' _ "$RC" "$GHFX/log"
+check "no token after repo code: the breaking label still comes from the fetched releases" \
+  test "$(plan '.labels | join(",")')" = "deps-cascade,deps-cascade:breaking"
+new_fx; mk_toy; fresh_checkout
+printf 'v0.2.0\n' >"$TOY_TARGET"
+gh_prs '[]'
+gh_rels "$NO_BREAK"
+compute init payload state
+rm -f "$CASCADE_T/releases/cascade-sandbox-up.tsv"
+compute prepare notes run text action plan summary
+check "no token after repo code: releases state did not fetch warn, never call the API" bash -c '
+  [ "$1" = 0 ] && grep -q "breaking check could not read" "$2" && [ "$(grep -c "releases" "$3")" = 1 ]' _ "$RC" "$GITHUB_STEP_SUMMARY" "$GHFX/log"
+new_fx; mk_toy
+bot_branch v0.2.0
+printf 'b\n' >"$FX/b"
+gh_prs "[$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/b" "deps-cascade,deps-cascade:hold")]"
+fresh_checkout
+compute init payload state
+check "no token after repo code: a held PR fetches no releases" bash -c '[ "$1" = 0 ] && [ "$3" = skip ] && ! grep -q releases "$2"' _ "$RC" "$GHFX/log" "$(st mode)"
+
 # --- rebuild ------------------------------------------------------------------
 new_fx; mk_toy
 bot_branch v0.2.0

@@ -126,6 +126,19 @@ expect "static: cascade-receive.yml takes action from the input on a gates-only 
   "\${{ inputs.gates-only && 'gates-only' || steps.plan.outputs.action }}" -- yq -r '.jobs.compute.outputs.action' "$RECV"
 expect "static: cascade-receive.yml reports compute-ok false on a gates-only run" 0 \
   "\${{ !inputs.gates-only && steps.done.outputs.ok == 'true' && 'true' || 'false' }}" -- yq -r '.jobs.compute.outputs.ok' "$RECV"
+# No compute step from the first one that runs repo code (Gates: the release
+# heads' task) on is given a token; the two Read steps before it are the only
+# ones that are.
+expect "static: cascade-receive.yml gives the token only to Read gates and Read state, both before Gates" 0 \
+  $'gates-read\nstate' -- yq -r '.jobs.compute.steps | to_entries | map(select((.value.env // {} | to_entries | map(.value) | join(" ")) | test("github\\.token|secrets\\."))) | .[].value.id' "$RECV"
+check "static: cascade-receive.yml runs the repo-code steps after both Read steps" bash -c '
+  idx() { I="$1" yq ".jobs.compute.steps | to_entries | map(select(.value.id == strenv(I))) | .[0].key" "$2"; }
+  [ "$(idx state "$1")" -lt "$(idx gates "$1")" ] && [ "$(idx gates-read "$1")" -lt "$(idx gates "$1")" ] &&
+  [ "$(idx gates "$1")" -lt "$(idx run "$1")" ] && [ "$(idx run "$1")" -lt "$(idx text "$1")" ]' _ "$RECV"
+check "static: cascade-receive.yml passes no token as an action input in compute" bash -c '
+  ! yq -r ".jobs.compute.steps[].with // {} | to_entries[] | .value" "$1" | grep -qE "github\.token|secrets\."' _ "$RECV"
+expect "static: cascade-receive.yml runs Gates even when Read state failed" 0 "\${{ !cancelled() && steps.gates-read.outcome == 'success' }}" -- \
+  yq -r '.jobs.compute.steps[] | select(.id == "gates") | .if' "$RECV"
 expect "static: cascade-receive.yml takes dry-run from Init" 0 '${{ steps.init.outputs.dry_run }}' -- yq -r '.jobs.compute.outputs.dry_run' "$RECV"
 expect "static: actions/cascade-notify mints for the targets only" 0 '${{ steps.validate.outputs.targets }}' -- \
   yq -r '.runs.steps[] | select(.id == "mint") | .with.repositories' "$ORG_ROOT/.github/actions/cascade-notify/action.yml"

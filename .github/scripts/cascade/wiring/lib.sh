@@ -151,6 +151,23 @@ changelog_source() {
   esac
 }
 
+# changelog_repos <receiver>: the repos whose releases the breaking check
+# may read for this receiver's moved pins, fetched before any repo code runs:
+# every product repo with a changelog_source entry but the receiver itself.
+changelog_repos() {
+  local r
+  case "$1" in
+    cascade-sandbox-down) echo cascade-sandbox-up ;;
+    catalog_opm | library | opm-operator | cli)
+      for r in core catalog_opm library opm-operator cli; do
+        [ "$r" = "$1" ] || printf '%s ' "$r"
+      done
+      echo
+      ;;
+    *) return 1 ;;
+  esac
+}
+
 # extra_sources <receiver>: CASCADE_EXTRA_SOURCES for the resolver's body.
 # Only the sandbox receiver widens it, with a literal; never from input.
 extra_sources() {
@@ -192,11 +209,24 @@ is_derived_path() {
 # --- tokens and repo code -----------------------------------------------------
 
 # run_repo_code <command...>: runs code from the calling repo (its tasks, its
-# pins.sh) with every token and git auth header removed from its environment.
+# pins.sh) with every token and git auth header removed from its environment,
+# and with no variable naming a runner command file (GITHUB_ENV, GITHUB_PATH,
+# GITHUB_OUTPUT, GITHUB_STEP_SUMMARY, GITHUB_STATE) or an Actions service
+# (every ACTIONS_*), so a task cannot set the step's outputs, environment or
+# PATH through them. This stops a task that honours those variables; it is no
+# boundary against hostile code, which can still find the files on disk or
+# leave a process running into later steps of the job. So no compute step
+# after the first one that runs repo code holds a token, and every later job
+# treats what compute wrote from then on as untrusted.
 run_repo_code() {
-  env -u GH_TOKEN -u GITHUB_TOKEN -u CASCADE_READ_TOKEN -u CASCADE_APP_TOKEN \
-    -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_PARAMETERS \
-    "$@"
+  local v
+  local -a un=(-u GH_TOKEN -u GITHUB_TOKEN -u CASCADE_READ_TOKEN -u CASCADE_APP_TOKEN
+    -u GIT_CONFIG_COUNT -u GIT_CONFIG_PARAMETERS
+    -u GITHUB_ENV -u GITHUB_PATH -u GITHUB_OUTPUT -u GITHUB_STEP_SUMMARY -u GITHUB_STATE)
+  while IFS= read -r v; do
+    case "$v" in ACTIONS_* | GIT_CONFIG_KEY_* | GIT_CONFIG_VALUE_*) un+=(-u "$v") ;; esac
+  done < <(compgen -e)
+  env "${un[@]}" "$@"
 }
 
 # auth_b64 <token>: the base64 of the basic-auth pair git sends.

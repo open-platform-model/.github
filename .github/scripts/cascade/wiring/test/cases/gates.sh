@@ -14,7 +14,13 @@ UP_PENDING=(pr list -R "$UP" --base main --state open --label "autorelease: pend
 
 # release_pr <number> <head>: the release-PR list entry.
 release_pr() { jq -nc --argjson n "$1" --arg oid "$2" '{number: $n, headRefName: "release-please--branches--main", headRefOid: $oid, isCrossRepository: false}'; }
-gates_eval() { run env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL"; }
+# gates_eval: read then run, as compute's Read gates and Gates steps do;
+# stops after a failing read (RC, OUT, ERR).
+gates_eval() {
+  run env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL" read
+  [ "$RC" = 0 ] || return 0
+  run env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL" run
+}
 g() { jq -r "$1" "$CASCADE_T/gates.json"; }
 
 # --- G2 -----------------------------------------------------------------------
@@ -126,16 +132,61 @@ check "gates: no release PR writes an empty list and asks nothing upstream" bash
 # --- the compute gates step ---------------------------------------------------
 new_fx; mk_toy; fresh_checkout
 gh_fx 0 '[]' -- "${REL_LIST[@]}"
-CASCADE_GATES_ONLY=true compute init payload gates
+CASCADE_GATES_ONLY=true compute init payload gates-read gates
 check "gates-only: the step stops the run with action gates-only" bash -c '[ "$1" = 0 ] && grep -qx "action=gates-only" "$2" && grep -q "gates only" "$3"' _ "$RC" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY"
 check "gates-only: the run is a dry run even with CASCADE_DRY_RUN false" bash -c 'grep -qx "dry_run=true" "$1" && ! grep -qx "dry_run=false" "$1"' _ "$GITHUB_OUTPUT"
 new_fx; mk_toy; fresh_checkout
 gh_fx_err 1 "HTTP 502" -- "${REL_LIST[@]}"
-compute init payload gates
+compute init payload gates-read gates
 check "gates: a failed evaluation does not stop a real run" bash -c '[ "$1" = 0 ] && [[ $2 == *"::warning::gate evaluation failed"* ]]' _ "$RC" "$OUT"
 gh_fx_err 1 "HTTP 502" -- "${REL_LIST[@]}"
-CASCADE_GATES_ONLY=true compute init payload gates
+CASCADE_GATES_ONLY=true compute init payload gates-read gates
 check "gates: a failed evaluation fails a gates-only run" test "$RC" = 1
+
+# A gates-only run whose release head forges compute's outputs: the head's
+# task appends action=push and ok=true to every command file it is given
+# (the toy does), and G2 runs it. The outputs still say gates-only and dry
+# run, and the forged lines reach no file. The workflow's action and ok
+# outputs come from its input besides (static cases), and publish refuses a
+# gates-only run (publish cases).
+new_fx; mk_toy
+seed_commit release-please--branches--main human CHANGELOG.md "## 0.1.1" "chore(main): release 0.1.1"
+HEAD1=$(origin_tip release-please--branches--main)
+fresh_checkout
+printf 'v0.2.0\n' >"$TOY_TARGET"
+gh_fx 0 "[$(release_pr 7 "$HEAD1")]" -- "${REL_LIST[@]}"
+gh_fx 0 '[]' -- "${UP_CASCADE[@]}"
+gh_fx 0 '[]' -- "${UP_PENDING[@]}"
+for f in env path state; do : >"$FX/$f"; done
+GITHUB_ENV="$FX/env" GITHUB_PATH="$FX/path" GITHUB_STATE="$FX/state" CASCADE_GATES_ONLY=true compute init payload gates-read gates
+check "gates-only forged: G2 ran the release head's task" test "$(g '.[0].freshness.state')" = problem
+check "gates-only forged: the outputs are gates-only and a dry run, nothing forged" bash -c '
+  [ "$1" = 0 ] && [ "$(sort "$2" | tr "\n" " ")" = "action=gates-only dry_run=true " ] && ! grep -q forged "$3" "$4/env" "$4/path" "$4/state"' \
+  _ "$RC" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" "$FX"
+
+# The token reads are all in read; run makes no API call.
+new_fx; mk_toy
+seed_commit release-please--branches--main human CHANGELOG.md "## 0.1.1" "chore(main): release 0.1.1"
+HEAD1=$(origin_tip release-please--branches--main)
+fresh_checkout
+mkdir -p "$CASCADE_T"
+gh_fx 0 "[$(release_pr 7 "$HEAD1")]" -- "${REL_LIST[@]}"
+gh_fx 0 '[]' -- "${UP_CASCADE[@]}"
+gh_fx 0 '[]' -- "${UP_PENDING[@]}"
+run env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL" read
+check "gates read: writes the head, its fetch and G3" bash -c '
+  [ "$1" = 0 ] && [ "$(jq -c "[.[] | [.pr, .sha == \"$3\", .fetched, .settled.state]]" "$2")" = "[[7,true,true,\"ok\"]]" ]' _ "$RC" "$CASCADE_T/gates-read.json" "$HEAD1"
+: >"$GHFX/log"
+run env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL" run
+check "gates run: G2 with no gh call" bash -c '[ "$1" = 0 ] && [ "$(jq -r ".[0].freshness.state" "$2")" = ok ] && [ ! -s "$3" ]' _ "$RC" "$CASCADE_T/gates.json" "$GHFX/log"
+jq '.[0].fetched = false' "$CASCADE_T/gates-read.json" >"$FX/gr" && mv "$FX/gr" "$CASCADE_T/gates-read.json"
+run env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL" run
+check "gates run: a head read could not fetch is an evaluator error" \
+  test "$(jq -r '.[0].freshness | .state + "|" + .msg' "$CASCADE_T/gates.json")" = "error|cannot check out the release head"
+rm -f "$CASCADE_T/gates-read.json"
+run env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL" run
+check "gates run: without gates-read.json exits 1 and writes no file" bash -c '[ "$1" = 1 ] && [ ! -e "$2/gates.json" ]' _ "$RC" "$CASCADE_T"
+expect "gates: no step is usage" 2 "" "usage: gates-eval.sh read|run" -- env -C "$WS" CASCADE_REPO=cascade-sandbox-down bash "$GATES_EVAL"
 
 # --- gates-post: the status mapping -------------------------------------------
 new_fx

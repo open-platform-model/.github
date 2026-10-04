@@ -3,9 +3,16 @@
 # Evaluates gates G2 cascade/freshness and G3 cascade/settled on the
 # receiving repo's open release PRs (workspace RELEASING.md, section
 # "Gates"). Runs inside the receiver's compute job, before any pin work;
-# gates-post.sh posts the result.
+# gates-post.sh posts the result. Two steps, so every read that needs a
+# token happens before any release head's code runs:
 #
-# Usage: gates-eval.sh
+# Usage:
+#   gates-eval.sh read   lists the release PRs, evaluates G3 and fetches each
+#                        head commit (GH_TOKEN, CASCADE_READ_TOKEN); writes
+#                        $CASCADE_T/gates-read.json:
+#                        [{"pr", "sha", "fetched": bool, "settled": {"state", "msg"}}]
+#   gates-eval.sh run    G2 for each head in gates-read.json, with no token
+#                        and no API call; writes $CASCADE_T/gates.json
 #
 # Scope: open PRs on base main whose head ref starts with release-please--
 # and whose head repo is this repo. Fork PRs are never evaluated.
@@ -16,22 +23,25 @@
 #   `autorelease: pending` PR listing a **deps:** bullet, is a problem.
 #
 # Environment: CASCADE_REPO, CASCADE_T (default $RUNNER_TEMP/cascade),
-# CASCADE_REPO_DIR (default $PWD/repo), CASCADE_RESOLVER, GH_TOKEN and
-# CASCADE_READ_TOKEN (GITHUB_TOKEN).
-# Writes $CASCADE_T/gates.json:
+# CASCADE_REPO_DIR (default $PWD/repo), CASCADE_RESOLVER; GH_TOKEN and
+# CASCADE_READ_TOKEN (GITHUB_TOKEN) for read only.
+# gates.json:
 #   [{"sha", "pr", "freshness": {"state": "ok|problem|error", "msg"}, "settled": {...}}]
 #
-# Exit status: 0 written (per-gate errors are in the file); 1 the release-PR
-# list cannot be read (no file); 2 usage.
+# Exit status: 0 written (per-gate errors are in the file); 1 read: the
+# release-PR list cannot be read, run: no gates-read.json (no file either
+# way); 2 usage.
 #
-# Tools: bash, coreutils, git, jq, go-task; gh through "${CASCADE_GH:-gh}".
+# Tools: bash, coreutils, git, jq, go-task; gh through "${CASCADE_GH:-gh}"
+# (read only).
 set -euo pipefail
 export LC_ALL=C
 CASCADE_SCRIPT=gates-eval.sh
 # shellcheck source=lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-[ $# -eq 0 ] || die "usage: gates-eval.sh" 2
+[ $# -eq 1 ] || die "usage: gates-eval.sh read|run" 2
+STEP="$1"
 REPO="${CASCADE_REPO:-}"
 [ -n "$REPO" ] || die "CASCADE_REPO is not set" 2
 T="${CASCADE_T:-${RUNNER_TEMP:-}/cascade}"
@@ -39,13 +49,6 @@ check_scratch "$T"
 RD=$(realpath -m -- "${CASCADE_REPO_DIR:-$PWD/repo}")
 RESOLVER="${CASCADE_RESOLVER:-$(cd "$WIRING_DIR/.." && pwd)/cascade-resolve.sh}"
 mkdir -p "$T"
-rm -f "$T/gates.json"
-need_tools git jq gh
-
-prs=$(gh_ pr list -R "$ORG/$REPO" --base main --state open --limit 200 --json number,headRefName,headRefOid,isCrossRepository) \
-  || die "cannot list the open PRs of $REPO"
-prs=$(jq -c '[.[] | select((.headRefName | startswith("release-please--")) and .isCrossRepository == false)]' <<<"$prs") \
-  || die "cannot parse the PR list of $REPO"
 
 # g3: sets G3_STATE and G3_MSG for this receiver's upstreams.
 g3() {
@@ -74,13 +77,14 @@ g3() {
   fi
 }
 
-# g2 <number> <sha>: sets G2_STATE and G2_MSG for one release head.
+# g2 <number> <sha> <fetched true|false>: sets G2_STATE and G2_MSG for one
+# release head. The head was fetched by read; nothing here needs a token.
 g2() {
-  local n="$1" sha="$2" tmp rc=0 shipped=0 moved=""
+  local n="$1" sha="$2" fetched="$3" tmp rc=0 shipped=0 moved=""
   G2_STATE=error G2_MSG="the release head could not be checked"
   tmp="$T/g2-$n"
   rm -rf "$tmp"
-  if ! git_read -C "$RD" fetch -q origin "$sha" || ! git -C "$RD" worktree add -q --detach "$tmp" "$sha"; then
+  if [ "$fetched" != true ] || ! git -C "$RD" worktree add -q --detach "$tmp" "$sha" 2>/dev/null; then
     G2_MSG="cannot check out the release head"
     return 0
   fi
@@ -119,15 +123,46 @@ g2() {
   git -C "$RD" worktree prune
 }
 
-out="[]"
-if [ "$(jq length <<<"$prs")" -gt 0 ]; then
-  g3
-  while IFS=$'\t' read -r n sha; do
-    [[ $sha =~ ^[0-9a-f]{40}$ ]] || continue
-    g2 "$n" "$sha"
-    echo "release PR #$n: freshness $G2_STATE ($G2_MSG); settled $G3_STATE ($G3_MSG)"
-    out=$(jq -c --arg sha "$sha" --argjson n "$n" --arg s2 "$G2_STATE" --arg m2 "$G2_MSG" --arg s3 "$G3_STATE" --arg m3 "$G3_MSG" \
+# read: the release PRs, G3 and each head's commit, with the token.
+read_step() {
+  local prs n sha fetched out="[]"
+  rm -f "$T/gates-read.json" "$T/gates.json"
+  need_tools git jq gh
+  prs=$(gh_ pr list -R "$ORG/$REPO" --base main --state open --limit 200 --json number,headRefName,headRefOid,isCrossRepository) \
+    || die "cannot list the open PRs of $REPO"
+  prs=$(jq -c '[.[] | select((.headRefName | startswith("release-please--")) and .isCrossRepository == false)]' <<<"$prs") \
+    || die "cannot parse the PR list of $REPO"
+  if [ "$(jq length <<<"$prs")" -gt 0 ]; then
+    g3
+    while IFS=$'\t' read -r n sha; do
+      [[ $sha =~ ^[0-9a-f]{40}$ ]] || continue
+      fetched=true
+      git_read -C "$RD" fetch -q origin "$sha" || fetched=false
+      out=$(jq -c --arg sha "$sha" --argjson n "$n" --argjson f "$fetched" --arg s3 "$G3_STATE" --arg m3 "$G3_MSG" \
+        '. + [{pr: $n, sha: $sha, fetched: $f, settled: {state: $s3, msg: $m3}}]' <<<"$out")
+    done < <(jq -r '.[] | [.number, .headRefOid] | @tsv' <<<"$prs")
+  fi
+  printf '%s\n' "$out" >"$T/gates-read.json"
+}
+
+# run: G2 for each head read found, with no token and no API call.
+run_step() {
+  local n sha fetched s3 m3 out="[]"
+  rm -f "$T/gates.json"
+  need_tools git jq
+  [ -f "$T/gates-read.json" ] || die "no gates-read.json: the read step did not run or failed"
+  while IFS=$'\t' read -r n sha fetched s3 m3; do
+    [[ $sha =~ ^[0-9a-f]{40}$ ]] && [[ $n =~ ^[0-9]+$ ]] || continue
+    g2 "$n" "$sha" "$fetched"
+    echo "release PR #$n: freshness $G2_STATE ($G2_MSG); settled $s3 ($m3)"
+    out=$(jq -c --arg sha "$sha" --argjson n "$n" --arg s2 "$G2_STATE" --arg m2 "$G2_MSG" --arg s3 "$s3" --arg m3 "$m3" \
       '. + [{sha: $sha, pr: $n, freshness: {state: $s2, msg: $m2}, settled: {state: $s3, msg: $m3}}]' <<<"$out")
-  done < <(jq -r '.[] | [.number, .headRefOid] | @tsv' <<<"$prs")
-fi
-printf '%s\n' "$out" >"$T/gates.json"
+  done < <(jq -r '.[] | [.pr, .sha, (.fetched | tostring), .settled.state, .settled.msg] | map(tostring | gsub("[\t\n\r]"; " ")) | @tsv' "$T/gates-read.json")
+  printf '%s\n' "$out" >"$T/gates.json"
+}
+
+case "$STEP" in
+  read) read_step ;;
+  run) run_step ;;
+  *) die "usage: gates-eval.sh read|run" 2 ;;
+esac

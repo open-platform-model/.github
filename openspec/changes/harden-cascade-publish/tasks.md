@@ -16,12 +16,12 @@ are committed first as `docs(openspec): plan harden-cascade-publish`.
 
 ## 2. Repo code is cut off from the command files and tokens
 
-- [ ] 2.1 `lib.sh` `run_repo_code`: also unset `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, `GITHUB_STATE`, every exported `ACTIONS_*` and every `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` (D3); add the `changelog_repos` map
-- [ ] 2.2 `gates-eval.sh read|run` (D2): `read` lists, evaluates G3, fetches the heads and writes `gates-read.json`; `run` runs G2 from it with no token and writes `gates.json`
-- [ ] 2.3 `receive-compute.sh`: new step `gates-read`; `gates` runs `gates-eval.sh run`; `state` also fetches the upstream releases into `$CASCADE_T/releases/`; `breaking_check` reads those files only; `text` no longer masks or needs a token
-- [ ] 2.4 `cascade-receive.yml`: the `Read gates` and `Read state` steps before `Gates`; `Gates` with `!cancelled() && steps.gates-read.outcome == 'success'` and no token; `Body, title and labels` without `GH_TOKEN`; header comment states the residual risk (design, "What a step boundary does not stop")
-- [ ] 2.5 Cases: the toy task appends to `$GITHUB_OUTPUT`, `$GITHUB_ENV`, `$GITHUB_PATH`, `$GITHUB_STEP_SUMMARY` and `$GITHUB_STATE` when set, and the step files stay unchanged in `run`, `text` and G2; `run_repo_code` hides each variable, an `ACTIONS_*` one and `GIT_CONFIG_KEY_3`; `text` makes no gh call and passes with no token; the breaking check from prefetched files, from a failed prefetch, and no prefetch in `skip` mode; G2 from `gates-read.json` and a head that could not be fetched; the static check that no `compute` step from `Gates` on is given a token; existing gates and compute cases moved to the new steps; wiring suite green
-- [ ] 2.6 Gates green, then commit `fix(cascade): keep repo code away from runner command files and tokens`
+- [x] 2.1 `lib.sh` `run_repo_code`: also unset `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, `GITHUB_STATE`, every exported `ACTIONS_*` and every `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` (D3); add the `changelog_repos` map
+- [x] 2.2 `gates-eval.sh read|run` (D2): `read` lists, evaluates G3, fetches the heads and writes `gates-read.json`; `run` runs G2 from it with no token and writes `gates.json`
+- [x] 2.3 `receive-compute.sh`: new step `gates-read`; `gates` runs `gates-eval.sh run`; `state` also fetches the upstream releases into `$CASCADE_T/releases/`; `breaking_check` reads those files only; `text` no longer masks or needs a token
+- [x] 2.4 `cascade-receive.yml`: the `Read gates` and `Read state` steps before `Gates`; `Gates` with `!cancelled() && steps.gates-read.outcome == 'success'` and no token; `Body, title and labels` without `GH_TOKEN`; header comment states the residual risk (design, "What a step boundary does not stop")
+- [x] 2.5 Cases: the toy task appends to `$GITHUB_OUTPUT`, `$GITHUB_ENV`, `$GITHUB_PATH`, `$GITHUB_STEP_SUMMARY` and `$GITHUB_STATE` when set, and the step files stay unchanged in `run`, `text` and G2; `run_repo_code` hides each variable, an `ACTIONS_*` one and `GIT_CONFIG_KEY_3`; `text` makes no gh call and passes with no token; the breaking check from prefetched files, from a failed prefetch, and no prefetch in `skip` mode; G2 from `gates-read.json` and a head that could not be fetched; the static check that no `compute` step from `Gates` on is given a token; existing gates and compute cases moved to the new steps; wiring suite green
+- [x] 2.6 Gates green, then commit `fix(cascade): keep repo code away from runner command files and tokens`
 
 ## 3. The canonical wiring check
 

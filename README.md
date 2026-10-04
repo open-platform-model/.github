@@ -256,6 +256,22 @@ and action to a full commit SHA (owner decision 24 for the actions, extended to 
 Every job's and every action's first step, `Guard`, derives the repo name from
 `GITHUB_REPOSITORY` and refuses a repo outside `open-platform-model`.
 
+**Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (on `main` merged
+with `deps/cascade`) and, for G2, the task of every open `release-please--*` head; any write
+collaborator can push to either branch. Its two `Read` steps make every read that needs
+`GITHUB_TOKEN` (the release-PR list, G3, the release heads' commits, the cascade PR, the branch
+tips and the upstream releases for the breaking check) before the first step that runs repo
+code, and no step from `Gates` on gets a token. Repo code also runs without `GITHUB_ENV`,
+`GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, `GITHUB_STATE` and every `ACTIONS_*`
+variable, so a task that honours them cannot set the step's outputs, environment or `PATH`.
+None of this is a boundary inside the job: hostile code can find the runner's command files on
+disk, leave a process running into later steps, rewrite the checked-out scripts, and with the
+runner's `sudo` read the job's token, which is read-only. So everything `compute` writes from
+`Gates` on (its `action` and `compute-ok` outputs, `gates.json`, the plan and the bundle) is
+untrusted: `Post gates` posts only on the open release heads it lists itself, and `publish`
+takes its switches from the caller's inputs and re-derives the plan. A release head can still
+choose its own G2 result, which is why G2 stays `warn`.
+
 **Pinning and bumps.** Owner decision 24 pins the two cascade actions by SHA in every repo,
 replacing `@main` (decision 13) for them; the supervisor extended it to the two reusable
 workflows, because the receive workflow runs the scripts of its own commit, so a workflow at
