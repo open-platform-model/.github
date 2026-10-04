@@ -86,7 +86,10 @@ never sourced, with exactly the keys `pin-comment` (words), `receiver` (boolean)
 only, `publish` (`labels-managed`, boolean), and optionally `extra-references` (a list of maps
 with exactly the keys `file`, a workflow file name, and `kind`, whose only value is `resolver`).
 The check SHALL refuse, as a config error, an unknown key, a wrong type, a `publish-workflows`
-list without `release.yml`, an `extra-references` item with another key, file name or kind, and an
+list without `release.yml`, an `extra-references` item with another key, file name or kind, an
+`extra-references` item on a non-receiver, naming a file twice, or naming `release.yml`,
+`deps-cascade.yml`, `cascade-gates.yml` or `cascade-task.yml` (files that hold a fixed
+reference), and an
 `env-allow` entry that is not `CUE_*`, `OPM_*`, `REGISTRY` or `IMAGE_NAME`: the names are allowed
 rather than denied, because too many variables make a shell, git, gh, node, curl or the dynamic
 loader run code, read other config or redirect traffic (`BASH_ENV`, `GIT_*`, `GH_*`, `NODE_*`,
@@ -105,6 +108,11 @@ loader run code, read other config or redirect traffic (`BASH_ENV`, `GIT_*`, `GH
 #### Scenario: An extra reference of an unknown kind
 
 - **WHEN** a repo lists `extra-references: [{file: module-deps.yml, kind: action}]`, or an item with a third key, or a `file` with a path
+- **THEN** the check exits 2 naming the item
+
+#### Scenario: An extra reference beside a fixed one
+
+- **WHEN** a receiver lists `{file: cascade-task.yml, kind: resolver}` or `{file: release.yml, kind: resolver}`, lists `module-deps.yml` twice, or core lists any item
 - **THEN** the check exits 2 naming the item
 
 ### Requirement: The pin is on .github main

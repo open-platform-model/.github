@@ -508,8 +508,10 @@ send traffic elsewhere (`BASH_ENV`, `GIT_*`, `GH_*`, `NODE_*`, `LD_*`, `XDG_*`, 
 `*_PROXY` and more) for a deny-list to be safe. `publish-workflows` must list `release.yml`.
 `extra-references` (optional) lists more pinned `.github` references, one item per reference,
 each a map of exactly `file` (a workflow file name) and `kind`; the only kind is `resolver`, a
-checkout of `.github` held to the rules above. A new kind (another action or reusable-workflow
-call) is a change here, never a config entry. Each repo's values:
+checkout of `.github` held to the rules above. Only a receiver may set it, a file appears at
+most once, and never one of `release.yml`, `deps-cascade.yml`, `cascade-gates.yml` or
+`cascade-task.yml`, which hold the fixed references. A new kind (another action or
+reusable-workflow call) is a change here, never a config entry. Each repo's values:
 
 | Repo | `receiver` | `env-allow` | `publish-workflows` | `ci` (workflow, job) | `notify.needs` | `labels-managed` |
 | --- | --- | --- | --- | --- | --- | --- |

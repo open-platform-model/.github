@@ -57,7 +57,10 @@ a step whose `with.repository` is any owner's `.github` in any case, or an expre
 `<file> resolver` to the expected reference list, so a declared reference is held to the same
 rules as the fixed ones: the one SHA across all references and the pin comment. One entry per
 reference; a missing or surplus reference fails `.github references`. Any other type, item key or
-kind is a config error (exit 2).
+kind is a config error (exit 2). After review the key was narrowed to its one use: only a
+receiver may set it, a file may be named once, and never a file that holds a fixed reference
+(`release.yml`, `deps-cascade.yml`, `cascade-gates.yml`, `cascade-task.yml`), so it cannot admit
+a second resolver beside the fixed one or a checkout inside a key-holding workflow.
 
 `uses:` kinds (an extra action or reusable-workflow call) are not offered: the key-holding jobs
 are the only callers of the cascade actions, and every reader of the App key is already pinned to

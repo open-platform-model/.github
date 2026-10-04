@@ -140,7 +140,10 @@ fi
 
 # More .github references the repo declares, one item each. The only kind is
 # resolver, a checkout of .github (opm-operator's module-deps.yml); each
-# declared one is held to the fixed references' rules below.
+# declared one is held to the fixed references' rules below. Only a receiver
+# declares one, at most one per file, and never in a file that already holds
+# a fixed reference (a second resolver beside cascade-task.yml's, or a
+# checkout inside a key-holding workflow).
 EXTRA_REFS=""
 if [ "$(y 'has("extra-references")' "$CONFIG")" = true ]; then
   [ "$(y '.["extra-references"] | type' "$CONFIG")" = '!!seq' ] || cfg_err "extra-references must be a list"
@@ -154,6 +157,12 @@ if [ "$(y 'has("extra-references")' "$CONFIG")" = true ]; then
     ek=$(I=$i y '.["extra-references"][env(I)].kind' "$CONFIG")
     [[ $ef =~ ^[A-Za-z0-9._-]+\.ya?ml$ ]] || cfg_err "$it: file [$ef] is not a workflow file name"
     [ "$ek" = resolver ] || cfg_err "$it: kind [$ek] is not resolver, the only kind"
+    [ "$RECEIVER" = true ] || cfg_err "$it: extra-references is only for a receiver"
+    case "$ef" in
+      release.yml | deps-cascade.yml | cascade-gates.yml | cascade-task.yml)
+        cfg_err "$it: $ef already holds a fixed .github reference" ;;
+    esac
+    ! grep -qxF -- "$ef resolver" <<<"$EXTRA_REFS" || cfg_err "$it: $ef is declared twice"
     EXTRA_REFS+="$ef resolver"$'\n'
   done
 fi

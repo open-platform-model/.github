@@ -443,10 +443,11 @@ wc_mdeps
 yq -i '.jobs.compute.steps += [.jobs.compute.steps[0]]' "$MD"
 wc_run
 check "wiring check refuses: two resolvers for one declared entry" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]]' _ "$RC" "$ERR"
-wc_mdeps
-yq -i '.jobs.compute.steps += [.jobs.compute.steps[0]]' "$MD"
-yq -i '.["extra-references"] += [{"file": "module-deps.yml", "kind": "resolver"}]' "$WCD/.tasks/cascade/wiring-check.yaml"
-wc_ok "two declared entries for two resolvers in one file pass"
+wc_cfg "an extra reference declared twice" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}, {"file": "module-deps.yml", "kind": "resolver"}]' "module-deps.yml is declared twice"
+for fx in release.yml deps-cascade.yml cascade-gates.yml cascade-task.yml; do
+  wc_cfg "an extra reference in $fx" ".[\"extra-references\"] = [{\"file\": \"$fx\", \"kind\": \"resolver\"}]" "$fx already holds a fixed .github reference"
+done
+wc_cfg "an extra reference on core" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}]' "extra-references is only for a receiver" core
 
 # Every resolver checkout passes no credentials (the fixed one and declared ones).
 for m in '.jobs.compute.steps[0].with.token = "${{ secrets.GITHUB_TOKEN }}"' \
