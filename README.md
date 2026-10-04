@@ -249,12 +249,38 @@ and action to a full commit SHA (owner decision 24 for the actions, extended to 
 | File | Kind | Jobs or caller job | Does |
 | --- | --- | --- | --- |
 | [`cascade-notify`](.github/actions/cascade-notify/action.yml) | composite action | the caller's `Notify downstream` (`cascade` Environment) | after a release is published: checks the tag, waits up to 10 minutes for the Go proxy (library only), and sends `repository_dispatch` `upstream-released` with `{source, tags}` to each downstream repo |
-| [`cascade-receive.yml`](.github/workflows/cascade-receive.yml) | reusable workflow | `Compute`, `Post gates` | runs the repo's `task -x deps:cascade` on the rolling `deps/cascade` branch with no secret in reach and plans the result; posts G2 and G3 on open release PRs; outputs `action`, `dry-run` and `compute-ok` |
-| [`cascade-publish`](.github/actions/cascade-publish/action.yml) | composite action | the caller's `Publish` (`cascade` Environment) | verifies the plan, then pushes, opens, edits, recreates, closes or labels the cascade PR; never runs repo code |
+| [`cascade-receive.yml`](.github/workflows/cascade-receive.yml) | reusable workflow | `Compute`, `Post gates` | runs the repo's `task -x deps:cascade` on the rolling `deps/cascade` branch with no secret in reach and plans the result; posts G2 (from `compute`) and G3 (evaluated in `Post gates`) on open release PRs; outputs `action`, `dry-run` and `compute-ok` (hints only: `compute` ran repo code) |
+| [`cascade-publish`](.github/actions/cascade-publish/action.yml) | composite action | the caller's `Publish` (`cascade` Environment) | refuses a gates-only run, verifies the plan, then pushes, opens, edits, recreates, closes or labels the cascade PR; never runs repo code |
 | [`cascade-gates.yml`](.github/workflows/cascade-gates.yml) | reusable workflow | `Cascade gates` | per PR (`pull_request_target`, nothing checked out): `n/a` on both gate contexts for an ordinary PR; a gates-only receiver run for a release PR |
 
 Every job's and every action's first step, `Guard`, derives the repo name from
 `GITHUB_REPOSITORY` and refuses a repo outside `open-platform-model`.
+
+**Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (on `main` merged
+with `deps/cascade`) and, for G2, the task of every open `release-please--*` head; any write
+collaborator can push to either branch. Its two `Read` steps make every read that needs
+`GITHUB_TOKEN` (the release-PR list, the release heads' commits, the cascade PR, the branch
+tips and the upstream releases for the breaking check) before the first step that runs repo
+code, and no step from `Gates` on is given a token. Repo code also runs without `GITHUB_ENV`,
+`GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, `GITHUB_STATE` and every `ACTIONS_*`
+variable, so a task that honours them cannot set the step's outputs, environment or `PATH`.
+None of this is a boundary inside the job. Hostile code can find the runner's command files on
+disk, leave a process running into later steps, and rewrite the checked-out scripts. It can
+plant a git hook or `core.fsmonitor` in `repo/.git` (the G2 worktrees share it), which the two
+`actions/checkout` post steps then run with the job's read-only token in their environment. With
+the runner's `sudo` it can read that token and the artifact runtime token, and the runtime token
+also writes the Actions cache of `main`'s scope. So everything `compute` writes from `Gates` on
+(its `action` and `compute-ok` outputs, `gates.json`, the plan, the bundle and any cache entry)
+is untrusted:
+
+- `Post gates` posts only on the open release heads it lists itself, takes only G2 from
+  `gates.json`, and evaluates G3 itself from the API. A release head can still choose its own
+  G2 result, which is why G2 stays `warn`; it cannot choose G3.
+- `publish` takes its switches from the caller's inputs and re-derives the plan.
+- No job that publishes restores an Actions cache: `compute` installs Go with `cache: false`,
+  and the wiring check (below) refuses a cache in every workflow a repo lists as publishing,
+  because a cache entry written from `compute` (or any job on `main` that runs repo code) would
+  otherwise reach a released binary or image.
 
 **Pinning and bumps.** Owner decision 24 pins the two cascade actions by SHA in every repo,
 replacing `@main` (decision 13) for them; the supervisor extended it to the two reusable
@@ -303,29 +329,116 @@ reference on its own. To roll a change out:
    checks.
 3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
    PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
-   every cascade reference and changes nothing else, unless the `.github` change altered an
-   input, in which case the caller edit rides the same PR. Find them with
+   every cascade reference and the copy of the wiring check (below) and changes nothing else,
+   unless the `.github` change altered an input or a caller shape, in which case the caller edit
+   and the `.tasks/cascade/wiring-check.yaml` edit ride the same PR. Find them with
    `grep -rn -A1 'open-platform-model/.github' .github/workflows`: the `uses:` lines and the
    `repository:` line of the `cascade-task.yml` checkout, whose `ref:` the `-A1` prints on the
    next line (comment lines also match and need no change). All of a repo's cascade references
-   carry the same SHA. Before the PR is opened, the `compare` check of step 1 passes for that
-   SHA and `task cascade:wiring:check` passes.
-4. Merge each after its CI is green, its "Verify the cascade wiring" step printed
-   `cascade wiring: ok, .github <SHA> (.github main)`, and the `compare` check passes for the
-   SHA it pins. After the canary (its dry-run checks, or its first successful live run for a
+   carry the same SHA. Before the PR is opened, `bash .tasks/cascade/wiring-check.sh
+   --pin-on-main` passes (the shapes, then the `compare` check of step 1 for that SHA).
+4. Merge each after its CI is green and its "Verify the cascade wiring" step printed
+   `cascade wiring: ok, .github <SHA> (.github main)`: that step runs the same check with
+   `--pin-on-main`, so it has also confirmed the SHA is on `.github`'s `main`. After the canary (its dry-run checks, or its first successful live run for a
    `cascade-publish` or `cascade-notify` change, step 2) the order does not matter, because a
    repo runs only its own pin. To roll back, move the pins back the same way (no canary needed for a SHA the repo
    already ran).
 
-**The wiring check.** Each product repo's `task cascade:wiring:check` runs in its required CI
-job and checks the caller shapes below: one SHA and the pin comment on every cascade reference,
-exact key sets on the key-holding jobs (`notify-downstream`, `publish`) and their one step,
-`runs-on: ubuntu-latest` on those jobs, no `secrets: inherit`, the key only where the contract
-puts it, and `release.yml`'s top-level `env` keys from a per-repo allow-list (core
-`CUE_VERSION`, `CUE_REGISTRY`; catalog_opm `OPM_REGISTRY`, `CUE_REGISTRY`; opm-operator
-`REGISTRY`, `IMAGE_NAME`, `CUE_VERSION`; library and cli none). The script lives in the repo's
-own tree, so a PR can change it along with the workflows: it guards against mistakes, and
-review plus the `main` ruleset guard against a deliberate edit.
+**The wiring check.** One script,
+[`.github/scripts/cascade/wiring-check.sh`](.github/scripts/cascade/wiring-check.sh), checks
+every product repo's caller shapes against the shapes below; each repo runs a byte-identical copy
+at `.tasks/cascade/wiring-check.sh` with its own values in `.tasks/cascade/wiring-check.yaml`:
+offline through `task cascade:wiring:check`, and online in a step of its required CI job:
+
+```yaml
+      - name: Verify the cascade wiring
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .tasks/cascade/wiring-check.sh --pin-on-main
+```
+
+It prints every mismatch and exits 1, or prints `cascade wiring: ok, .github <SHA> (<pin
+comment>)`; a bad config exits 2. It checks:
+
+- no workflow file uses a YAML anchor or alias (GitHub resolves them, the check reads text);
+- the key-holding jobs (`notify-downstream`, `publish`): exact job and step keys, names,
+  timeouts (20 and 15 minutes), `environment: cascade`, `runs-on: ubuntu-latest`, permissions,
+  one SHA-pinned cascade action with exact inputs, the client id and the key; notify's `needs`,
+  `if:` and `tag` from the config; publish's `needs`, `if:` (with the gates-only clause),
+  `dry-run`, `gates-only` and `labels-managed` (a YAML boolean, from the config);
+- `release.yml`'s top-level `env`: a map whose keys are all on the config's `env-allow`;
+- for a receiver: the triggers, permissions, concurrency and jobs of `deps-cascade.yml` and
+  `cascade-gates.yml`, and that the `cascade` job passes only inputs `cascade-receive.yml` takes;
+- in every workflow: the App key read only by the key-holding jobs, where a reader is any
+  expression that names it in any case or uses the secrets context other than as
+  `secrets.<name>` (`secrets[…]` with any index, `format()` included, `secrets.*`, or
+  `toJSON(secrets)` and any other function given the whole context); the cascade Environment
+  (any case, a map, or an expression) only on them; and no call into `.github` (in any case)
+  passing `secrets:`;
+- in every workflow the config's `publish-workflows` lists: no cache action (any action whose
+  name says `cache`), `actions/setup-go` with `cache: false`, `actions/setup-node` with
+  `package-manager-cache: false` and no `cache`, no other `cache*` input but `no-cache`, and no
+  `type=gha` anywhere (buildx `cache-from`/`cache-to`). A reusable workflow called from there is
+  not checked (docs-kit's `publish.yml` sets `cache: false`);
+- one full SHA and the pin comment on every `.github` reference, matched in any case (the four
+  `uses:` and the `cascade-task.yml` resolver `ref:`);
+- that the config's CI job runs it as exactly the step above on every pull request: no path
+  filter, no `if:` or `continue-on-error`, no `shell` or `working-directory` of its own or from
+  `defaults`;
+- with `--pin-on-main`, after every shape matched:
+  `gh api repos/open-platform-model/.github/compare/<SHA>...main --jq .status` prints
+  `identical` or `ahead`, so a commit that exists only in a fork of `.github` (which GitHub also
+  resolves under this repo's name) is refused.
+
+The config is data, read with `yq`, never run. `env-allow` may name only `CUE_*`, `OPM_*`,
+`REGISTRY` and `IMAGE_NAME`: a workflow-level env reaches the notify action's steps, which hold
+the App token, and too many other names make bash, git, gh, node, curl or the loader run code or
+send traffic elsewhere (`BASH_ENV`, `GIT_*`, `GH_*`, `NODE_*`, `LD_*`, `XDG_*`, `SSL_*`,
+`*_PROXY` and more) for a deny-list to be safe. `publish-workflows` must list `release.yml`.
+Each repo's values:
+
+| Repo | `receiver` | `env-allow` | `publish-workflows` | `ci` (workflow, job) | `notify.needs` | `labels-managed` |
+| --- | --- | --- | --- | --- | --- | --- |
+| core | `false` | `CUE_VERSION`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | (none) |
+| catalog_opm | `true` | `OPM_REGISTRY`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | `false` |
+| library | `true` | (none) | `release.yml`, `docs.yml` | `test.yml`, `test` | `release-please` | `false` |
+| opm-operator | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `release.yml`, `publish-fixtures.yml`, `docs.yml` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
+| cli | `true` | (none) | `release.yml`, `publish-fixtures.yml`, `docs.yml` | `pr.yml`, `lint` | `release-please`, `goreleaser` | `true` |
+
+`pin-comment` is `.github main` everywhere; `notify.if` and `notify.tag` are each repo's own
+`release.yml` values. catalog_opm's file, for example:
+
+```yaml
+pin-comment: .github main
+receiver: true
+env-allow: [OPM_REGISTRY, CUE_REGISTRY]
+publish-workflows: [release.yml, branch-publish.yml, docs.yml]
+ci:
+  workflow: ci.yml
+  job: ci
+notify:
+  needs: [release-please, publish-cue]
+  if: ${{ !cancelled() && needs.publish-cue.outputs.published == 'true' && vars.CASCADE_NOTIFY != 'off' }}
+  tag: ${{ needs.release-please.outputs.opm_tag_name }}
+publish:
+  labels-managed: false
+```
+
+**Keeping the copy in sync.** A repo's copy is the file at the `.github` SHA its cascade
+references pin, and it moves only with the pin: the pin-bump PR (step 3 above) replaces it with
+
+```sh
+sha=<the new .github SHA>
+gh api "repos/open-platform-model/.github/contents/.github/scripts/cascade/wiring-check.sh?ref=$sha" \
+  -H 'Accept: application/vnd.github.raw' >.tasks/cascade/wiring-check.sh
+```
+
+so the PR's diff of the copy is exactly `.github`'s change between the two SHAs, and a reviewer
+confirms it with the same `gh api` call piped to `cmp - .tasks/cascade/wiring-check.sh`. A change
+to the check is made here, never in a copy. The script cannot verify its own provenance offline,
+so this is the review's job. The copy and the config live in the repo's own tree, so a PR can
+change them along with the workflows: the check guards against mistakes, and review plus the
+`main` ruleset guard against a deliberate edit.
 
 `<sha>` in the shapes below stands for that full SHA.
 
@@ -400,6 +513,7 @@ jobs:
       && needs.cascade.outputs.compute-ok == 'true'
       && needs.cascade.outputs.dry-run == 'false'
       && inputs.dry_run != true
+      && inputs.gates_only != true
       && vars.CASCADE_DRY_RUN == 'false'
       && github.ref == 'refs/heads/main'
       && contains(fromJSON('["push","recreate","close","conflict","too_long"]'), needs.cascade.outputs.action)
@@ -414,6 +528,7 @@ jobs:
         uses: open-platform-model/.github/.github/actions/cascade-publish@<sha> # .github main
         with:
           dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
+          gates-only: ${{ inputs.gates_only == true }}
           labels-managed: false
           client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
           private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
@@ -424,7 +539,15 @@ and runs from any other ref (always dry runs) `deps-cascade-<ref>`, so neither r
 pending real run. The stop switch is the `cascade-publish` input `dry-run`, given the same
 expression as the reusable job's `dry-run`: the action publishes only when it is exactly `false`,
 does nothing on `true` and fails on any other value (an empty or missing input included), so a
-mistyped `if:` cannot make a dry run publish. The `publish` job's `if:` repeats the switches only
+mistyped `if:` cannot make a dry run publish. GitHub compares strings without regard to case, so
+the receiver is live when `CASCADE_DRY_RUN` is `false` in any letter case (`False`, `FALSE`);
+any other value keeps it dry. A gates-only run never publishes: the `publish` job's `if:` reads
+the caller's own `gates_only` input, and the required `cascade-publish` input `gates-only`
+(the same input as `${{ inputs.gates_only == true }}`) makes the action fail before the mint
+unless it is exactly `false`. A gates-only run runs the code of every open release head inside
+`compute`, so `compute`'s outputs are hints there and everywhere: the reusable workflow also
+reports `action: gates-only` and `compute-ok: false` for such a run, from its input, but nothing
+relies on that. The `publish` job's `if:` repeats the switches only
 so a dry run does not start a `cascade` Environment job; it reads them itself, not from the
 reusable job that ran repo code. `cascade-publish` also refuses any ref but `main` and a plan
 marked as a dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
@@ -458,14 +581,14 @@ jobs:
 
 | Variable | Repo | Meaning |
 | --- | --- | --- |
-| `CASCADE_DRY_RUN` | receivers | the receiver pushes only when it is exactly `false`; unset, deleted or anything else is a dry run (compute, summary and artifact; no push, PR, label or comment) |
+| `CASCADE_DRY_RUN` | receivers | the receiver pushes only when it is `false`, in any letter case (GitHub compares without case); unset, deleted or anything else is a dry run (compute, summary and artifact; no push, PR, label or comment) |
 | `CASCADE_NOTIFY` | upstreams | `off` skips notify, so that repo's releases stop dispatching |
 | `CASCADE_G2_MODE`, `CASCADE_G3_MODE` | receivers | `warn` (default: a problem posts `success` with `WARN:`) or `enforce` (a problem posts `failure`) |
 
-A run from any ref other than `main` is always a dry run, and `workflow_dispatch` with
-`dry_run: true` dry-runs one run.
+A run from any ref other than `main` and every gates-only run is always a dry run, and
+`workflow_dispatch` with `dry_run: true` dry-runs one run.
 
 **Stop switches**, smallest first: the `deps-cascade:hold` label on the cascade PR (the bot
-skips it); a `.cascade-hold` entry (one pin); `CASCADE_DRY_RUN` set to anything but `false`;
+skips it); a `.cascade-hold` entry (one pin); `CASCADE_DRY_RUN` set to anything but `false` (in any letter case);
 `CASCADE_NOTIFY=off` in an upstream; disabling `deps-cascade.yml`; suspending the
 `opm-cascade` App (notify and publish then fail at minting, compute and gates keep running).

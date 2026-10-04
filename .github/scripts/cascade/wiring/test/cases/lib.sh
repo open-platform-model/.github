@@ -200,6 +200,15 @@ check "status: modes other than warn and enforce are refused" bash -c '. "$1"; v
 # --- tokens -------------------------------------------------------------------
 expect "tokens: repo code sees no token or header" 0 "|||||" -- env GH_TOKEN=a GITHUB_TOKEN=b CASCADE_READ_TOKEN=c GIT_CONFIG_COUNT=1 \
   GIT_CONFIG_KEY_0=k GIT_CONFIG_VALUE_0=v bash -c '. "$1"; run_repo_code bash -c '"'"'printf "%s|%s|%s|%s|%s|%s" "${GH_TOKEN:-}" "${GITHUB_TOKEN:-}" "${CASCADE_READ_TOKEN:-}" "${GIT_CONFIG_COUNT:-}" "${GIT_CONFIG_KEY_0:-}" "${GIT_CONFIG_VALUE_0:-}"'"'"'' _ "$WIRING/lib.sh"
+expect "tokens: repo code sees no runner command file or Actions service variable" 0 "||||||||" -- \
+  env GITHUB_ENV=/e GITHUB_PATH=/p GITHUB_OUTPUT=/o GITHUB_STEP_SUMMARY=/s GITHUB_STATE=/st ACTIONS_RUNTIME_TOKEN=rt \
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN=it GIT_CONFIG_KEY_3=k3 GIT_CONFIG_VALUE_3=v3 bash -c '. "$1"; run_repo_code bash -c '"'"'printf "%s|%s|%s|%s|%s|%s|%s|%s|%s" "${GITHUB_ENV:-}" "${GITHUB_PATH:-}" "${GITHUB_OUTPUT:-}" "${GITHUB_STEP_SUMMARY:-}" "${GITHUB_STATE:-}" "${ACTIONS_RUNTIME_TOKEN:-}" "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" "${GIT_CONFIG_KEY_3:-}" "${GIT_CONFIG_VALUE_3:-}"'"'"'' _ "$WIRING/lib.sh"
+expect "tokens: repo code keeps the variables a task may read" 0 "true|/w|/tmp/r" -- \
+  env GITHUB_ACTIONS=true GITHUB_WORKSPACE=/w RUNNER_TEMP=/tmp/r bash -c '. "$1"; run_repo_code bash -c '"'"'printf "%s|%s|%s" "${GITHUB_ACTIONS:-}" "${GITHUB_WORKSPACE:-}" "${RUNNER_TEMP:-}"'"'"'' _ "$WIRING/lib.sh"
+expect "maps: changelog_repos of a receiver is every other product repo" 0 "core catalog_opm library opm-operator" -- \
+  bash -c '. "$1"; r=$(changelog_repos cli); printf "%s" "${r% }"' _ "$WIRING/lib.sh"
+expect "maps: changelog_repos of the sandbox receiver" 0 "cascade-sandbox-up" -- bash -c '. "$1"; changelog_repos cascade-sandbox-down' _ "$WIRING/lib.sh"
+expect "maps: core has no changelog_repos" 1 "" -- bash -c '. "$1"; changelog_repos core' _ "$WIRING/lib.sh"
 expect "tokens: git_read passes the header to that git call only" 0 "AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46c2VjcmV0" -- \
   env CASCADE_READ_TOKEN=secret bash -c '. "$1"; git_read config --get http.https://github.com/.extraheader; [ -z "${GIT_CONFIG_COUNT:-}" ]' _ "$WIRING/lib.sh"
 expect "tokens: without a read token git_read adds nothing" 1 "" -- bash -c '. "$1"; git_read config --get http.https://github.com/.extraheader' _ "$WIRING/lib.sh"

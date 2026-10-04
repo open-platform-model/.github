@@ -11,7 +11,12 @@
 #   receive-publish.sh verify   before the App token exists (GITHUB_TOKEN)
 #   receive-publish.sh act      with the App token
 #
-# Environment: CASCADE_PUBLISH_DRY_RUN (the action's required dry-run input:
+# Environment: CASCADE_PUBLISH_GATES_ONLY (the action's required gates-only
+# input, the caller's own dispatch input: only exactly false goes on; true
+# and anything else are refused before the dry-run input, the plan or any
+# API call, because a gates-only run never publishes and compute's outputs,
+# which ran repo code, cannot be trusted to say so),
+# CASCADE_PUBLISH_DRY_RUN (the action's required dry-run input:
 # only exactly false publishes; true skips with publish=false; anything else
 # is refused), CASCADE_REPO (the Guard step's repo name), CASCADE_T (default
 # $RUNNER_TEMP/cascade; the plan artifact is in $CASCADE_T/plan),
@@ -60,8 +65,19 @@ dry_run_switch() {
   esac
 }
 
+# gates_only_switch: the caller's gates-only input. Returns 0 only when it is
+# exactly false; refuses otherwise.
+gates_only_switch() {
+  case "${CASCADE_PUBLISH_GATES_ONLY-}" in
+    false) return 0 ;;
+    true) refuse "a gates-only run never publishes" ;;
+    *) refuse "the gates-only input must be true or false, not \`$(safe_text "${CASCADE_PUBLISH_GATES_ONLY-}")\`" ;;
+  esac
+}
+
 verify() {
   local switch
+  gates_only_switch
   switch=$(dry_run_switch) || exit 1
   if [ "$switch" != false ]; then
     echo "::notice::dry run (the dry-run input is true); nothing is published"
@@ -245,6 +261,7 @@ create_pr() {
 comment() { gh_ pr comment "$1" -R "$ORG/$REPO" --body-file "$2" >/dev/null || die "cannot comment on #$1"; }
 
 act() {
+  gates_only_switch
   [ "$(dry_run_switch)" = false ] || die "the dry-run input is not false; act publishes nothing"
   need_tools git jq gh
   [ -f "$V/plan.json" ] || die "verify has not run"

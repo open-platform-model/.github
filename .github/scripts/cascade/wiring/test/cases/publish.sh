@@ -26,10 +26,14 @@ publish_job() {
 }
 # PUBLISH_DRY_RUN is the action's dry-run input (default false); the value
 # "<unset>" leaves it out of the environment.
+# PUBLISH_GATES_ONLY is the action's gates-only input (default false), with
+# "<unset>" the same way.
 publish() {
-  local -a dr=(CASCADE_PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN-false}")
-  [ "${PUBLISH_DRY_RUN-}" != "<unset>" ] || dr=(-u CASCADE_PUBLISH_DRY_RUN)
-  run env -C "$PWS" "${dr[@]}" CASCADE_REPO=cascade-sandbox-down CASCADE_T="$PWS/t" CASCADE_REPO_DIR="$PWS/repo" \
+  # env takes its -u options before any assignment.
+  local -a un=() set=()
+  if [ "${PUBLISH_DRY_RUN-}" = "<unset>" ]; then un+=(-u CASCADE_PUBLISH_DRY_RUN); else set+=(CASCADE_PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN-false}"); fi
+  if [ "${PUBLISH_GATES_ONLY-}" = "<unset>" ]; then un+=(-u CASCADE_PUBLISH_GATES_ONLY); else set+=(CASCADE_PUBLISH_GATES_ONLY="${PUBLISH_GATES_ONLY-false}"); fi
+  run env -C "$PWS" "${un[@]}" "${set[@]}" CASCADE_REPO=cascade-sandbox-down CASCADE_T="$PWS/t" CASCADE_REPO_DIR="$PWS/repo" \
     GH_TOKEN=ghs_appTokenForTests CASCADE_LABELS_MANAGED="${LABELS_MANAGED:-false}" bash "$PUBLISH" "$1"
 }
 # edit_plan <jq filter>: tampers with the downloaded plan.
@@ -99,6 +103,41 @@ publish verify
 PUBLISH_DRY_RUN=true publish act
 check "dry-run input true: act refuses even after a verified plan" bash -c '[ "$1" = 1 ] && [[ $2 == *"act publishes nothing"* ]] && ! grep -qE "^(pr (create|edit|close|comment)|label )" "$3"' _ "$RC" "$ERR" "$GHFX/log"
 check "dry-run input true: act pushed nothing" test -z "$(origin_tip deps/cascade)"
+# A gates-only run never publishes. The plan below is a real, complete push
+# plan, as forged release-head code in a gates-only compute run could upload
+# it next to forged action=push and compute-ok=true outputs; the action's
+# gates-only input, the caller's own dispatch input, still stops it.
+publish_job
+gh_reset
+: >"$GITHUB_OUTPUT"
+PUBLISH_GATES_ONLY=true publish verify
+check "gates-only input true: verify refuses a complete plan before reading it" bash -c '
+  [ "$1" = 1 ] && [[ $2 == *"refusing the plan: a gates-only run never publishes"* ]] && [ ! -s "$3" ] && [ ! -e "$4/plan.json" ] && [ ! -s "$5" ]' \
+  _ "$RC" "$ERR" "$GITHUB_OUTPUT" "$PV" "$GHFX/log"
+publish_job
+gh_reset
+: >"$GITHUB_OUTPUT"
+PUBLISH_GATES_ONLY=true PUBLISH_DRY_RUN=true publish verify
+check "gates-only input true: refused even with the dry-run input true (checked first)" bash -c '
+  [ "$1" = 1 ] && [[ $2 == *"a gates-only run never publishes"* ]] && [ ! -s "$3" ]' _ "$RC" "$ERR" "$GITHUB_OUTPUT"
+for v in "<unset>" "" False TRUE " false" "false " yes; do
+  publish_job
+  gh_reset
+  : >"$GITHUB_OUTPUT"
+  PUBLISH_GATES_ONLY="$v" publish verify
+  check "gates-only input \`$v\`: verify refuses before reading the plan" bash -c '
+    [ "$1" = 1 ] && [[ $2 == *"the gates-only input must be true or false"* ]] && [ ! -s "$3" ] && [ ! -s "$4" ]' \
+    _ "$RC" "$ERR" "$GITHUB_OUTPUT" "$GHFX/log"
+done
+publish_job
+gh_reset
+gh_prs '[]'
+publish verify
+check "gates-only: the same plan verifies when the input is false" bash -c '[ "$1" = 0 ] && grep -qx publish=true "$2"' _ "$RC" "$GITHUB_OUTPUT"
+gh_reset
+PUBLISH_GATES_ONLY=true publish act
+check "gates-only input true: act refuses even after a verified plan" bash -c '[ "$1" = 1 ] && [[ $2 == *"a gates-only run never publishes"* ]] && [ ! -s "$3" ]' _ "$RC" "$ERR" "$GHFX/log"
+check "gates-only input true: act pushed nothing" test -z "$(origin_tip deps/cascade)"
 refusal "an unknown action" "unknown action \`merge-now\`" '.action = "merge-now"'
 refusal "an unknown label" "label \`admin\` is not one of the bot's labels" '.labels += ["admin"]'
 refusal "a title that does not recompute" "the planned title does not recompute" '.title = "feat(deps): x"'
@@ -125,7 +164,7 @@ publish verify
 check "refuse: a moved remote tip" bash -c '[ "$1" = 1 ] && [[ $2 == *"deps/cascade moved since compute; the next run retries"* ]]' _ "$RC" "$ERR"
 check "refuse: nothing mutating was called" test -z "$(mutations)"
 check "refuse: act will not run without a verified plan" bash -c '
-  cd "$1" && env CASCADE_PUBLISH_DRY_RUN=false CASCADE_REPO=cascade-sandbox-down CASCADE_T="$1/t" CASCADE_REPO_DIR="$1/repo" GH_TOKEN=x bash "$2" act 2>&1 | grep -q "verify has not run"' _ "$PWS" "$PUBLISH"
+  cd "$1" && env CASCADE_PUBLISH_GATES_ONLY=false CASCADE_PUBLISH_DRY_RUN=false CASCADE_REPO=cascade-sandbox-down CASCADE_T="$1/t" CASCADE_REPO_DIR="$1/repo" GH_TOKEN=x bash "$2" act 2>&1 | grep -q "verify has not run"' _ "$PWS" "$PUBLISH"
 
 # A planted workflow change is refused by publish's own guard.
 new_fx; mk_toy; fresh_checkout

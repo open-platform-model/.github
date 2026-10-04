@@ -217,6 +217,10 @@ set -euo pipefail
 for v in GH_TOKEN GITHUB_TOKEN CASCADE_READ_TOKEN GIT_CONFIG_COUNT GIT_CONFIG_VALUE_0; do
   if [ -n "${!v:-}" ]; then echo "toy: $v is visible to repo code" >&2; exit 9; fi
 done
+# A hostile task writes every runner command file whose path it is given.
+for v in GITHUB_OUTPUT GITHUB_ENV GITHUB_PATH GITHUB_STEP_SUMMARY GITHUB_STATE; do
+  if [ -n "${!v:-}" ]; then printf 'action=push\nok=true\nforged=%s\n' "$v" >>"${!v}"; fi
+done
 [ -z "$(git status --porcelain --untracked-files=all)" ] || { echo "toy: dirty tree" >&2; exit 1; }
 state="$(git rev-parse --git-dir)/cascade"
 mkdir -p "$state"
@@ -251,6 +255,9 @@ mk_toy() {
   : >"$TOY_LOG"
   export CASCADE_T="$FX/t" CASCADE_REPO_DIR="$WS/repo"
   mkdir -p "$WS"
+  # compute's state step reads the upstream's releases on every run that is
+  # not skipped; a case that cares answers them with a fixture.
+  gh_accept "api --paginate repos/open-platform-model/cascade-sandbox-up/releases --jq *"
 }
 
 # fresh_checkout: the job's own clone of origin (as actions/checkout with

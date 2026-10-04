@@ -3,19 +3,20 @@
 # Posts gates G2 cascade/freshness and G3 cascade/settled as commit
 # statuses on release PR heads, with GITHUB_TOKEN, so both contexts come
 # from GitHub Actions (workspace RELEASING.md, section "Gates"). Run by the
-# receiver's gates job.
+# receiver's Post gates job, which runs no repo code.
 #
 # Usage:
 #   gates-post.sh --g2-mode <warn|enforce> --g3-mode <warn|enforce> <gates.json>
 #   gates-post.sh --g2-mode <warn|enforce> --g3-mode <warn|enforce> --missing
 #
-# --missing (compute wrote no gates.json): a context in warn mode gets a
-# warning and no status; in enforce mode it is posted as `error` on every
-# open same-repo release PR head.
-#
-# Only open same-repo release PR heads are posted on: gates.json comes from
-# compute, which ran repo code, so an entry naming any other commit is
-# skipped with a warning.
+# The heads are the open same-repo release PR heads this script lists
+# itself. G3 is evaluated here (g3_eval, API reads only), once, when there is
+# at least one head, and posted on every head. G2 comes from gates.json,
+# which compute wrote after the release heads' code ran: only its freshness
+# is read, only for a listed head, and an entry naming any other commit is
+# skipped with a warning. A head without a G2 result (--missing: compute
+# wrote no gates.json, or no entry for it) gets a warning and no freshness
+# status in warn mode, and `error` in enforce mode.
 #
 # Mapping: ok is success; a problem is success "WARN: <msg>" in warn mode
 # and failure "<msg>" in enforce mode; an evaluator error is success "WARN:
@@ -63,26 +64,35 @@ release_heads() {
     || die "cannot list the release PRs of $REPO"
 }
 
+if [ "$SRC" != --missing ]; then
+  [ -f "$SRC" ] || die "$SRC not found"
+  jq -e 'type == "array"' "$SRC" >/dev/null || die "$SRC is not a JSON array"
+fi
+heads=$(release_heads)
+live=" $(tr '\n' ' ' <<<"$heads") "
+G2RES=""
 if [ "$SRC" = --missing ]; then
   echo "::warning::no gate results from compute"
-  if [ "$G2" = warn ] && [ "$G3" = warn ]; then exit 0; fi
-  heads=$(release_heads)
-  for sha in $heads; do
-    [[ $sha =~ ^[0-9a-f]{40}$ ]] || continue
-    if [ "$G2" = enforce ]; then post "$sha" cascade/freshness enforce error "missing"; fi
-    if [ "$G3" = enforce ]; then post "$sha" cascade/settled enforce error "missing"; fi
-  done
-  [ "$failed" = 0 ] || exit 1
-  exit 0
+else
+  # "<sha>\t<state>\t<msg>" per entry; the first entry for a head counts.
+  G2RES=$(jq -r '.[] | [.sha, .freshness.state, .freshness.msg] | map(tostring | gsub("[\t\n\r]"; " ")) | @tsv' "$SRC")
+  while IFS=$'\t' read -r sha _; do
+    [ -n "$sha" ] || continue
+    [[ $live == *" $sha "* ]] || echo "::warning::skipping ${sha:0:12}: not the head of an open release PR"
+  done <<<"$G2RES"
 fi
-
-[ -f "$SRC" ] || die "$SRC not found"
-jq -e 'type == "array"' "$SRC" >/dev/null || die "$SRC is not a JSON array"
-heads=" $(release_heads | tr '\n' ' ') "
-while IFS=$'\t' read -r sha s2 m2 s3 m3; do
-  [[ $sha =~ ^[0-9a-f]{40}$ ]] || { note "skipping an entry without a commit id"; continue; }
-  [[ $heads == *" $sha "* ]] || { echo "::warning::skipping ${sha:0:12}: not the head of an open release PR"; continue; }
-  post "$sha" cascade/freshness "$G2" "$s2" "$m2"
-  post "$sha" cascade/settled "$G3" "$s3" "$m3"
-done < <(jq -r '.[] | [.sha, .freshness.state, .freshness.msg, .settled.state, .settled.msg] | map(tostring | gsub("[\t\n\r]"; " ")) | @tsv' "$SRC")
+if [ -n "$(tr -d '[:space:]' <<<"$heads")" ]; then g3_eval "$REPO"; fi
+for sha in $heads; do
+  [[ $sha =~ ^[0-9a-f]{40}$ ]] || { note "skipping a head without a commit id"; continue; }
+  line=$(awk -F '\t' -v s="$sha" '$1 == s { print; exit }' <<<"$G2RES")
+  if [ -n "$line" ]; then
+    IFS=$'\t' read -r _ s2 m2 <<<"$line"
+    post "$sha" cascade/freshness "$G2" "$s2" "$m2"
+  elif [ "$G2" = enforce ]; then
+    post "$sha" cascade/freshness enforce error "missing"
+  else
+    echo "::warning::no cascade/freshness result for ${sha:0:12}"
+  fi
+  post "$sha" cascade/settled "$G3" "$G3_STATE" "$G3_MSG"
+done
 [ "$failed" = 0 ] || exit 1

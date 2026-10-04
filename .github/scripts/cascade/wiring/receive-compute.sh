@@ -10,9 +10,12 @@
 # Usage: receive-compute.sh <step>, one workflow step each, in this order:
 #   init     checks tools, modes and the receiver; the effective dry run
 #   payload  validates a repository_dispatch payload (dropped when invalid)
-#   gates    G2 and G3 on open release PRs (gates-eval.sh); in a gates-only
+#   gates-read  the release PRs and the release heads' commits
+#            (gates-eval.sh read); G3 is the Post gates job's
+#   state    the cascade PR, the remote deps/cascade tip, the mode, and the
+#            upstream releases the breaking check reads
+#   gates    G2 on the release heads (gates-eval.sh run); in a gates-only
 #            run also the summary and action=gates-only
-#   state    the cascade PR, the remote deps/cascade tip, the mode
 #   prepare  the bot identity and the branch (merge mode merges main)
 #   notes    the old PR's Notes and title marker
 #   run      the task, the commit, the title check
@@ -26,7 +29,11 @@
 # CASCADE_RESOLVER (default the resolver beside this script),
 # CASCADE_DRY_RUN, CASCADE_GATES_ONLY, CASCADE_REF, CASCADE_EVENT,
 # CASCADE_PAYLOAD, CASCADE_G2_MODE, CASCADE_G3_MODE; GH_TOKEN and
-# CASCADE_READ_TOKEN (GITHUB_TOKEN) on gates, state and text only.
+# CASCADE_READ_TOKEN (GITHUB_TOKEN) on gates-read and state only. Those two
+# steps make every read that needs a token and run no repo code; gates, run
+# and text run repo code (run_repo_code), and no step from gates on is given
+# a token (the job's read-only token still sits in the checkout actions'
+# post steps and the runner, where repo code can reach it: cascade-receive.yml).
 # Writes GITHUB_OUTPUT, GITHUB_STEP_SUMMARY and files under CASCADE_T.
 #
 # Exit status: 0 success, 1 failure (the job fails), 2 usage.
@@ -99,12 +106,14 @@ step_init() {
   [ -d "$RD/.git" ] || die "no repo checkout at $RD"
   rm -rf "$T"
   mkdir -p "$T" "$ST"
-  local dry=false
+  local dry=false gates_only=false
+  [ "${CASCADE_GATES_ONLY:-false}" != true ] || gates_only=true
   # A run from any ref but main is always a dry run: the cascade
-  # Environment would refuse its publish job anyway.
-  if [ "${CASCADE_DRY_RUN:-true}" != false ] || [ "${CASCADE_REF:-}" != refs/heads/main ]; then dry=true; fi
+  # Environment would refuse its publish job anyway. A gates-only run is
+  # one too: it never publishes.
+  if [ "${CASCADE_DRY_RUN:-true}" != false ] || [ "${CASCADE_REF:-}" != refs/heads/main ] || [ "$gates_only" = true ]; then dry=true; fi
   st_set dry_run "$dry"
-  st_set gates_only "$([ "${CASCADE_GATES_ONLY:-false}" = true ] && echo true || echo false)"
+  st_set gates_only "$gates_only"
   output dry_run "$dry"
   trigger "- Event: \`$(safe_text "${CASCADE_EVENT:-unknown}")\` on \`$(safe_text "${CASCADE_REF:-}")\`; dry run: $dry"
 }
@@ -132,10 +141,25 @@ step_payload() {
   esac
 }
 
-step_gates() {
+step_gates_read() {
   mask_read_token
   local rc=0
-  bash "$WIRING_DIR/gates-eval.sh" || rc=$?
+  bash "$WIRING_DIR/gates-eval.sh" read || rc=$?
+  if [ "$rc" != 0 ]; then
+    # No gates-read.json: gates reports it. A real run still moves pins; a
+    # gates-only run has nothing else to do.
+    [ "$(st_get gates_only)" != true ] || die "gate evaluation failed"
+    echo "::warning::gate evaluation failed; the gates job reports it"
+  fi
+}
+
+step_gates() {
+  local rc=0
+  if [ -f "$T/gates-read.json" ]; then
+    bash "$WIRING_DIR/gates-eval.sh" run || rc=$?
+  else
+    rc=1
+  fi
   if [ "$(st_get gates_only)" = true ]; then
     output action gates-only
     {
@@ -164,7 +188,8 @@ gates_table() {
     echo "- Gates: no open release PR"
     return 0
   fi
-  jq -r '.[] | "- Release PR #\(.pr) (`\(.sha[0:12])`): freshness \(.freshness.state) (\(.freshness.msg)); settled \(.settled.state) (\(.settled.msg))"' "$T/gates.json"
+  jq -r '.[] | "- Release PR #\(.pr) (`\(.sha[0:12])`): freshness \(.freshness.state) (\(.freshness.msg))"' "$T/gates.json"
+  echo "- \`cascade/settled\` (G3) is evaluated and posted by the Post gates job"
 }
 
 step_state() {
@@ -205,6 +230,26 @@ step_state() {
   fi
   st_set mode "$mode"
   echo "mode $mode, cascade PR ${n:-none}, remote $BRANCH ${old:-absent}"
+  [ "$mode" = skip ] || fetch_releases
+}
+
+# fetch_releases: the upstream releases the breaking check may need, read
+# here because text runs repo code and gets no token. Each repo of
+# changelog_repos gets $T/releases/<repo>.tsv (tag, BREAKING CHANGES true or
+# false), or <repo>.failed when the API call fails; not an error here.
+fetch_releases() {
+  local repo
+  mkdir -p "$T/releases"
+  for repo in $(changelog_repos "$REPO"); do
+    if gh_ api --paginate "repos/$ORG/$repo/releases" --jq '.[] | select(.draft | not) | [.tag_name, ((.body // "") | test("BREAKING CHANGES"))] | @tsv' \
+      >"$T/releases/$repo.tsv"; then
+      :
+    else
+      rm -f "$T/releases/$repo.tsv"
+      : >"$T/releases/$repo.failed"
+      note "cannot read the releases of $repo; the breaking check warns if it needs them"
+    fi
+  done
 }
 
 step_prepare() {
@@ -302,8 +347,9 @@ step_run() {
   st_set computed "$computed"
 }
 
-# breaking_check: exit 0 and print yes or no; exit 1 on an API or tool
-# error; exit 2 when the repo's pins.sh fails.
+# breaking_check: exit 0 and print yes or no; exit 1 when the releases a
+# moved pin needs were not fetched by state; exit 2 when the repo's pins.sh
+# fails. It makes no API call: text holds no token.
 breaking_check() {
   local m k from to repo prefix rels tag v brk c1 c2
   local pm pw
@@ -318,7 +364,8 @@ breaking_check() {
     [ -n "$from" ] && [ "$from" != "$to" ] || continue
     read -r repo prefix <<<"$(changelog_source "$k")" || continue
     [ -n "$repo" ] || continue
-    rels=$(gh_ api --paginate "repos/$ORG/$repo/releases" --jq '.[] | select(.draft | not) | [.tag_name, ((.body // "") | test("BREAKING CHANGES"))] | @tsv') || return 1
+    [ -f "$T/releases/$repo.tsv" ] || return 1
+    rels=$(cat "$T/releases/$repo.tsv")
     while IFS=$'\t' read -r tag brk; do
       [ -n "$tag" ] || continue
       [[ $tag == "$prefix"* ]] || continue
@@ -338,7 +385,6 @@ step_text() {
   local mode computed labels marker_labels l rise breaking
   mode=$(st_get mode)
   case "$mode" in skip | conflict) return 0 ;; esac
-  mask_read_token
   computed=$(st_get computed)
   local -a benv=()
   mapfile -t benv < <(payload_env)
@@ -511,8 +557,9 @@ step_summary() {
 case "$STEP" in
   init) step_init ;;
   payload) step_payload ;;
-  gates) step_gates ;;
+  gates-read) step_gates_read ;;
   state) step_state ;;
+  gates) step_gates ;;
   prepare) step_prepare ;;
   notes) step_notes ;;
   run) step_run ;;

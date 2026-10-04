@@ -111,6 +111,38 @@ g3_upstreams() {
   esac
 }
 
+# g3_eval <receiver>: sets G3_STATE and G3_MSG, gate G3 cascade/settled
+# (workspace RELEASING.md, section "Gates"): an upstream's open cascade PR
+# titled fix(deps) or feat(deps), or its `autorelease: pending` PR listing a
+# **deps:** bullet, is a problem; an API error is an evaluator error. Only
+# the API, read with GH_TOKEN: gates-post.sh evaluates it in the Post gates
+# job, which runs no repo code, so no release head can choose its result.
+g3_eval() {
+  local up pr n title pending problems=() p
+  G3_STATE=ok G3_MSG="ok: upstreams settled"
+  for up in $(g3_upstreams "$1"); do
+    if ! pr=$(cascade_pr "$up"); then G3_STATE=error G3_MSG="cannot read the cascade PR of $up"; return 0; fi
+    if [ -n "$pr" ]; then
+      n=$(jq -r .number <<<"$pr")
+      title=$(jq -r .title <<<"$pr")
+      case "$title" in "fix(deps)"* | "feat(deps)"*) problems+=("$up has open cascade #$n") ;; esac
+    fi
+    if ! pending=$(gh_ pr list -R "$ORG/$up" --base main --state open --label "autorelease: pending" --json number,body); then
+      G3_STATE=error G3_MSG="cannot list the release PRs of $up"
+      return 0
+    fi
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      problems+=("$up release #$p pending with deps")
+    done < <(jq -r '.[] | select((.body // "") | contains("**deps:**")) | .number' <<<"$pending")
+  done
+  if [ "${#problems[@]}" -gt 0 ]; then
+    G3_STATE=problem
+    G3_MSG=$(printf '%s; ' "${problems[@]}")
+    G3_MSG="${G3_MSG%; }"
+  fi
+}
+
 # tag_re <source>: the tag shape a release of <source> has.
 tag_re() {
   if [ "$1" = catalog_opm ]; then
@@ -147,6 +179,23 @@ changelog_source() {
     github.com/open-platform-model/opm-operator) echo "opm-operator " ;;
     github.com/open-platform-model/cli) echo "cli " ;;
     github.com/open-platform-model/cascade-sandbox-up) echo "cascade-sandbox-up " ;;
+    *) return 1 ;;
+  esac
+}
+
+# changelog_repos <receiver>: the repos whose releases the breaking check
+# may read for this receiver's moved pins, fetched before any repo code runs:
+# every product repo with a changelog_source entry but the receiver itself.
+changelog_repos() {
+  local r
+  case "$1" in
+    cascade-sandbox-down) echo cascade-sandbox-up ;;
+    catalog_opm | library | opm-operator | cli)
+      for r in core catalog_opm library opm-operator cli; do
+        [ "$r" = "$1" ] || printf '%s ' "$r"
+      done
+      echo
+      ;;
     *) return 1 ;;
   esac
 }
@@ -192,11 +241,24 @@ is_derived_path() {
 # --- tokens and repo code -----------------------------------------------------
 
 # run_repo_code <command...>: runs code from the calling repo (its tasks, its
-# pins.sh) with every token and git auth header removed from its environment.
+# pins.sh) with every token and git auth header removed from its environment,
+# and with no variable naming a runner command file (GITHUB_ENV, GITHUB_PATH,
+# GITHUB_OUTPUT, GITHUB_STEP_SUMMARY, GITHUB_STATE) or an Actions service
+# (every ACTIONS_*), so a task cannot set the step's outputs, environment or
+# PATH through them. This stops a task that honours those variables; it is no
+# boundary against hostile code, which can still find the files on disk or
+# leave a process running into later steps of the job. So no compute step
+# after the first one that runs repo code holds a token, and every later job
+# treats what compute wrote from then on as untrusted.
 run_repo_code() {
-  env -u GH_TOKEN -u GITHUB_TOKEN -u CASCADE_READ_TOKEN -u CASCADE_APP_TOKEN \
-    -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_PARAMETERS \
-    "$@"
+  local v
+  local -a un=(-u GH_TOKEN -u GITHUB_TOKEN -u CASCADE_READ_TOKEN -u CASCADE_APP_TOKEN
+    -u GIT_CONFIG_COUNT -u GIT_CONFIG_PARAMETERS
+    -u GITHUB_ENV -u GITHUB_PATH -u GITHUB_OUTPUT -u GITHUB_STEP_SUMMARY -u GITHUB_STATE)
+  while IFS= read -r v; do
+    case "$v" in ACTIONS_* | GIT_CONFIG_KEY_* | GIT_CONFIG_VALUE_*) un+=(-u "$v") ;; esac
+  done < <(compgen -e)
+  env "${un[@]}" "$@"
 }
 
 # auth_b64 <token>: the base64 of the basic-auth pair git sends.
