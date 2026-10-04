@@ -3,7 +3,7 @@
 # Notify downstream: tells each receiver of the calling repo that it
 # released, through repository_dispatch `upstream-released` (workspace
 # RELEASING.md, sections "Notify after publish" and "repository_dispatch").
-# Run by cascade-notify.yml.
+# Run by the cascade-notify composite action (.github/actions/cascade-notify).
 #
 # Usage:
 #   notify.sh validate --tag <tag>    prints the targets, comma-separated

@@ -16,11 +16,14 @@ and the variable `CASCADE_APP_CLIENT_ID`.
 
 ## What Changes
 
-- **`cascade-notify.yml`** (reusable, `workflow_call`): validates the tag for the calling repo,
+- **`cascade-notify`** (a composite action run by the upstream's own `cascade`-Environment job,
+  which passes the App key in; sandbox cycle E1 replaced the reusable `cascade-notify.yml`):
+  validates the tag for the calling repo,
   waits for the Go proxy when the source is library, mints an App token scoped to the fixed
   targets and sends `repository_dispatch` `upstream-released` with `{source, tags}` to each
   (RELEASING.md, sections "Notify after publish" and "repository_dispatch"; contract §3.1, §4).
-- **`cascade-receive.yml`** (reusable): three jobs. `compute` (no secret) validates the payload,
+- **`cascade-receive.yml`** (reusable) plus the **`cascade-publish`** composite action (run by
+  the receiver's own `cascade`-Environment `publish` job, E1): three jobs. `compute` (no secret) validates the payload,
   evaluates G2 and G3, picks the branch mode, runs the repo's task, commits as the bot, builds
   title, body and labels, and uploads a git bundle and plan. `gates` posts G2 and G3 with
   `GITHUB_TOKEN`. `publish` (`cascade` Environment) verifies the plan, mints the token, and
@@ -74,7 +77,7 @@ Not in this change:
 
 ### New Capabilities
 
-- `cascade-workflows`: rules shared by the three reusable workflows: pinning, permissions, no
+- `cascade-workflows`: rules shared by the reusable workflows and composite actions: pinning, permissions, no
   inline expressions, no secrets input, repo-name derivation, the `org-github-ref` sandbox
   guard, and App token minting.
 - `cascade-notify`: the notify interface, the fixed source-to-target map, tag shapes, the

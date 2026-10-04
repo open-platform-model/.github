@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034 # globals here are read by the scripts that source this file
-# Shared code for the release-cascade workflows (cascade-notify.yml,
-# cascade-receive.yml, cascade-gates.yml): the fixed maps, payload
+# Shared code for the release-cascade workflows and actions (cascade-notify,
+# cascade-receive.yml, cascade-publish, cascade-gates.yml): the fixed maps, payload
 # validation, the cascade-PR filter, Notes and title-marker parsing, the
 # title rank, the mention lint, the comment texts, the workflows guard, the
 # action table and the gate status mapping. Design: workspace RELEASING.md,

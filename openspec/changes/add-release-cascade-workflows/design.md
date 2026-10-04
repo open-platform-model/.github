@@ -53,7 +53,8 @@ private.
 ### Layout
 
 ```text
-.github/workflows/cascade-notify.yml
+.github/actions/cascade-notify/action.yml     (composite; E1 replaced cascade-notify.yml)
+.github/actions/cascade-publish/action.yml    (composite; E1 moved publish out of cascade-receive.yml)
 .github/workflows/cascade-receive.yml
 .github/workflows/cascade-gates.yml
 .github/scripts/cascade/wiring/lib.sh
@@ -71,28 +72,29 @@ private.
 
 `lib.sh` is the single source of every fixed map (contract §3.1 to §3.7), the comment texts
 (contract §7.5), the mention-lint pattern (copied from `lib/prtext.sh:10`, the same as
-`mention-guard.yml:56`) and the constant `WF_GUARD_RULE` (default `strict`). Every other script
+`mention-guard.yml:56`) and the constant `WF_GUARD_RULE` (`tree`, decided by E4c; it was `strict` until then). Every other script
 sources it and nothing else duplicates a map.
 
 ### Workflows
 
-All three follow the `cascade-workflows` spec. Third-party pins are the contract §2.2 SHAs
+The two reusable workflows and the two composite actions follow the `cascade-workflows` spec
+(the table below is the shape after the E1 fallback; see Research & Decisions). Third-party pins are the contract §2.2 SHAs
 (checkout v7.0.1, create-github-app-token v3.2.0, setup-go v7.0.0, setup-cue v1.0.1, setup-task
 v2.0.0); `actions/upload-artifact` and `actions/download-artifact` are pinned to the SHA of their
 current release at implementation time, recorded in a comment.
 
 | Workflow | Job (name) | Environment | Permissions | Timeout | Runs |
 | --- | --- | --- | --- | --- | --- |
-| `cascade-notify.yml` | `notify` (`Notify downstream`) | `cascade` | `contents: read` | 20 | guard, checkout `org-github`, `notify.sh validate`, Go proxy wait (library), mint, `notify.sh dispatch` |
-| `cascade-receive.yml` | `compute` (`Compute`) | none | `contents: read`, `pull-requests: read` | 45 | contract §6.2 steps 1 to 15 |
+| the caller's `notify-downstream`, running `actions/cascade-notify` | `Notify downstream` | `cascade` | `contents: read` | 20 | guard, checkout `org-github`, `notify.sh validate`, Go proxy wait (library), mint, `notify.sh dispatch` |
+| `cascade-receive.yml` | `compute` (`Compute`) | none | `contents: read`, `pull-requests: read` | 45 | contract §6.2 steps 1 to 15, then `Done` (output `ok`) |
 | | `gates` (`Post gates`) | none | `contents: read`, `statuses: write`, `pull-requests: read` | 10 | contract §6.3 |
-| | `publish` (`Publish`) | `cascade` | `contents: read`, `pull-requests: read` | 15 | contract §6.4 |
+| the caller's `publish`, running `actions/cascade-publish` | `Publish` | `cascade` | `contents: read`, `pull-requests: read` | 15 | guard, main-only check, contract §6.4 |
 | `cascade-gates.yml` | `gates` (`Cascade gates`) | none | `statuses: write`, `actions: write` | 5 | contract §8.3, inline script, no checkout |
 
 No job name here is, or becomes in this change, a required check.
 
-**The guard step.** The first step of every job (five jobs in three workflows) is the same
-inline `run:` step, `Guard`, written in the reusable YAML and run before any checkout. It reads
+**The guard step.** The first step of every reusable job and of both composite actions is the
+same inline `run:` step, `Guard`, written in the YAML and run before any checkout. It reads
 `GITHUB_REPOSITORY` and the input `org-github-ref` (through `env:` as `INPUTS_REF`), fails unless
 the owner is exactly `open-platform-model` and the name is non-empty and matches the resolver's
 `REPO_RE`, fails with "org-github-ref may differ from main only in a sandbox repo" when
@@ -100,12 +102,14 @@ the owner is exactly `open-platform-model` and the name is non-empty and matches
 and writes the name to the step output `repo` (contract §2.2, §2.4). It is never a `lib.sh`
 function: `lib.sh` exists on disk only after the `org-github` checkout, and that checkout uses
 the very ref being guarded, so a guard read from it could be replaced by the ref it guards. The
-wiring suite extracts the step text from each job with `yq`, asserts the five copies are
+wiring suite extracts the step text from each job and action with `yq`, asserts the copies are
 identical, and runs it against the guard cases.
 
-The `compute` job outputs `action`, `dry_run` and `mode`. `publish`'s `if:` is the contract
-§6.4 expression with two terms added, both read by the reusable workflow itself and never from
-`compute`: `!inputs.dry-run && github.ref == 'refs/heads/main'`. `compute` runs repo code, which
+The `compute` job outputs `action`, `dry_run`, `mode` and `ok`, which `cascade-receive.yml`
+exposes as `action`, `dry-run` and `compute-ok`. The caller's `publish` `if:` is the contract
+§6.4 expression with `compute-ok` for `needs.compute.result` and three terms the caller reads
+itself, never from `compute`: `inputs.dry_run != true`, `vars.CASCADE_DRY_RUN == 'false'` and
+`github.ref == 'refs/heads/main'`. `compute` runs repo code, which
 can write `GITHUB_ENV` or `BASH_ENV` for the steps after it, so its `dry_run` output alone cannot
 hold the `CASCADE_DRY_RUN` stop switch; `receive-publish.sh verify` also refuses a plan whose
 `effective_dry_run` is true. Artifacts: `cascade-gates` (`gates.json`) and `cascade-plan`
@@ -282,10 +286,18 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
 - **Context.** opm-operator has `sha_pinning_required: true`; owner decision 13 says `@main`.
   docs-kit's tag-pinned reusable call ran green there, which suggests reusable-workflow refs are
   exempt, but the setting's date is unknown.
-- **Decision.** Measure E6 in `cascade-sandbox-down` (setting toggled by the supervisor, since
-  repo Actions settings are outside this branch's sandbox permissions) and record the result; a
-  refusal is an owner decision for opm-operator (contract §15 item 2), not something this change
-  works around.
+- **Decision.** Measure E6 in `cascade-sandbox-down` and record the result; a refusal is an
+  owner decision for opm-operator (contract §15 item 2), not something this change works around.
+- **E6 result (2026-10-04).** `sha_pinning_required` does **not** refuse a reusable-workflow
+  reference by branch (`@main`, or a `.github` feature branch) or by SHA; all three ran. It
+  **does** refuse an action reference by branch, including the `.github` composite actions
+  (`cascade-notify@<branch>`: "is not allowed ... because all actions must be pinned to a
+  full-length commit SHA"), and accepts them by full SHA. Because E1 moved notify and publish
+  into composite actions, opm-operator's `notify-downstream` and `publish` steps cannot use
+  `@main` while the setting is on: the owner chooses between turning the setting off there and
+  pinning opm-operator's two action references to a `.github` commit SHA (a carve-out from
+  owner decision 13). Its `cascade-receive.yml@main` and `cascade-gates.yml@main` calls are
+  unaffected.
 
 ### Departures from the contract, reported to the supervisor
 
@@ -315,12 +327,28 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   now a bot-only branch under an open PR (`rebuild` turned into `recreate` by the guard, Notes
   and labels carried); (b2) is the closed PR (a fresh PR with no Notes). The contract text is
   inconsistent, not the design; reported to the supervisor.
+- **Contract §13.1 fallback implemented (E1).** Notify and publish are composite actions in
+  caller-owned `cascade` jobs; `cascade-notify.yml` is gone and `cascade-receive.yml` has two
+  jobs plus the outputs `action`, `dry-run` and `compute-ok`. Every caller shape in contract §4.3,
+  §4.5 and §5 changes (README "Cascade workflows" holds the new ones); the B changes depend on it.
+- **`WF_GUARD_RULE` ships as `tree` (E4c).** Under `tree`, `recreate` happens only when a human
+  closed the cascade PR and its branch was left behind, and the workflows `conflict` never
+  happens; a workflow change on `main` is merged or rebuilt in place.
+- **S5: mention-guard no longer fails on a bare mention in a bot-authored PR body.** `.github`
+  main treats such a body as advisory (a notice), so the P2 §11 C1 expectation the contract
+  repeats is outdated. Nothing in this change depends on it.
+- **S6: the squash commit is not "title only".** GitHub appends `Co-authored-by:` trailers for
+  commit authors other than the merger even under the BLANK message setting, so a merged cascade
+  PR carries `Co-authored-by: opm-cascade[bot] <…>`. The first line is exactly `<title> (#N)`;
+  release-please reads only the header, so releases are unaffected.
+- **E3/E4 (b) reached without a human force push** (Sandbox cycle).
 
 ## Risks / Trade-offs
 
 - [Under `strict`, every workflow change on `main`, including Dependabot `github_actions` bumps,
-  turns a bot-only cascade PR into a new PR and a human-touched one into `conflict`] → E4c may
-  allow `tree`; otherwise accepted and documented in the C-recreate comment and RELEASING.md.
+  turns a bot-only cascade PR into a new PR and a human-touched one into `conflict`] → E4c showed
+  GitHub accepts both updates, so `tree` ships; `strict` stays in the code should GitHub tighten
+  the rule, and a refused push then fails the publish job visibly.
 - [One App key in seven Environments: anyone who can run a `main` job in any `cascade`
   Environment, sandboxes included, reaches all seven repos with the App's permissions] → sandbox
   `main` rulesets before the Environments are used (contract §11.5); probe tokens always scoped
@@ -333,7 +361,7 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   its `CASCADE_EXPECT` wait and its "Triggering releases" line; the version is re-resolved and
   the breaking label comes from the pin range (contract §5).
 - [The per-PR `pull_request_target` workflow on Dependabot PRs may get a read-only token (E7)] →
-  recorded; it blocks only Phase 5's required contexts.
+  E7 showed `Statuses: write` and `Actions: write` on a Dependabot PR; not a Phase 5 blocker.
 - [Public repos disable scheduled workflows after 60 days without activity] → product repos are
   active; the sandbox uses no schedule.
 - [`compute` and `publish` read the private sandbox with `GITHUB_TOKEN`] → the header is set
@@ -377,23 +405,41 @@ the owner's `gh` token has no `workflow` scope, so an HTTPS push of `.github/wor
 be refused. Every row gets its run URL, PR URL, the `org-github` commit it ran, and the observed
 outcome, here and in the scratchpad file `p3-gh-workflows-sandbox.md`.
 
-**Status (2026-10-04): not started.** Task 5.1 found all three supervisor preconditions
-missing (`cascade-sandbox-up` still private; only the org `mention-guard` ruleset on either
-sandbox; the branch not on `origin`), so nothing was pushed to or run in a sandbox. The seeds are
-committed and linted, and the runbook is in the scratchpad file `p3-gh-workflows-sandbox.md`.
+**Status (2026-10-04): done.** The full cycle ran against `feat/add-release-cascade-workflows`
+with every caller pinned to a commit SHA (implementation review finding 3). Three `.github`
+commits were exercised: `d5d47bb` (the reusable notify and publish jobs; E1 failed there),
+`038da12` (the contract §13.1 fallback: composite actions in caller-owned `cascade` jobs) and
+`30a98c6` (`WF_GUARD_RULE=tree` from E4c). Each move of the pin was a sandbox PR: [up#3](https://github.com/open-platform-model/cascade-sandbox-up/pull/3) and
+[down#4](https://github.com/open-platform-model/cascade-sandbox-down/pull/4) to `038da12`, [up#4](https://github.com/open-platform-model/cascade-sandbox-up/pull/4) and [down#10](https://github.com/open-platform-model/cascade-sandbox-down/pull/10) to `30a98c6`. Seeds: [down#1](https://github.com/open-platform-model/cascade-sandbox-down/pull/1) and [up#1](https://github.com/open-platform-model/cascade-sandbox-up/pull/1); release
+`v0.1.0` by hand; `CASCADE_DRY_RUN=false` on down. Cleanup: [down#15](https://github.com/open-platform-model/cascade-sandbox-down/pull/15) and [up#5](https://github.com/open-platform-model/cascade-sandbox-up/pull/5) removed every
+probe workflow, the probe PRs [down#3](https://github.com/open-platform-model/cascade-sandbox-down/pull/3) and [down#13](https://github.com/open-platform-model/cascade-sandbox-down/pull/13) were closed, and the `probe-env`, `probe/*`,
+`probe-branch-run` and `release-please--branches--main` branches were deleted. Left open on
+purpose: the live cascade PR [down#14](https://github.com/open-platform-model/cascade-sandbox-down/pull/14) and Dependabot's [down#2](https://github.com/open-platform-model/cascade-sandbox-down/pull/2). `v0.2.0` exists from the failed
+first E1 run, so the reruns started at `v0.2.1`; releases are never deleted.
+
+Two scenarios ran differently from the runbook, for reasons outside the code:
+
+- **E3/E4 (b).** The runbook's human lease-reset of `deps/cascade` to the last bot-only commit
+  was refused by this session's own permission layer (a force push), not by GitHub. The same
+  state was reached without it: (b2) closed the PR so the bot recreated the branch bot-only under
+  a new PR, then a second workflow change on `main` under that open PR gave `rebuild` with D2
+  non-empty, which is exactly (b).
+- **E6.** The agent toggled `sha_pinning_required` on `cascade-sandbox-down` itself (granted for
+  E6 only) and restored it 81 seconds later. `.github` has no reusable workflow on `main`, so a
+  true `@main` reference was tested against a harmless reusable probe on `cascade-sandbox-up`
+  `main`; `.github` references were tested by branch and by SHA.
 
 **Preconditions** (supervisor): `cascade-sandbox-up` public; `main` rulesets on both sandboxes
-(contract §11.5); this branch pushed to `origin` so `@feat/add-release-cascade-workflows`
-resolves. **Agent:** the variable `CASCADE_DRY_RUN=false` on `cascade-sandbox-down`, set after
+(contract §11.5); this branch pushed to `origin` so its commit SHAs resolve. All three were met on 2026-10-04. **Agent:** the variable `CASCADE_DRY_RUN=false` on `cascade-sandbox-down`, set after
 the seed PR merges and before E1.
 
 **Seeds** (committed under `sandbox/up/` and `sandbox/down/` in this change, linted with the
 pinned actionlint and shellcheck before they are pushed). `cascade-sandbox-up`: `README.md`;
 `.github/workflows/release.yml` (`workflow_dispatch` input `version`; job `release` with
 `contents: write` creating a published release with `up.tar.gz`; job `notify-downstream`
-calling `cascade-notify.yml@feat/add-release-cascade-workflows` with `org-github-ref` set the
-same); `.github/workflows/probe-env.yml` (E1b: `workflow_dispatch`, calls the same notify, its
-job skipped on `main` so only the `--ref probe-env` run reaches the Environment); seed release
+in the `cascade` Environment running the `cascade-notify` action at a commit SHA of this branch,
+with `org-github-ref` the same SHA); `.github/workflows/probe-env.yml` (E1b: `workflow_dispatch`,
+the same job shape, skipped on `main` so only the `--ref probe-env` run reaches the Environment); seed release
 `v0.1.0`. `cascade-sandbox-down`: `UPSTREAM_VERSION` (`v0.1.0`), `Taskfile.yml` with the four
 cascade tasks, `.tasks/cascade/classes` (`shipped UPSTREAM_VERSION`, `test fixtures/`),
 `.tasks/cascade/pins.sh` (one row, key `github.com/open-platform-model/cascade-sandbox-up`,
@@ -401,36 +447,44 @@ display `up`, class `shipped`), `.tasks/cascade/cascade.sh` (contract §11.3),
 `.github/workflows/ci.yml` (job `ci`, plus one step using a deliberately old SHA-pinned
 `actions/checkout` for E7), `.github/dependabot.yml` (`github-actions`, daily),
 `.github/workflows/touch.yml`, `.github/workflows/deps-cascade.yml` (contract §5, no schedule,
-`setup-cue: false`), `.github/workflows/cascade-gates.yml` (contract §8.3), and
+`setup-cue: false`, plus the caller-owned `publish` job running `cascade-publish`),
+`.github/workflows/cascade-gates.yml` (contract §8.3), and
 `.github/workflows/probe.yml`: `workflow_dispatch` with a choice input `e4c-inplace`,
 `e4c-merge` or `e5` and a `pr` input, one job in the `cascade` Environment that mints a token
 with `repositories: cascade-sandbox-down` and only `contents: write` (E4c) or `contents: write`
 plus `pull-requests: write` (E5), and records whether GitHub accepts the push or the
 update-branch call. `probe.yml` is in the first seed so that no workflow change on `main` is
 needed mid-cycle; it is removed by a sandbox PR, and the `probe-env` branch and the `probe/*`
-branches deleted, after the cycle.
+branches deleted, after the cycle. The committed seeds show the final shape, pinned to
+`30a98c6`. Two probe sets were added during the cycle and are not seeds: `probe-secrets.yml` and
+`probe-secrets-called.yml` in up (E1 follow-up, [up#2](https://github.com/open-platform-model/cascade-sandbox-up/pull/2)) and `probe-pin-{a,b,c,d,e,g}.yml` in down
+(E6, [down#12](https://github.com/open-platform-model/cascade-sandbox-down/pull/12)); both were removed by the cleanup PRs.
 
-| Id | Step | Pass | org-github SHA | Run / PR | Result |
-| --- | --- | --- | --- | --- | --- |
-| E1 | S1: release `v0.2.0` in up | notify mints in the reusable job; down starts a `repository_dispatch` run whose actor is `opm-cascade[bot]`; a branch `workflow_dispatch` of down's caller is a forced dry run | | | not run |
-| E1b | `probe-env` branch in up, `gh workflow run probe-env.yml --ref probe-env` | the Environment refuses before any step; no token | | | not run |
-| E2 | S2: receiver opens the PR | one PR by `app/opm-cascade`, title `fix(deps): bump up to v0.2.0`, body with moved pin, triggering release and Notes marker; bot commit; `ci` and `mention-guard` pass | | | not run |
-| S3 | release `v0.3.0` | same PR number, one commit, `v0.3.0`, title updated | | | not run |
-| S4 | human commit `fixtures/human.txt`, release `v0.4.0` | human commit kept as ancestor, bot commit on top, title `fix(deps)` | | | not run |
-| E3/E4 (a) | `touch.yml` changed on `main` (sandbox PR) with the human commit on the branch, release | `conflict` (workflows), label and comment once, no push | | | not run |
-| E3/E4 (b) | a human force-resets `deps/cascade` to the last bot-only commit with the PR open, release | `rebuild` → D2 non-empty → `recreate`: C-recreate on the old PR, a new PR with the Notes and the carried `deps-cascade:breaking`/`need-human-review` labels, "Continued in #N" | | | not run |
-| E3/E4 (b2) | close the PR, release | mode `recreate` with no open PR: a fresh PR with no Notes, nothing carried | | | not run |
-| E3/E4 (c) | `probe.yml` `e4c-inplace` and `e4c-merge` against `probe/*` branches built before the `touch.yml` change | decides `WF_GUARD_RULE` | | | not run |
-| E5 | `probe.yml` `e5` on a PR behind the workflow change | recorded only | | | not run |
-| E6 | the supervisor sets `sha_pinning_required` on down; dispatch down's caller (branch ref, a non-SHA ref like `@main`); the supervisor restores it | recorded; a refusal goes to the owner (contract §15 item 2) | | | not run |
-| E7 | the Dependabot PR bumping the old checkout pin in down | `n/a` statuses posted, or the read-only token recorded as a Phase 5 blocker | | | not run |
-| S5 | Notes edited, release again | Notes byte for byte; a bare mention in Notes fails mention-guard (accepted) | | | not run |
-| S6 | squash-merge the PR | `main` message is exactly `<PR title> (#N)` | | | not run |
-| S7 | fake `release-please--branches--main` PR with `UPSTREAM_VERSION` behind | `cascade/freshness` `WARN: behind: up …`; ordinary PR `n/a` | | | not run |
-| S8 | dispatch `{"source":"evil","tags":["@x"]}` | dropped with a warning, sweep, no mention | | | not run |
-| S9 | `CASCADE_DRY_RUN=true`, release, then back to `false` | summary diff and "DRY RUN", nothing pushed | | | not run |
-| S10 | retitle to `feat(deps): sandbox`, release | title kept, marker computed, no title-rise comment | | | not run |
-| S11 | push to the S7 PR while a dispatch run is pending | gates-only run in `deps-cascade-gates`; pending run not replaced | | | not run |
+| Id | Step | org-github | Run / PR | Result |
+| --- | --- | --- | --- | --- |
+| E1 (first) | release `v0.2.0` in up | `d5d47bb` | [up 37205835905](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37205835905) | **fail**: the reusable notify job ran in the caller's `cascade` Environment and read `vars.CASCADE_APP_CLIENT_ID`, but `secrets.CASCADE_APP_PRIVATE_KEY` was empty ("The 'private-key' input must be set to a non-empty string") |
+| E1 probe | one reusable job with `environment: cascade`, called without `secrets:` and with `secrets: inherit` | n/a | [up 37205963663](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37205963663), [up#2](https://github.com/open-platform-model/cascade-sandbox-up/pull/2) | without: secret no, variable yes; with `secrets: inherit`: both yes. Contract §13.1 fallback implemented (Research & Decisions) |
+| E1 | release `v0.2.1` in up | `038da12` | [up 37206437700](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37206437700), [down 37206458777](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37206458777), branch run [down 37206547449](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37206547449) | **pass**: the caller-owned job minted and dispatched (HTTP 204); down's run is `repository_dispatch`, actor and triggering actor `opm-cascade[bot]`; a `workflow_dispatch` from branch `probe-branch-run` with `dry_run=false` planned `effective_dry_run: true` and `Publish` was skipped |
+| E1b | `probe-env.yml` dispatched with `--ref probe-env` | `038da12` | [up 37206627490](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37206627490) | **pass**: "Branch "probe-env" is not allowed to deploy to cascade due to environment protection rules"; zero steps ran, no token |
+| E2 | the receiver opens the PR | `038da12` | [down#5](https://github.com/open-platform-model/cascade-sandbox-down/pull/5) | **pass**: author `app/opm-cascade`, title `fix(deps): bump up to v0.2.1`, body with the moved pin `v0.1.0`→`v0.2.1`, triggering release `cascade-sandbox-up` `v0.2.1` and the Notes marker; commit `0518a3c` author and committer the bot; `ci`, `mention-guard` and `Cascade gates` passed |
+| E7 | Dependabot PR bumping the old checkout pin | `d5d47bb` | [down#2](https://github.com/open-platform-model/cascade-sandbox-down/pull/2), [gates](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37205783292) | **pass**: the `pull_request_target` token had `Statuses: write` and `Actions: write`; both contexts `success` "n/a: not a release PR" by `github-actions[bot]`. Not a Phase 5 blocker |
+| S3 | release `v0.3.0` | `038da12` | [up 37206670878](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37206670878), [down 37206696519](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37206696519) | **pass**: `rebuild`/`push`, PR 5 kept, one commit, `v0.3.0`, title updated |
+| S4 | human commit, release `v0.4.0` | `038da12` | [up 37206780011](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37206780011), [down 37206803140](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37206803140) | **pass**: `merge`/`push`; human `458b38d` an ancestor, bot `36c22d1` on top, title `fix(deps)` |
+| E3/E4 (a), strict | `touch.yml` changed on main ([down#6](https://github.com/open-platform-model/cascade-sandbox-down/pull/6)), human commit present, release `v0.5.0` | `038da12` | [up 37206905348](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37206905348), [down 37206929569](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37206929569), sweep [down 37206991382](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37206991382) | **pass**: `merge`/`conflict`, reason `workflows`, file `touch.yml`; label and one C-conflict comment, no push; the sweep added no second comment |
+| E3/E4 (c) | `probe.yml` `e4c-inplace` and `e4c-merge` | `038da12` | [down 37207063750](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37207063750), [down 37207085490](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37207085490) | **both accepted**: in-place lease update of `probe/inplace` to `f893fd0` and merge commit `df079fb` into `probe/merge`, each with D1 empty and D2 = three workflow files. Decides `tree` |
+| E3/E4 (b2), strict | close PR 5, release `v0.6.0` | `038da12` | [up 37207230069](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37207230069), [down 37207250517](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37207250517) | **pass**: `recreate` with no open PR, fresh [down#7](https://github.com/open-platform-model/cascade-sandbox-down/pull/7), no Notes, nothing carried, no comment on the closed PR |
+| E3/E4 (b), strict | Notes and `need-human-review` on PR 7, workflow change on main ([down#8](https://github.com/open-platform-model/cascade-sandbox-down/pull/8)), release `v0.7.0` (breaking) | `038da12` | [up 37207358154](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37207358154), [down 37207378831](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37207378831) | **pass**: `rebuild`→`recreate`; C-recreate and "Continued in #9." on PR 7; [down#9](https://github.com/open-platform-model/cascade-sandbox-down/pull/9) with the Notes byte-identical, `need-human-review` carried, `deps-cascade:breaking` from the release notes |
+| E3/E4 (b), tree | pin move [down#10](https://github.com/open-platform-model/cascade-sandbox-down/pull/10) is a workflow change on main under bot-only PR 9; release `v0.8.0` | `30a98c6` | [up 37207795782](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37207795782), [down 37207816358](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37207816358) | **pass**: `rebuild`/`push`, PR 9 rebuilt in place on `329c74c` (`d924f19`), no comment |
+| E3/E4 (a), tree | human commit `774ed1a`, workflow change on main ([down#11](https://github.com/open-platform-model/cascade-sandbox-down/pull/11)), release `v0.9.0` | `30a98c6` | [up 37207954306](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37207954306), [down 37207979847](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37207979847) | **pass**: `merge`/`push`; the App pushed merge commit `c086837` that brings main's workflow change in; human commit kept |
+| E5 | `probe.yml` `e5` on [down#3](https://github.com/open-platform-model/cascade-sandbox-down/pull/3) | `30a98c6` | [down 37208052407](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208052407) | recorded: `PUT update-branch` with the App token was **accepted** after the workflow change ("Updating pull request branch."); unused by the design |
+| E6 | `sha_pinning_required: true` on down, probes [down#12](https://github.com/open-platform-model/cascade-sandbox-down/pull/12) | `30a98c6` | A [down 37208164124](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208164124), B [down 37208166361](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208166361), C [down 37208168647](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208168647), D [down 37208170244](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208170244), E [down 37208171918](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208171918), G [down 37208173937](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208173937), receiver [down 37208176173](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208176173) | reusable workflow at `@main` (A), at a SHA (B) and at a `.github` branch (C): **not refused**, all ran. Composite action at a SHA (D): ran. Composite action at a branch (E) and the control `actions/checkout@v4` (G): **refused** at job setup, "must be pinned to a full-length commit SHA". The real receiver (reusable and action at `30a98c6`) succeeded with publish |
+| S5 | Notes edited on PR 9 with a bare mention of a non-existent handle, release `v0.10.0` | `30a98c6` | [up 37208293318](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37208293318), [down 37208315156](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208315156), [mention-guard](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208368685) | **pass** for the Notes (byte-identical). The mention did **not** fail mention-guard: on `.github` main a bot-authored PR body is advisory (notice only), so the contract's expectation is outdated |
+| S6 | squash-merge PR 9 | `30a98c6` | [down#9](https://github.com/open-platform-model/cascade-sandbox-down/pull/9), `5f4f893` | **partial**: first line exactly `fix(deps): bump up to v0.10.0 (#9)`, but GitHub appended `Co-authored-by:` trailers for the other commit authors (the bot, the human, and the `Claude` trailer of the sandbox human commits) despite the BLANK message setting |
+| S7 | fake release PR with `UPSTREAM_VERSION` behind | `30a98c6` | [down#13](https://github.com/open-platform-model/cascade-sandbox-down/pull/13), gates-only [down 37208464972](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208464972) | **pass**: `cascade/freshness` `success` "WARN: behind: up v0.9.0→v0.10.0", `cascade/settled` "ok: upstreams settled"; the gates-only run skipped `Publish`; ordinary PRs show `n/a` |
+| S8 | dispatch `{"source":"evil","tags":["@x"]}` | `30a98c6` | [down 37208516941](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208516941) | **pass**: "payload dropped: source `evil` is not accepted by cascade-sandbox-down; continuing as a sweep", `fresh`/`noop`, no `@x` in the plan or body |
+| S9 | `CASCADE_DRY_RUN=true`, release `v0.11.0`, back to `false` | `30a98c6` | [up 37208574770](https://github.com/open-platform-model/cascade-sandbox-up/actions/runs/37208574770), [down 37208598636](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208598636) | **pass**: `effective_dry_run: true`, `Publish` skipped, no branch or PR, `diff.patch` `v0.10.0`→`v0.11.0` (the summary's "DRY RUN" line is not readable through the API; the offline case covers it) |
+| S10 | release `v0.12.0` ([down#14](https://github.com/open-platform-model/cascade-sandbox-down/pull/14)), retitle to `feat(deps): sandbox`, release `v0.13.0` | `30a98c6` | [down 37208687309](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208687309), [down 37208784609](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208784609) | **pass**: title kept, body marker `fix(deps): bump up to v0.13.0`, no comment |
+| S11 | sweep active, dispatch pending, push to the S7 PR | `30a98c6` | sweep [down 37208881115](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208881115), dispatch [down 37208904285](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208904285), gates-only [down 37208922871](https://github.com/open-platform-model/cascade-sandbox-down/actions/runs/37208922871) | **pass**: the dispatch run was pending from 14:20:35 to 14:21:04 (the sweep ended 14:21:02); the gates-only run was created 14:20:54 and started 14:20:58 in its own group; the pending run was not replaced and its body names `cascade-sandbox-up` `v0.14.0` |
 
 **`WF_GUARD_RULE`: `tree`**, decided by E4c (contract §7.6). With an App token scoped to
 `cascade-sandbox-down` and only `contents: write`, after `main` had changed three workflow files
@@ -449,8 +503,11 @@ to `@main` and the branch is deleted (Migration Plan step 4).
 
 ## Open Questions
 
-None that change the specs or tasks. E1, E2 and E6 can each force a supervisor or owner decision
-(contract §13, §15); the tasks stop and report at those points instead of choosing.
+- **opm-operator under `sha_pinning_required` (E6).** The two composite-action references in
+  its caller jobs need either the setting off or a `.github` SHA pin; an owner decision before
+  its join change merges (contract §15 item 2, now about actions, not reusable workflows).
+- **RELEASING.md** (contract §14, a workspace PR) must also describe the caller-owned
+  `cascade` jobs, `tree`, and the S5/S6 findings above.
 
 ## Plan review (commit c8a038d)
 
