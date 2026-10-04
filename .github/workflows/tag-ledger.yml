@@ -44,7 +44,7 @@ concurrency:
 
 env:
   ORG: open-platform-model
-  REPOS: core library catalog_opm cli opm-operator
+  REPOS: core library catalog_opm cli opm-operator opm
   RELEASE_APP_ID: '5132303'
   LEDGER_BRANCH: tag-ledger
   ANCHOR_PREFIX: tag-ledger-anchor-
