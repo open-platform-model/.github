@@ -102,8 +102,10 @@ non-empty and matches the resolver's `REPO_RE`, and writes the name to the step 
 the sandbox cycle it also refused an `org-github-ref` other than `main` outside the sandboxes;
 that input is gone (next paragraph).
 
-**Scripts at the pinned commit (review M2, owner decision 24).** Every caller pins the four
-cascade references to a full commit SHA of `.github` `main` (decision 24 names the actions; the
+**Scripts at the pinned commit (review M2, owner decision 24).** Every caller pins its cascade
+references (in a receiver five: the four cascade `uses:` targets and the `ref:` of the
+`cascade-task.yml` resolver checkout; in core the one notify reference) to one full commit SHA of
+`.github` `main` (decision 24 names the actions; the
 supervisor extended it to the two reusable workflows, see Decisions), and the scripts always come
 from that same commit. The composite actions run them from their own directory
 (`$GITHUB_ACTION_PATH/../../scripts/cascade/wiring/`; the runner downloads the whole `.github`
@@ -408,11 +410,12 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   turns a bot-only cascade PR into a new PR and a human-touched one into `conflict`] → E4c showed
   GitHub accepts both updates, so `tree` ships; `strict` stays in the code should GitHub tighten
   the rule, and a refused push then fails the publish job visibly.
-- [One App key in seven Environments: anyone who can run a `main` job in any `cascade`
-  Environment, sandboxes included, reaches all seven repos with the App's permissions] → sandbox
-  `main` rulesets before the Environments are used (contract §11.5); probe tokens always scoped
-  with `repositories`; rotating the key rotates it everywhere. Recorded again under "Sandbox
-  cycle".
+- [One App key in seven Environments during the cycle: anyone who can run a `main` job in any
+  `cascade` Environment, sandboxes included, reaches all seven repos with the App's permissions]
+  → sandbox `main` rulesets before the Environments are used (contract §11.5); probe tokens always
+  scoped with `repositories`; rotating the key rotates it everywhere. After the cycle the key left
+  both sandbox Environments (owner decision 26), so five Environments hold it. Recorded again
+  under "Sandbox cycle".
 - [`compute` runs repo code, and G2 runs it from a release-PR head] → no secret in `compute`,
   read-only permissions, `publish` re-derives and verifies everything before minting (contract
   §6.4, §8.2), and the stop switch is the `cascade-publish` input, never a `compute` output.
@@ -437,21 +440,23 @@ context name stay `Resolver tests`; the timeout is raised from 10 only if a gree
   sandbox run. The callers therefore pin a full commit SHA of this branch (implementation review
   finding 3; since review M2 the scripts come from that same commit): a later push to the branch changes
   nothing a sandbox runs until a sandbox PR, merged by PR under the sandbox `main` ruleset, moves
-  the pin. Right after this PR merges the callers move to a SHA on `.github` `main` and the
-  branch is deleted (Migration Plan step 4, task 5.8).
+  the pin. Owner decision 26 ended this reach before merge: the key left both sandbox
+  Environments, so a sandbox run can no longer mint a token; the branch is deleted when this PR
+  merges, and both sandboxes are archived after Phase 3 (Migration Plan step 4, task 5.8).
 
 ## Migration Plan
 
 1. Sections 1 to 4 of `tasks.md` land the code and tests, each green and committed.
 2. The supervisor completes the sandbox preconditions (proposal "Depends on").
 3. Section 5 runs the sandbox cycle against this branch and records results here.
-4. The contract §14 workspace PR merges, then this PR. Right after the merge the sandbox
-   callers move to a full commit SHA on `.github` `main` in one sandbox PR per sandbox,
-   `feat/add-release-cascade-workflows` is deleted from `origin`, and S1 is rerun once (contract
-   §11.3, task 5.8), and the sandboxes are disarmed: the production key leaves both sandbox
-   Environments and `cascade-sandbox-up` is private again. The product callers pin a `.github`
-   `main` SHA as well (owner decision 24) and move it by the README's bump procedure, whose
-   sandbox step re-arms and disarms the sandboxes.
+4. The contract §14 workspace PR merges, then this PR, and `feat/add-release-cascade-workflows`
+   is deleted from `origin`. The sandboxes are dropped (owner decision 26, superseding decision
+   25): the production key and the client-id variable are already gone from both sandbox
+   Environments, `cascade-sandbox-up` is private again, no sandbox App exists, and both sandbox
+   repos are archived after Phase 3 (task 5.8). The sandbox callers are not moved to `main`. The
+   product callers pin a `.github` `main` SHA (owner decision 24) and move it by the README's
+   bump procedure: the offline suites on the `.github` PR, then a dry-run pin bump in one
+   receiver (`CASCADE_DRY_RUN=true` there), then the other repos.
 5. B1 to B5 merge after this, each receiver behind `CASCADE_DRY_RUN=true`.
 
 Rollback: callers stop at once by stop switches (contract §9.2: `CASCADE_NOTIFY=off`,
@@ -591,12 +596,13 @@ scripts, should GitHub tighten the rule.
 
 **Shared-key reach:** the seven `cascade` Environments hold one App key (contract Facts); whoever
 can run a `main` job in any of them can mint a token for all seven repos. Rotating the key
-rotates it everywhere. During the cycle that reach also extends to whoever can push to
-`feat/add-release-cascade-workflows` in `.github` (Risks); it ends when the sandbox callers move
-to a SHA on `.github` `main` and the branch is deleted (Migration Plan step 4). After that the
-sandboxes are disarmed (the key removed from both sandbox Environments, `cascade-sandbox-up` made
-private again) and re-armed only for the sandbox step of a pin bump (README "Pinning and bumps",
-step 2), so the reach of the sandboxes exists only while a rollout is being proven.
+rotates it everywhere. During the cycle that reach also extended to whoever can push to
+`feat/add-release-cascade-workflows` in `.github` (Risks). It ended on 2026-10-04 under owner
+decision 26: the key and the client-id variable were deleted from both sandbox Environments and
+`cascade-sandbox-up` was made private again. The sandboxes are never re-armed; both are archived
+after Phase 3, and the seeds under `sandbox/` stay in this change as history. Future
+cascade-wiring changes are proven by the offline suites and a dry-run pin bump in one product
+repo first (README "Pinning and bumps").
 
 ## Open Questions
 

@@ -115,7 +115,9 @@ Not in this change:
   branch pushed to `origin`. The agent sets `CASCADE_DRY_RUN=false` on `cascade-sandbox-down`
   after seeding (allowed by the Phase 3 brief). During the cycle `sha_pinning_required` on
   `cascade-sandbox-down` is toggled for E6 (by the agent, under the supervisor's grant). After
-  merge the sandbox callers move to a `.github` `main` SHA and the branch is deleted (task 5.8).
+  the cycle the sandboxes are dropped (owner decision 26): the key leaves both sandbox
+  Environments, the branch is deleted on merge, and both sandbox repos are archived after Phase 3
+  (task 5.8).
 - **Gate to merge:** the full sandbox cycle green with E1, E1b and E2 to E5 recorded (contract
   §1), and the contract §14 RELEASING.md amendments merged before or together with this PR.
 - **Depended on by:** `join-release-cascade` in core, catalog_opm, library, opm-operator and cli;
