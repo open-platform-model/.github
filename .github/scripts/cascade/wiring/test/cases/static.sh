@@ -66,3 +66,10 @@ fi
 # 5), byte for byte, in the README's caller shape.
 CONTRACT_GROUP="\${{ github.ref != 'refs/heads/main' && format('deps-cascade-{0}', github.ref) || (inputs.gates_only && 'deps-cascade-gates' || 'deps-cascade') }}"
 check "static: the README's receiver caller uses the contract's concurrency group" grep -qxF "  group: $CONTRACT_GROUP" "$ORG_ROOT/README.md"
+# The sandbox caller committed with the change (before or after its archive).
+for seed in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox/down/.github/workflows/deps-cascade.yml \
+  "$ORG_ROOT"/openspec/changes/archive/*-add-release-cascade-workflows/sandbox/down/.github/workflows/deps-cascade.yml; do
+  [ -f "$seed" ] || continue
+  expect "static: the sandbox receiver caller uses the contract's concurrency group" 0 "$CONTRACT_GROUP" -- \
+    yq -r '.concurrency.group' "$seed"
+done

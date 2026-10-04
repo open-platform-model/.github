@@ -1,0 +1,18 @@
+name: Touch
+
+# A dummy workflow the sandbox cycle edits on main (E3/E4).
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  touch:
+    name: Touch
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Touch
+        run: echo "touch 1"

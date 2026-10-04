@@ -1,0 +1,60 @@
+name: Release
+
+# Publishes a release with up.tar.gz, then notifies cascade-sandbox-down
+# through the shared cascade-notify workflow (sandbox cycle, Phase 3 wiring
+# contract section 11.3).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The release tag, vX.Y.Z
+        type: string
+        required: true
+      breaking:
+        description: Write BREAKING CHANGES into the release notes
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          V: ${{ inputs.version }}
+          BREAKING: ${{ inputs.breaking }}
+        run: |
+          set -euo pipefail
+          if ! [[ $V =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must be vX.Y.Z"
+            exit 1
+          fi
+          notes="sandbox $V"
+          if [ "$BREAKING" = true ]; then notes=$(printf '%s\n\n### BREAKING CHANGES\n\n* sandbox break\n' "$notes"); fi
+          tar czf up.tar.gz README.md
+          gh release create "$V" up.tar.gz --target main --title "$V" --notes "$notes"
+
+  notify-downstream:
+    name: Notify downstream
+    needs: release
+    if: success() && vars.CASCADE_NOTIFY != 'off'
+    permissions:
+      contents: read
+    uses: open-platform-model/.github/.github/workflows/cascade-notify.yml@feat/add-release-cascade-workflows
+    with:
+      tag: ${{ inputs.version }}
+      org-github-ref: feat/add-release-cascade-workflows

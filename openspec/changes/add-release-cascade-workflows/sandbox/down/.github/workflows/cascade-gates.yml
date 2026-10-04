@@ -1,0 +1,26 @@
+name: Cascade gates
+
+# The per-PR gates caller (Phase 3 wiring contract section 8.3), at the
+# .github branch under test.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+concurrency:
+  group: cascade-gates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Cascade gates
+    permissions:
+      statuses: write
+      actions: write
+    uses: open-platform-model/.github/.github/workflows/cascade-gates.yml@feat/add-release-cascade-workflows
+    with:
+      g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
+      g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
+      org-github-ref: feat/add-release-cascade-workflows

@@ -1,0 +1,42 @@
+name: Deps cascade
+
+# The receiver caller (Phase 3 wiring contract section 5), at the .github
+# branch under test. No schedule: the sandbox runs by dispatch only.
+
+on:
+  repository_dispatch:
+    types: [upstream-released]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Compute and show the diff in the job summary; push nothing
+        type: boolean
+        default: false
+      gates_only:
+        description: Evaluate and post the release-PR gates only (sent by Cascade gates)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.ref != 'refs/heads/main' && format('deps-cascade-{0}', github.ref) || (inputs.gates_only && 'deps-cascade-gates' || 'deps-cascade') }}
+  cancel-in-progress: false
+
+jobs:
+  cascade:
+    name: Deps cascade
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    uses: open-platform-model/.github/.github/workflows/cascade-receive.yml@feat/add-release-cascade-workflows
+    with:
+      dry-run: ${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}
+      gates-only: ${{ inputs.gates_only == true }}
+      g2-mode: ${{ vars.CASCADE_G2_MODE || 'warn' }}
+      g3-mode: ${{ vars.CASCADE_G3_MODE || 'warn' }}
+      setup-go: false
+      setup-cue: false
+      labels-managed: false
+      org-github-ref: feat/add-release-cascade-workflows

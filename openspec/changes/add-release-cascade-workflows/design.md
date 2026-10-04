@@ -354,6 +354,11 @@ the owner's `gh` token has no `workflow` scope, so an HTTPS push of `.github/wor
 be refused. Every row gets its run URL, PR URL, the `org-github` commit it ran, and the observed
 outcome, here and in the scratchpad file `p3-gh-workflows-sandbox.md`.
 
+**Status (2026-10-04): not started.** Task 5.1 found all three supervisor preconditions
+missing (`cascade-sandbox-up` still private; only the org `mention-guard` ruleset on either
+sandbox; the branch not on `origin`), so nothing was pushed to or run in a sandbox. The seeds are
+committed and linted, and the runbook is in the scratchpad file `p3-gh-workflows-sandbox.md`.
+
 **Preconditions** (supervisor): `cascade-sandbox-up` public; `main` rulesets on both sandboxes
 (contract §11.5); this branch pushed to `origin` so `@feat/add-release-cascade-workflows`
 resolves. **Agent:** the variable `CASCADE_DRY_RUN=false` on `cascade-sandbox-down`, set after

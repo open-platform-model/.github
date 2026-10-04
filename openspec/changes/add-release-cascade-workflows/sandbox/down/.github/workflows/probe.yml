@@ -1,0 +1,120 @@
+name: Probe
+
+# E4c and E5 probes of the sandbox cycle (Phase 3 wiring contract section
+# 11.4): with an App token scoped to this repo only, records whether GitHub
+# accepts, without the Workflows permission,
+#   e4c-inplace  a lease push that updates probe/inplace in place to main's
+#                tip plus one commit, after main changed a workflow file
+#   e4c-merge    a push of a merge commit that brings main's workflow change
+#                into probe/merge
+#   e5           PUT pulls/<pr>/update-branch on a PR behind that change
+# The probe/* branches are built by hand on main before the workflow change.
+# The job never fails on a refusal: the result is the output.
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: Which probe to run
+        type: choice
+        options: [e4c-inplace, e4c-merge, e5]
+      pr:
+        description: The PR number (e5 only)
+        type: string
+        default: ''
+
+permissions: {}
+
+jobs:
+  probe:
+    name: Probe
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: cascade
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mint a contents token
+        id: mint-contents
+        if: inputs.probe != 'e5'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
+          owner: open-platform-model
+          repositories: cascade-sandbox-down
+          permission-contents: write
+
+      - name: Mint a pull-requests token
+        id: mint-pr
+        if: inputs.probe == 'e5'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.CASCADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
+          owner: open-platform-model
+          repositories: cascade-sandbox-down
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Probe
+        env:
+          PROBE: ${{ inputs.probe }}
+          PR: ${{ inputs.pr }}
+          GH_TOKEN: ${{ steps.mint-contents.outputs.token || steps.mint-pr.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          b64=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$b64"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $b64"
+          git config user.name 'opm-cascade[bot]'
+          git config user.email '337635439+opm-cascade[bot]@users.noreply.github.com'
+          result() { echo "RESULT $PROBE: $1"; echo "RESULT $PROBE: $1" >>"$GITHUB_STEP_SUMMARY"; }
+          # lease_push <branch> <old tip>: the push the cascade would make.
+          lease_push() {
+            if git push "--force-with-lease=refs/heads/$1:$2" origin "HEAD:refs/heads/$1" 2>push.err; then
+              result "accepted"
+            else
+              cat push.err
+              result "refused: $(grep -m1 -iE 'refusing|denied|rejected|error' push.err || head -n1 push.err)"
+            fi
+          }
+          diffs() {
+            echo "D1 (vs main): $(git diff --name-only origin/main HEAD -- .github/workflows/ | tr '\n' ' ')"
+            echo "D2 (vs old tip): $(git diff --name-only "$1" HEAD -- .github/workflows/ | tr '\n' ' ')"
+          }
+          case "$PROBE" in
+            e4c-inplace)
+              old=$(git rev-parse origin/probe/inplace)
+              git checkout -q -B probe-new origin/main
+              echo "in-place $GITHUB_RUN_ID" >fixtures/probe-inplace.txt
+              git add -A
+              git commit -q -m "test: probe an in-place update"
+              diffs "$old"
+              lease_push probe/inplace "$old"
+              ;;
+            e4c-merge)
+              old=$(git rev-parse origin/probe/merge)
+              git checkout -q -B probe-merge origin/probe/merge
+              git merge -q --no-edit -m "Merge origin/main into probe/merge" origin/main
+              diffs "$old"
+              lease_push probe/merge "$old"
+              ;;
+            e5)
+              [[ $PR =~ ^[0-9]+$ ]] || { echo "::error::e5 needs a PR number"; exit 1; }
+              if out=$(gh api -X PUT "repos/$GH_REPO/pulls/$PR/update-branch" 2>&1); then
+                result "accepted: $out"
+              else
+                result "refused: $out"
+              fi
+              ;;
+          esac
