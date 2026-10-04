@@ -232,4 +232,12 @@ check "body: a mention in Notes passes through unchanged" bash -c '
 : >"$FX/notes-empty"
 run env CASCADE_NOTES_FILE="$FX/notes-empty" bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 check "body: empty notes end the body at the marker" bash -c '[ "$(tail -n 1 <<<"$1")" = "<!-- cascade-notes: the bot keeps everything below this line -->" ]' _ "$OUT"
+# A grep without PCRE support (exit 2 on -P) must fail the lint, never pass it.
+mkdir -p "$FX/nopcre"
+printf '#!/usr/bin/env bash\nfor a in "$@"; do case "$a" in -*P*) echo "grep: support for the -P option is not compiled into this build" >&2; exit 2 ;; esac; done\nexec %q "$@"\n' "$(command -v grep)" >"$FX/nopcre/grep"
+chmod +x "$FX/nopcre/grep"
+expect "title: a grep without -P fails the lint" 1 "" "mention lint: grep -P failed on the title (exit 2)" -- \
+  env PATH="$FX/nopcre:$PATH" bash -c 'cd "$1" && "$2" title --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
+expect "body: a grep without -P fails the lint" 1 "" "mention lint: grep -P failed on the body (exit 2)" -- \
+  env PATH="$FX/nopcre:$PATH" bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 expect "body: a missing notes file is exit 1" 1 "" -- env CASCADE_NOTES_FILE="$FX/none" bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"

@@ -180,7 +180,9 @@ Changed files: <s> shipped, <t> test, <r> release-tool.
 
 Before printing, `title` and `body` SHALL check the whole title and every body line above the
 `cascade-notes` marker against `(?<![\w@])@[A-Za-z0-9]`, and exit 1 naming the line on a match,
-printing nothing on stdout. Notes below the marker SHALL pass through unchanged.
+printing nothing on stdout. Notes below the marker SHALL pass through unchanged. A lint that
+cannot run (grep exits other than 0 or 1, for example a grep without `-P` support) SHALL exit 1;
+it MUST NOT be read as "no match".
 
 #### Scenario: Module path passes
 
@@ -191,6 +193,11 @@ printing nothing on stdout. Notes below the marker SHALL pass through unchanged.
 
 - **WHEN** a warning in the generated part contains ` @octocat`
 - **THEN** `body` exits 1 naming the offending line
+
+#### Scenario: Lint that cannot run fails
+
+- **WHEN** the `grep` on `PATH` exits 2 on `-P`
+- **THEN** `title` and `body` exit 1 with `mention lint: grep -P failed` and print nothing on stdout
 
 #### Scenario: Mention in Notes passes through
 

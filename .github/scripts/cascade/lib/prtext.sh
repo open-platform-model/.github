@@ -116,12 +116,16 @@ pr_compute() {
 }
 
 # lint_file <surface> <file>: exit 1 naming the first line holding a bare
-# mention.
+# mention. A grep that cannot run the pattern (no PCRE, a read error) is exit
+# 1 too: grep's exit 2 is never read as "no match".
 lint_file() {
-  local hit
-  if hit=$(grep -nP -m 1 -- "$MENTION_RE" "$2"); then
-    die "mention lint: $1 line ${hit%%:*} holds a bare mention: ${hit#*:}"
-  fi
+  local hit rc=0
+  hit=$(grep -nP -m 1 -- "$MENTION_RE" "$2") || rc=$?
+  case "$rc" in
+    0) die "mention lint: $1 line ${hit%%:*} holds a bare mention: ${hit#*:}" ;;
+    1) ;;
+    *) die "mention lint: grep -P failed on the $1 (exit $rc)" ;;
+  esac
 }
 
 cmd_title() {
