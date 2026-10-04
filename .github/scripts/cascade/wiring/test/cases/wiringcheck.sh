@@ -361,3 +361,8 @@ run env -C "$WCD" bash "$WCHECK" --pin-on-main other.yaml extra
 check "pin on main: two arguments after the flag are usage" test "$RC" = 2
 run env -C "$WCD" bash "$WCHECK" --online
 check "an unknown flag is usage" bash -c '[ "$1" = 2 ] && [[ $2 == *"usage: wiring-check.sh [--pin-on-main] [<config>]"* ]]' _ "$RC" "$ERR"
+
+# The README's CI step is the one the check requires.
+wc_fresh
+check "wiring check: the README's CI step is the required one" test \
+  "$(wc_readme "**The wiring check.**" | yq -o=json -I=0 '.[0] | del(.name)')" = "$(yq -o=json -I=0 '.jobs.ci.steps[1] | del(.name)' "$WCD/.github/workflows/ci.yml")"

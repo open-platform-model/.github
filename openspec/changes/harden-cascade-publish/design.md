@@ -24,8 +24,11 @@ Trust model this design keeps to, stated once:
 
 - No gates-only run can reach a token or a push, whatever `compute` outputs.
 - Repo code never inherits a variable that names a runner command file, and no `compute` step
-  after the first repo-code step holds `GITHUB_TOKEN`.
-- One wiring-check script for all five repos, tested once here, with per-repo values in data.
+  after the first repo-code step is given `GITHUB_TOKEN`.
+- G3 cannot be chosen by repo code (D6), and no Actions cache repo code can write reaches a
+  publish job (D7).
+- One wiring-check script for all five repos, tested once here, with per-repo values in data,
+  that also proves its pin is on `.github` `main` in CI (D8).
 
 **Non-Goals:**
 
@@ -84,13 +87,14 @@ steps are unchanged:
 | Body, title and labels (`text`) | `receive-compute.sh text` | **none** (was `GH_TOKEN`) | yes | `!inputs.gates-only` |
 | Action, Plan, Summary, Upload the plan, Done | as before | none | no | as before |
 
-- `gates-eval.sh read` lists the open same-repo release PRs, evaluates G3 (upstream API reads
-  only), and fetches each head commit into the checkout with `git_read`. It writes
-  `$CASCADE_T/gates-read.json`: `[{"pr", "sha", "fetched": bool, "settled": {"state", "msg"}}]`.
-  Exit 0 written; 1 the release-PR list cannot be read (no file); 2 usage.
+- `gates-eval.sh read` lists the open same-repo release PRs and fetches each head commit into
+  the checkout with `git_read`. It writes `$CASCADE_T/gates-read.json`:
+  `[{"pr", "sha", "fetched": bool}]`. Exit 0 written; 1 the release-PR list cannot be read (no
+  file); 2 usage. (G3 moved to `Post gates`, D6.)
 - `gates-eval.sh run` reads `gates-read.json`, runs G2 per head (a head with `fetched: false` is
-  `error`, "cannot check out the release head"), and writes `$CASCADE_T/gates.json` exactly as
-  before. Exit 0 written; 1 no `gates-read.json`; 2 usage. It needs no token and no `gh`.
+  `error`, "cannot check out the release head"), and writes `$CASCADE_T/gates.json`
+  (`[{"sha", "pr", "freshness"}]`, no `settled`). Exit 0 written; 1 no `gates-read.json`; 2
+  usage. It needs no token and no `gh`.
 - `receive-compute.sh gates-read` runs `read`; a failure in a real run is a warning and the run
   goes on (as the old `gates` step did); in a gates-only run it fails the step.
   `receive-compute.sh gates` runs `run` and keeps the gates-only summary and `action=gates-only`
@@ -137,14 +141,24 @@ caller shapes of the same commit:
   the reusable workflow does not take; `cascade-gates.yml` top-level keys, `permissions: {}`,
   trigger `pull_request_target` with `opened`, `reopened`, `synchronize`, and the `gates` job's
   keys, permissions and `uses`.
-- **Key readers** across every workflow file: case-insensitive `secrets.cascade_app_private_key`,
-  `secrets[…]` and `toJSON(secrets)`; any `environment` (string or map) naming `cascade` in any
-  case or written as an expression; no `.github` call passing `secrets:`.
+- **No YAML anchors or aliases** in any workflow file (GitHub resolves them; every check here
+  reads the text, so `environment: *e` would read as `*e`).
+- **Key readers** across every workflow file: any expression (a `${{ }}` in a string, or a whole
+  `if:`) that names `secrets.cascade_app_private_key` in any case, or that uses the secrets
+  context other than as `secrets.<name>`: `secrets[…]` with any index (`format()` included),
+  `secrets.*`, and the whole context given to a function (`toJSON(secrets)`, `join(secrets)`).
+  Any `environment` (string or map) naming `cascade` in any case or written as an expression; no
+  `.github` call (owner and repo matched without case) passing `secrets:`.
+- **Publish workflows restore no cache** (D7), in each file of the config's
+  `publish-workflows`.
 - **The pin**: every `.github` reference (four `uses:` and the `cascade-task.yml` resolver
-  `ref:`) at one full SHA with the config's `pin-comment`.
+  `ref:`), matched without case, at one full SHA with the config's `pin-comment`; with
+  `--pin-on-main`, that SHA is on `.github` `main` (D8).
 - **The CI job** named by `ci.workflow` and `ci.job`: the workflow runs on `pull_request` with no
-  `paths`/`paths-ignore`; the job has no `if:` or `continue-on-error`; exactly one step runs
-  `task cascade:wiring:check`, with neither key.
+  `paths`/`paths-ignore`; the job has no `if:` or `continue-on-error`; neither the workflow nor
+  the job sets `defaults.run`; exactly one step runs `bash .tasks/cascade/wiring-check.sh
+  --pin-on-main`, with exactly the keys `name`, `env` and `run` and the env
+  `GH_TOKEN: ${{ github.token }}`.
 
 The config, `.tasks/cascade/wiring-check.yaml`, is data read with `yq`, never sourced:
 
@@ -152,6 +166,7 @@ The config, `.tasks/cascade/wiring-check.yaml`, is data read with `yq`, never so
 pin-comment: .github main
 receiver: true
 env-allow: [OPM_REGISTRY, CUE_REGISTRY]
+publish-workflows: [release.yml, branch-publish.yml, docs.yml]
 ci:
   workflow: ci.yml
   job: ci
@@ -163,18 +178,25 @@ publish:
   labels-managed: false
 ```
 
-Unknown keys, a non-boolean `receiver` or `labels-managed`, `publish` on a non-receiver, an
-`env-allow` entry that is not an upper-case name, and an `env-allow` entry naming a variable
-that makes a shell, node, git or the loader run code (`BASH_ENV`, `ENV`, `NODE_OPTIONS`,
-`SHELLOPTS`, `PS4`, `LD_PRELOAD`, `PATH`, the `GIT_*` command hooks and others, plus every
-`GITHUB_*`, `ACTIONS_*`, `RUNNER_*` and `CASCADE_*` name) are config errors (exit 2), so a
-config edit cannot widen the allow-list to a code-running variable.
+Unknown keys, a non-boolean `receiver` or `labels-managed`, `publish` on a non-receiver,
+`publish-workflows` without `release.yml`, an `env-allow` entry that is not an upper-case name,
+and an `env-allow` entry outside `^(CUE|OPM)_[A-Z0-9_]+$`, `REGISTRY` and `IMAGE_NAME` are
+config errors (exit 2). The first version denied a list of code-running variables; review
+showed `GIT_TEMPLATE_DIR`, `GIT_PROXY_COMMAND`, `GIT_EXTERNAL_DIFF`, `XDG_CONFIG_HOME`,
+`NODE_EXTRA_CA_CERTS`, `HTTPS_PROXY`, `SSL_CERT_FILE`, `GIT_SSL_NO_VERIFY`, `GH_DEBUG`,
+`GIT_TRACE_CURL` and `GCONV_PATH` all passed it. The names the five release workflows use are
+all registry settings, so an allow pattern covers them and nothing a shell, git, gh, node, curl
+or the loader reads.
 
 Checked on 2026-10-04 against each product repo's `origin/main` workflows (core `98c1877`,
-catalog_opm `3288406`, library `93a892f`, opm-operator `81a640d`, cli `dc3f77a1`) with the
-configs in the README table: after the D1 caller edit all five print `cascade wiring: ok`; as
-they are, core passes and each receiver fails on exactly three lines (the publish `with` keys,
-its `if:` and its `gates-only` input).
+catalog_opm `3288406`, library `93a892f`, opm-operator `4eebece`, cli `5f009308`) with the
+configs in the README table. As they are: core fails only on the CI step (three lines: the step,
+its keys, its env); catalog_opm also on the receiver edit (three lines) and `branch-publish.yml`'s
+setup-go; library on the receiver edit and the CI step; opm-operator also on `release.yml`
+(`type=gha` cache-from/cache-to, `publish-examples` setup-go) and `publish-fixtures.yml`
+(setup-go); cli also on `release.yml` (the `goreleaser` and `publish-templates` setup-go) and
+`publish-fixtures.yml` (setup-go). After the follow-up edits (Migration Plan) all five print
+`cascade wiring: ok`. No real workflow trips the anchor, key-reader or reference-case checks.
 
 ### D5. Keeping the copies identical
 
@@ -194,6 +216,58 @@ itself offline (it does not know which `.github` commit it was copied from beyon
 reads, and core has no `.github` checkout in CI), so the check is the PR review's; the README
 says so.
 
+### D6. G3 is evaluated in `Post gates`
+
+The first version evaluated G3 in `Read gates`, with the token and before repo code, but its
+result reached `Post gates` through `gates-read.json` and `gates.json`, which release-head code
+in `Gates` can rewrite before the upload; `gates-post.sh` only checked that each entry named an
+open release head. Workspace RELEASING.md plans to make G3 a required check, so a forgeable G3
+would be a forgeable required check. G3 reads only the API (each upstream's cascade PR and its
+`autorelease: pending` PRs), so `gates-post.sh` now evaluates it itself (`g3_eval` in `lib.sh`),
+once per run when a release head is open, in the job that holds `GITHUB_TOKEN` and runs no repo
+code, and posts it on every head it lists. It takes only `freshness` from `gates.json`. A missing
+artifact no longer drops G3: the heads get `cascade/settled` as evaluated, and `cascade/freshness`
+per the G2 mode (nothing and a warning in `warn`, `error` in `enforce`); a head with no entry in
+`gates.json` is treated the same. `compute`'s summary lists G2 only and says G3 is posted by
+`Post gates`. G2 stays forgeable by the head it rates (Non-Goals).
+
+### D7. No Actions cache crosses into a publish job
+
+Repo code in `compute` (and in any job on `main` that runs repo code) can write the Actions cache
+of `main`'s scope, either through a cache step that saves after it ran or with the artifact
+runtime token it can read. Any write collaborator reaches that code through a `release-please--*`
+head or `deps/cascade`. A release job that restores that scope builds from what it finds: cli's
+goreleaser job runs `actions/setup-go` with the default `cache: true`, keyed on `go.sum`, which
+the release PR head predicts; opm-operator's image build uses `cache-from`/`cache-to:
+type=gha`. A poisoned module cache, build cache or image layer would ship in a released binary
+or image without review (the "cacheract" pattern). So:
+
+1. `cascade-receive.yml` installs Go with `cache: false`, and no cascade workflow or action uses
+   a cache action or `type=gha` (a static case holds it).
+2. The wiring check takes a `publish-workflows` list (which must include `release.yml`) and in
+   each listed file refuses: an action whose name contains `cache`; `actions/setup-go` without
+   `cache: false`; `actions/setup-node` without `package-manager-cache: false`, or with `cache`;
+   any other input whose name contains `cache` except `no-cache`; and `type=gha` in any string.
+3. Each product repo lists every workflow that publishes (release, branch and fixture publishes,
+   docs) and turns its caches off in its follow-up PR (Migration Plan).
+
+A reusable workflow called from a publish workflow is outside the check; docs-kit's `publish.yml`
+already installs Go with `cache: false`. CI workflows keep their caches: a poisoned CI cache can
+only mislead a check, which the publish-side rule does not depend on.
+
+### D8. The pin is proved on `.github` `main` in CI
+
+GitHub resolves a commit that exists only in a fork of `.github` under the `.github` name (an
+"imposter commit"), and the check only knew the SHA was 40 hex characters; README step 1's
+`compare` was manual. `wiring-check.sh --pin-on-main` now runs, after every shape matched,
+`gh api repos/open-platform-model/.github/compare/<sha>...main --jq .status` and refuses anything
+but `identical` or `ahead` (behind or diverged is a commit `main` never had), and an API error.
+The required CI step runs the script directly with the flag and `GH_TOKEN: ${{ github.token }}`
+(read-only, a public repo), instead of `task cascade:wiring:check`, which stays the offline
+local entry. Running the script directly also takes the Taskfile out of what the required check
+trusts. The step must have exactly `name`, `env` and `run`, and neither the job nor the workflow
+may set `defaults.run`, so a `shell:` or `working-directory:` cannot run something else.
+
 ### Script interfaces (new or changed)
 
 - `receive-compute.sh <step>`: steps `init payload gates-read state gates prepare notes run text
@@ -203,20 +277,28 @@ says so.
   `CASCADE_RESOLVER`; `GH_TOKEN` and `CASCADE_READ_TOKEN` for `read` only.
 - `receive-publish.sh verify|act`: new environment `CASCADE_PUBLISH_GATES_ONLY` (D1). Exit codes
   unchanged (a refusal is 1).
-- `wiring-check.sh [<config>]` (D4).
+- `gates-post.sh` (D6): same usage and exit codes; it now lists the heads first, evaluates G3
+  (`g3_eval`, moved from `gates-eval.sh` to `lib.sh`) and reads only G2 from `gates.json`.
+- `wiring-check.sh [--pin-on-main] [<config>]` (D4, D8).
 
 ### Network requests
 
 Unchanged hosts and paths; only where they run. `Read state` gains the releases list per
 `changelog_repos` entry (`GET api.github.com/repos/open-platform-model/<repo>/releases`, paged,
 200; any failure is recorded, not fatal), which `Body, title and labels` used to make.
-`gates-eval.sh run` makes no request. `wiring-check.sh` makes none.
+`gates-eval.sh run` makes no request. G3's reads (each upstream's cascade PR and its
+`autorelease: pending` PRs) move from `Read gates` to `Post gates`, unchanged. `wiring-check.sh`
+makes none, except with `--pin-on-main`: one
+`GET api.github.com/repos/open-platform-model/.github/compare/<sha>...main` after every shape
+matched (D8).
 
 ### Workflows
 
 No trigger, job name, permission or timeout changes. `cascade-receive.yml`: the step order and
-`env` of D2, the two output expressions of D1. `cascade-publish`: the required input
-`gates-only`, passed to `Verify the plan` and `Act` as `CASCADE_PUBLISH_GATES_ONLY`.
+`env` of D2, the two output expressions of D1, `cache: false` on `Set up Go` (D7), and `Post
+gates` evaluating G3 (D6, with its existing `pull-requests: read`). `cascade-publish`: the
+required input `gates-only`, passed to `Verify the plan` and `Act` as
+`CASCADE_PUBLISH_GATES_ONLY`.
 
 ## Research & Decisions
 
@@ -242,12 +324,22 @@ Measured against what a GitHub-hosted runner allows, not assumed:
 - The `runner` user has password-less `sudo`, so repo code can read other processes' memory,
   including the runner's job token (read-only here: `contents: read`, `pull-requests: read`) and
   the artifact runtime token, and can change what the runner reports.
+- Without `sudo` too: the post steps of both `actions/checkout` steps run after `Gates` with
+  `INPUT_TOKEN` (the read-only job token) in their environment and run `git` in `repo/`. The G2
+  worktrees share `repo/.git`, so release-head code can plant a hook or `core.fsmonitor` there
+  that those post steps run. So "no step from `Gates` on holds a token" is true only of what the
+  workflow passes; the token stays reachable, with the impact of the line above.
+- The artifact runtime token also writes the Actions cache in the run's ref scope, `main` here,
+  and every branch's runs can restore `main`'s entries. A cache step that saves after repo code
+  ran (setup-go's post step) writes there without any token theft.
 
 So D3 stops the accidental and the casual case (a task that appends to `$GITHUB_ENV`, a tool
-that honours `GITHUB_OUTPUT`), and D2 removes any token a later step would carry, but neither is
-a security boundary inside the job. The boundaries are the job edges: `gates` posts only on the
-open release heads it re-lists itself, and `publish` takes its decisions from the caller's inputs
-(D1) and re-derives the plan.
+that honours `GITHUB_OUTPUT`), and D2 removes any token a later step would be given, but neither
+is a security boundary inside the job. What holds is what crosses a job edge: `gates` posts only
+on the open release heads it re-lists itself and evaluates G3 itself (D6), `publish` takes its
+decisions from the caller's inputs (D1) and re-derives the plan, and no publish job restores a
+cache (D7), because a cache entry is the one thing that crosses into a later job without passing
+any of those checks.
 
 ### Canonical script versus a shared action
 
@@ -260,7 +352,13 @@ open release heads it re-lists itself, and `publish` takes its decisions from th
 ## Risks / Trade-offs
 
 - [Release-head code still sets its own G2 status] → accepted; G2 stays `warn`; an owner
-  ruleset on `release-please--*` is the fix (owner step, not in this change).
+  ruleset on `release-please--*` is the fix (owner step, not in this change). G3 no longer has
+  this gap (D6).
+- [A cache poisoning path the rule does not name, such as a reusable workflow that restores a
+  cache or a tool with its own GitHub cache backend] → the rule names the known forms; review of
+  each publish workflow covers the rest, and docs-kit's reusable workflow sets `cache: false`.
+- [The CI step makes one API call per PR] → read-only, well inside `GITHUB_TOKEN`'s limit; a
+  GitHub API outage fails the required check, which a re-run clears.
 - [`compute` can still forge `action`/`compute-ok` on a real run] → `publish` already treats the
   plan as untrusted and refuses anything it cannot re-derive (`cascade-receive` "Publish
   verifies before it mints"); unchanged.
@@ -275,16 +373,21 @@ open release heads it re-lists itself, and `publish` takes its decisions from th
 
 1. Merge this change; take its squash SHA (README "Pinning and bumps", step 1).
 2. Canary (step 2, with the `cascade-publish` rule): in one receiver, one PR that moves every
-   cascade reference to the SHA, copies `wiring-check.sh`, adds `.tasks/cascade/wiring-check.yaml`,
-   and makes the two caller edits in `deps-cascade.yml`:
-   - `publish` `if:`: insert `&& inputs.gates_only != true` after `&& inputs.dry_run != true`;
+   cascade reference to the SHA, copies `wiring-check.sh`, adds `.tasks/cascade/wiring-check.yaml`
+   (with `publish-workflows`), and makes the edits:
+   - `deps-cascade.yml` `publish` `if:`: insert `&& inputs.gates_only != true` after
+     `&& inputs.dry_run != true`;
    - the `Publish` step's `with:`: add `gates-only: ${{ inputs.gates_only == true }}` after
-     `dry-run`.
-3. The other repos follow after the canary's first live publish; core takes only the copy, the
-   config and the SHA (it has no receiver).
-4. Rollback: revert that repo's pin PR (SHA, script copy, config and caller edit together). The
-   old `cascade-publish` would only warn about the extra `gates-only` input, but the old script
-   copy refuses it, so the four go back as one.
+     `dry-run`;
+   - the required CI job's "Verify the cascade wiring" step: `env: GH_TOKEN: ${{ github.token }}`
+     and `run: bash .tasks/cascade/wiring-check.sh --pin-on-main`;
+   - every listed publish workflow: `cache: false` on each `actions/setup-go`, and no
+     `cache-from`/`cache-to: type=gha`.
+3. The other repos follow after the canary's first live publish; core takes the copy, the config,
+   the CI step, the cache edits (none today) and the SHA (it has no receiver).
+4. Rollback: revert that repo's pin PR (SHA, script copy, config and edits together). The old
+   `cascade-publish` would only warn about the extra `gates-only` input, but the old script copy
+   refuses it, so they go back as one. Turning a cache off needs no rollback.
 
 ## Open Questions
 

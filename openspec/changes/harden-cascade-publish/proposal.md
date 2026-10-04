@@ -21,6 +21,14 @@ switches"; the owner's "go" of 2026-10-04 to "the two `.github` fixes" before Ph
    catalog_opm and cli still miss `secrets['…']`, `toJSON(secrets)` and a lower-case `cascade`.
    A check that differs per repo cannot be reviewed once.
 
+The review of this change's first version found more, fixed here too: G3 travelled through
+files release-head code can rewrite; repo code in `compute` can write the Actions cache that
+cli's and opm-operator's release jobs restore (a poisoned module cache or image layer would ship
+unreviewed); the new wiring check could be bypassed with a YAML alias plus
+`secrets[format(…)]` or a mixed-case `.github` reference, its `env-allow` deny-list missed
+proxy, TLS, git-hook and XDG variables, and it accepted a pin to a commit that exists only in a
+fork of `.github`.
+
 ## What Changes
 
 - **Gates-only runs never publish.** The caller's `publish` `if:` adds
@@ -47,9 +55,18 @@ switches"; the owner's "go" of 2026-10-04 to "the two `.github` fixes" before Ph
   five scripts (library's case-insensitive key and Environment scans, catalog_opm's and
   opm-operator's job values, the env allow-list and `runs-on` rules) plus the reviewers' open
   probes (caller permissions, triggers, the CI job that runs it), driven by a per-repo
-  `.tasks/cascade/wiring-check.yaml` (`pin-comment`, `receiver`, `env-allow`, `ci`, `notify`,
-  `publish`). Each product repo keeps a byte-identical copy at `.tasks/cascade/wiring-check.sh`.
+  `.tasks/cascade/wiring-check.yaml` (`pin-comment`, `receiver`, `env-allow`,
+  `publish-workflows`, `ci`, `notify`, `publish`). It refuses YAML anchors and aliases, any use
+  of the secrets context but `secrets.<name>` outside the key-holding steps, `.github`
+  references in any case, `env-allow` names other than `CUE_*`, `OPM_*`, `REGISTRY` and
+  `IMAGE_NAME`, and any Actions cache in the listed publish workflows. The required CI step
+  runs it with `--pin-on-main`, which proves the pinned SHA is on `.github` `main` through the
+  compare API. Each product repo keeps a byte-identical copy at `.tasks/cascade/wiring-check.sh`.
   An offline mutation suite runs it against the README's caller shapes.
+- **G3 in `Post gates`.** `gates-post.sh` evaluates G3 from the API itself and takes only G2
+  from `compute`'s `gates.json`.
+- **No cache in reach of repo code.** `compute` installs Go with `cache: false`; the residual
+  risk text names the Actions cache, the checkout post steps and the artifact runtime token.
 - **README**: the receiver caller shape, the `cascade-publish` inputs, the stop switch wording
   ("`false` in any letter case", because GitHub compares strings without case), the
   wiring-check section and how a repo syncs its copy.
@@ -69,18 +86,22 @@ statuses trustworthy against a malicious release head (G2 runs that head's own t
 
 - `cascade-receive`: `cascade-publish` takes `gates-only`; a gates-only run never publishes;
   the stop switch is `false` in any letter case.
-- `cascade-workflows`: repo code runs without the runner's command-file variables, and no
-  `compute` step after the first repo-code step holds a token.
+- `cascade-workflows`: repo code runs without the runner's command-file variables, no
+  `compute` step after the first repo-code step is given a token, and no cache repo code can
+  write reaches a publish job.
+- `cascade-gates`: G3 is evaluated in `Post gates`, never read from `compute`; a missing
+  artifact still gets G3.
 
 ## Impact
 
 - Workflows and scripts: `.github/workflows/cascade-receive.yml`,
   `.github/actions/cascade-publish/action.yml`, `wiring/lib.sh`, `wiring/receive-compute.sh`,
-  `wiring/receive-publish.sh`, `wiring/gates-eval.sh`, the new
+  `wiring/receive-publish.sh`, `wiring/gates-eval.sh`, `wiring/gates-post.sh`, the new
   `.github/scripts/cascade/wiring-check.sh`, the wiring suite and `README.md`.
 - Callers: catalog_opm, library, opm-operator and cli (`deps-cascade.yml`: the `publish` `if:`
-  and the new `gates-only` input) and all five product repos (the script copy and config) apply
-  the edit in the PR that moves their pin to this change's squash SHA. `cascade-publish` without
+  and the new `gates-only` input) and all five product repos (the script copy and config, the
+  CI step with `--pin-on-main`, and `cache: false` or no `type=gha` in their publish workflows)
+  apply the edits in the PR that moves their pin to this change's squash SHA. `cascade-publish` without
   `gates-only` fails closed, so a repo that bumps the pin without the edit cannot publish.
 - Rollout: the diff touches `cascade-publish`, so the canary rule applies (README "Pinning and
   bumps", step 2): the other receivers stay on `2376ffa` until the canary's first live publish
