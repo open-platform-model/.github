@@ -37,7 +37,7 @@ SHA-pinned `mention-guard` here.
   `.cascade-frozen` and `.cascade-hold`.
 - **Publish never drops human commits.** A push that does not contain the old remote tip is
   refused when `origin/main..old` holds a commit the bot did not make; `close` keeps such a
-  branch instead of deleting it. `recreate` stays exempt (the plan's item 9).
+  branch instead of deleting it, and a `recreate` over such a branch is refused.
 - **Publish renders the PR text and labels itself.** `.github` holds a mirror of each
   receiver's `pins.sh` and `classes` (`wiring/lib.sh`, run through `wiring/pins.sh`). Verify
   checks the new tip out into a scratch worktree and runs the resolver's own `title` and `body`

@@ -44,8 +44,10 @@ range:
 
 Drop check: when the push does not contain the old tip and the action is `push`, every commit of
 `origin/main..old` MUST have `BOT_EMAIL` as author and committer, else "refusing the plan: the
-push would drop commits on deps/cascade the bot did not make". `recreate` is exempt (plan item
-9). `close` deletes the branch only when that holds; otherwise it closes the PR and keeps the
+push would drop commits on deps/cascade the bot did not make". A `recreate` is refused whenever
+`origin/main..old` holds a non-bot commit ("recreate would drop commits ..."): `close` keeps such a
+branch, and the next run, finding it without a PR, plans `recreate`, which would otherwise delete
+it (review finding after the first push of the PR). `close` deletes the branch only when that holds; otherwise it closes the PR and keeps the
 branch with a notice (`$V/keep-branch`).
 
 Every commit in the range (`git rev-list --parents`):
@@ -210,7 +212,8 @@ rejected: trusting `plan.mode`, which `compute` writes; the range is derived fro
 **Item 9 wording.** The plan says "the new tip contains the old remote tip unless the action is
 recreate". Taken literally it refuses every rebuild of a bot-only branch (a force push by
 design). Decision: containment is required only when the old branch holds a non-bot commit
-(PUB-4's own fix notes); recreate stays exempt.
+(PUB-4's own fix notes). recreate, which always rebuilds on main, is refused when the old
+branch holds a non-bot commit; a human deletes the branch or opens a PR from it.
 
 **`hack/**` versus cli's task.** The plan always refuses `hack/**`, but cli's task writes
 `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue` (data, run by no workflow with a

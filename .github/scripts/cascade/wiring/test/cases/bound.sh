@@ -193,6 +193,19 @@ publish act
 check "bound: close keeps a branch with a human commit" bash -c '
   [ "$1" = 0 ] && [ "$2" = "$3" ] && [[ $4 == *"holds a commit the bot did not make; the branch stays"* ]]' _ "$RC" "$(origin_tip deps/cascade)" "$TIP" "$OUT"
 
+# The next run finds that kept branch without a PR and plans recreate, which
+# would drop the human commit: refused.
+new_fx; mk_toy
+bot_branch v0.2.0
+seed_commit deps/cascade human fixtures/human.txt "human" "test: human"
+fresh_checkout
+printf 'v0.3.0\n' >"$TOY_TARGET"
+gh_prs '[]'
+gh_fx 0 "$(printf '%s' "$NO_BREAK")" -- "${REL_ARGS[@]}"
+compute "${COMPUTE_STEPS[@]}"
+check "bound: the kept branch without a PR planned recreate" test "$(plan '.mode + "/" + .action')" = recreate/recreate
+bound_refuses "a recreate that would drop a human commit" "recreate would drop commits on deps/cascade the bot did not make"
+
 # --- the text publish renders ----------------------------------------------------
 planned_push
 publish_job

@@ -113,11 +113,17 @@ check_merge() {
 # check_increment <action> <old tip>: the bot's own commits in the push (the
 # new tip's commits that neither main nor, for a fast-forward, the old tip
 # has) are at most two, and each passes check_paths or check_merge. A push
-# that replaces the old tip may drop only bot commits; recreate is exempt.
+# that replaces the old tip may drop only bot commits. recreate rebuilds the
+# branch on main, so it is refused outright when the old tip holds a commit
+# the bot did not make (close keeps such a branch, and the next run, finding
+# it without a PR, plans recreate).
 check_increment() {
   local action="$1" old="$2" n c p1 p2 extra ae ce
   local -a range=(refs/cascade/new ^origin/main)
-  if [ "$action" != recreate ] && [ -n "$old" ]; then
+  if [ "$action" = recreate ] && [ -n "$old" ]; then
+    bot_only "origin/main..$old" \
+      || refuse "recreate would drop commits on $BRANCH the bot did not make; delete the branch or open a PR from it"
+  elif [ -n "$old" ]; then
     if g merge-base --is-ancestor "$old" refs/cascade/new; then
       range+=("^$old")
     else

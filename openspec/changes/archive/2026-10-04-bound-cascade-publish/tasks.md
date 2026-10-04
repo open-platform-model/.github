@@ -42,3 +42,7 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 - [x] 5.2 Static cases: every workflow of this repo has top-level `permissions:` and only SHA-pinned `uses:` with a version comment
 - [x] 5.3 README: the increment bounds, the mirrors and how to keep them in step, tags on main, pinned tools, the release-key rule, the residual risk (D9); a workspace `RELEASING.md` patch for the supervisor
 - [x] 5.4 Gates green, then commit `ci: add code owners, pin mention-guard and record the residual risk`
+
+## 6. Review fixes
+
+- [x] 6.1 `receive-publish.sh verify` refuses a `recreate` when `origin/main..old` holds a commit the bot did not make; case: the branch `close` kept, planned as `recreate` on the next run

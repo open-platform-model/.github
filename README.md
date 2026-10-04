@@ -314,7 +314,8 @@ verify`) bounds the push and writes the PR text itself:
   `hack/**` (but cli's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), any
   `*.sh`, any `CODEOWNERS`, the release-please files, `.cascade-frozen` and `.cascade-hold`.
 - *Human commits.* A push that does not contain the old tip is refused when the old branch holds
-  a commit the bot did not make; `recreate` is exempt, and `close` keeps such a branch.
+  a commit the bot did not make, a `recreate` over such a branch is refused, and `close` keeps
+  such a branch.
 - *The text.* `publish` checks the new tip out into a scratch worktree and runs the resolver's
   own `title` and `body` there with a mirror of the receiver's `pins.sh` and `classes`
   (`wiring/pins.sh` and `receiver_pins`/`receiver_classes` in `lib.sh`, which read only `git

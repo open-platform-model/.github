@@ -146,8 +146,9 @@ keyed by the receiver, never read from the receiver's tree. The deny-list SHALL 
 `hack/platform/cue.mod/module.cue`), `*.sh`, any `CODEOWNERS`, `release-please-config.json`,
 `.release-please-manifest.json`, `.cascade-frozen` and `.cascade-hold`, and SHALL win over the
 allow-list. When a `push` does not contain the old tip and `origin/main..old` holds a commit the
-bot did not make, `publish` SHALL refuse; `recreate` is exempt; `close` SHALL then keep the branch
-and delete only a bot-only one.
+bot did not make, `publish` SHALL refuse; it SHALL refuse a `recreate` whenever `origin/main..old`
+holds such a commit, since `recreate` rebuilds the branch on `main`; `close` SHALL then keep the
+branch and delete only a bot-only one.
 
 #### Scenario: A bundle that edits the cascade task
 
@@ -173,6 +174,11 @@ and delete only a bot-only one.
 
 - **WHEN** the remote branch holds a human commit and the plan's new tip does not contain it
 - **THEN** `publish` refuses with "would drop commits", and `close` keeps such a branch
+
+#### Scenario: A recreate over a kept human commit
+
+- **WHEN** a branch `close` kept for its human commit has no PR, so `compute` plans `recreate`
+- **THEN** `publish` refuses with "recreate would drop commits" before the mint
 
 #### Scenario: Merge mode with a human commit
 
