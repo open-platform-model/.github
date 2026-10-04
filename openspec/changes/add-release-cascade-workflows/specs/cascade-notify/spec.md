@@ -8,7 +8,7 @@ each downstream receiver through `repository_dispatch` that a new upstream versi
 ### Requirement: Notify interface
 
 `.github/actions/cascade-notify/action.yml` SHALL be a composite action taking the inputs `tag`
-(required), `org-github-ref` (default `main`), `client-id` and `private-key` (both required). The
+(required), `client-id` and `private-key` (both required). The
 upstream runs it as the only step of its own job named `Notify downstream`, which declares
 `environment: cascade`, `permissions: {contents: read}` and `timeout-minutes: 20`, and passes
 `vars.CASCADE_APP_CLIENT_ID` and `secrets.CASCADE_APP_PRIVATE_KEY`. It SHALL NOT have a dry-run

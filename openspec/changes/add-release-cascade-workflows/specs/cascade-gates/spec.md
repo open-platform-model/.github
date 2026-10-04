@@ -91,8 +91,7 @@ and SHALL post nothing and fail when that list cannot be read.
 
 ### Requirement: Per-PR gates workflow
 
-`.github/workflows/cascade-gates.yml` SHALL take the inputs `g2-mode`, `g3-mode` and
-`org-github-ref`, run one job named `Cascade gates` with `permissions: {statuses: write, actions:
+`.github/workflows/cascade-gates.yml` SHALL take the inputs `g2-mode` and `g3-mode`, run one job named `Cascade gates` with `permissions: {statuses: write, actions:
 write}`, check out nothing, and: on a PR that is not a same-repo release PR post both contexts as
 `success`, `n/a: not a release PR`; on a same-repo release PR post both as `pending`, "evaluating
 in Deps cascade" in `enforce` mode only, then start `deps-cascade.yml` on `main` with

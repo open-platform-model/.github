@@ -49,30 +49,34 @@ NOT be used.
 - **WHEN** `GITHUB_REPOSITORY` is `someone-else/core`
 - **THEN** the first step fails and no later step runs
 
-### Requirement: Scripts come from the org .github repo
+### Requirement: Scripts come from the pinned .github commit
 
-Each job that needs the shared scripts or the resolver SHALL check out
-`open-platform-model/.github` at the input `org-github-ref` (default `main`) to `org-github`, with
-`persist-credentials: false`. The first step of every job SHALL fail with "org-github-ref may
-differ from main only in a sandbox repo" when `org-github-ref` is not `main` and the calling repo
-does not match `^open-platform-model/cascade-sandbox-`. That check and the repo-name derivation
-SHALL be written inline in the reusable workflow or composite action and run before any checkout, never read from
-the `org-github` checkout whose ref they guard.
+Callers SHALL reference `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and
+`cascade-gates.yml` by the full 40-character SHA of a commit on `open-platform-model/.github`
+`main` (owner decision 24), never by a branch or tag, and one repo SHALL use one SHA in all its
+cascade references. The scripts SHALL run at that same commit, with no input naming another
+`.github` ref: the composite actions SHALL run them from their own directory
+(`GITHUB_ACTION_PATH`) and SHALL NOT check out `open-platform-model/.github`; each
+`cascade-receive.yml` job that needs them SHALL check out `open-platform-model/.github` to
+`org-github` with `persist-credentials: false`, at the ref its `Own commit` step wrote, after
+that step has checked that `job.workflow_repository` is `open-platform-model/.github` and
+`job.workflow_sha` is a full 40-character SHA, and failed otherwise. The repo-name derivation
+(`Guard`) SHALL be written inline in the workflow or action and run before any script.
 
-#### Scenario: Production repo with a branch ref
+#### Scenario: A pinned action runs its own commit's code
 
-- **WHEN** `library` calls `cascade-receive.yml` with `org-github-ref: feat/x`
-- **THEN** every job fails in its first step with the message above
+- **WHEN** opm-operator, with `sha_pinning_required` on, runs `cascade-publish@<sha>`
+- **THEN** the action's scripts come from `<sha>`, not from `.github` `main`
 
-#### Scenario: Guard does not come from the guarded ref
+#### Scenario: The receive workflow checks its scripts out at its own SHA
 
-- **WHEN** a production repo passes an `org-github-ref` whose scripts would accept any ref
-- **THEN** the job still fails in its first step, before that ref is checked out
+- **WHEN** `cascade-sandbox-down` calls `cascade-receive.yml@<sha>`
+- **THEN** both jobs check out `open-platform-model/.github` at `<sha>`
 
-#### Scenario: Sandbox repo with a branch ref
+#### Scenario: Unknown own commit
 
-- **WHEN** `cascade-sandbox-down` calls `cascade-receive.yml` with `org-github-ref: feat/x`
-- **THEN** the scripts and the resolver are checked out from `feat/x`
+- **WHEN** `job.workflow_sha` is empty or not a full SHA
+- **THEN** the job fails in its `Own commit` step instead of checking out the default branch
 
 ### Requirement: App token minting
 
