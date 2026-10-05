@@ -461,7 +461,7 @@ reference on its own. To roll a change out:
      receiver is live, the canary is a live receiver, and no other repo moves until both its
      first live publish run and its first live notify run on the new pin have succeeded.
 
-   Watch every first live run on the new pin and roll back (step 4) if one fails.
+   Watch every first live run on the new pin and roll back if one fails.
 3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
    PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
    every cascade reference and the copy of the wiring check (below) and changes nothing else,
