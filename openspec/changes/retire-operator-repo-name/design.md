@@ -39,9 +39,8 @@ A hash read from a PR head can differ from the squash merge. The `mirror_sources
 `opm-controller` and `cli` MUST be computed from `origin/main` of each repo after its rename PR
 merged, with `git show origin/main:.tasks/cascade/<file> | sha256sum`, and the read commits
 written into the comment above `publish_paths` and the README's "Keeping the mirrors in step".
-Until then the entries carry the pre-rename hashes and `TODO(cutover)` comments (both arms and
-the `publish_paths` comment); the change is
-not archived before they are recorded.
+Until then the entries carry the pre-rename hashes and three `TODO(cutover)` comments (both arms
+and the `publish_paths` comment); the change is not archived before they are recorded.
 
 ### D4: cli is the canary
 
@@ -62,6 +61,11 @@ equal to the pinned `accept-controller-repo-name` commit until this round.
   plan as a stale mirror; keep `CASCADE_DRY_RUN=true` until this pin is in place.
 - [A rename PR's hashed file changes again after the hashes are read] -> the drift run goes red
   within a day; read the hashes after the last merge in that repo.
+- [cli's cascade task writes more than `pin.go`] -> after cli's rename `hack/controller-pin` also
+  rewrites the embedded CRD manifests in `internal/controller/crds/`; `publish_paths cli` accepts
+  them (task 1.5). A module version that adds or drops a CRD is a status `A`/`D` change, which
+  `publish` refuses: a human lands that bump. The allow-list re-check at cutover reads what
+  `hack/controller-pin` writes, not only `cascade.sh`.
 - [Old-name rows in the tag ledger] -> data, not code; the ledger is append-only by design.
 
 ## Rollout

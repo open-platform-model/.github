@@ -337,7 +337,7 @@ verify`) bounds the push and writes the PR text itself:
 | catalog_opm | `.opm-cli-version` |
 | library | `opm/schema/loader.go`, `docs/getting-started.md`, `AGENTS.md` |
 | opm-controller | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
-| cli | `go.mod`, `go.sum`, `internal/controller/pin.go`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
+| cli | `go.mod`, `go.sum`, `internal/controller/pin.go`, the CRD manifests in `internal/controller/crds/`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
 
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
 receiver's `.tasks/cascade/` on its `main` (read 2026-10-05: catalog_opm `0560990`, library

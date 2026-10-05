@@ -32,6 +32,10 @@ ledger run until `REPOS` names the new repo.
   `publish_denied`, `receiver_classes`, `receiver_pins`, `mirror_sources`. `same_repo` goes.
 - **cli's pin file:** `internal/controller/pin.go` only (`pins_cli`, `publish_paths cli`,
   `is_derived_path`).
+- **cli's embedded CRDs:** after cli's rename, `hack/controller-pin` also writes the pinned
+  module's CRD manifests to `internal/controller/crds/<name>.yaml` (for the offline
+  `opm controller install --crds-only`); `publish_paths cli` and `is_derived_path` accept them,
+  never `crds.go`. Adding or dropping a manifest stays refused (status `M` only).
 - **Resolver:** `tag_source` maps only `opmodel.dev/modules/opm_controller@vN`;
   `CASCADE_SOURCES` lists `opm-controller` only.
 - **Unpinned reader on `.github` main:** `MIRROR_RECEIVERS` names `opm-controller`. It takes

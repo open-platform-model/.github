@@ -11,6 +11,7 @@ archive only after it.
 - [x] 1.2 `lib/release.sh` `tag_source` and `lib/prtext.sh` `CASCADE_SOURCES` drop the old name
 - [x] 1.3 Cases follow; `git mv test/fixtures/git/opm-operator.refs test/fixtures/git/opm-controller.refs`; cli's e2e fixture path `tests/e2e/testdata/controller-owned`
 - [x] 1.4 Gates green, then commit `refactor(cascade)!: name opm-controller only in the cascade maps`
+- [x] 1.5 `publish_paths cli` and `is_derived_path` accept cli's `internal/controller/crds/<name>.yaml`, which `hack/controller-pin` writes beside the pin (never `crds.go` or a subdirectory); cases in `wiring/test/cases/{bound,lib}.sh`; README allow-list table; gates green, then commit `feat(cascade): accept cli's embedded controller CRDs`
 
 ## 2. Workflows and the canonical wiring check
 

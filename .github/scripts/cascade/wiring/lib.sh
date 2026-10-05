@@ -234,10 +234,13 @@ is_bot_label() { [[ " $BOT_LABELS " == *" $1 "* ]]; }
 
 # is_derived_path <path>: a merge conflict here takes main's side and the
 # task regenerates the file. internal/controller/pin.go is the cli's
-# controller module pin, which its task rewrites with hack/controller-pin.
+# controller module pin, and internal/controller/crds/<name>.yaml the CRD
+# manifests the pinned module renders (embedded for the offline
+# `opm controller install --crds-only`); hack/controller-pin rewrites both.
 is_derived_path() {
   case "${1##*/}" in go.mod | go.sum) return 0 ;; esac
   case "$1" in cue.mod/module.cue | */cue.mod/module.cue | internal/controller/pin.go) return 0 ;; esac
+  case "$1" in internal/controller/crds/*/*) return 1 ;; internal/controller/crds/*.yaml) return 0 ;; esac
   return 1
 }
 
@@ -269,7 +272,7 @@ publish_paths() {
       ;;
     cli)
       printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/controller/pin\.go$' \
-        '^hack/kind-platform\.yaml$' '^(templates/[^/]+|tests/fixtures/modules/podinfo)/identity/identity\.cue$'
+        '^internal/controller/crds/[^/]+\.yaml$' '^hack/kind-platform\.yaml$' '^(templates/[^/]+|tests/fixtures/modules/podinfo)/identity/identity\.cue$'
       ;;
     cascade-sandbox-down) printf '%s\n' '^UPSTREAM_VERSION$' '^fixtures/' ;;
     *) return 1 ;;

@@ -107,6 +107,14 @@ fails, so a forged tag is refused even when `compute` skipped the resolver.
 - **WHEN** cli's task commit changes `internal/controller/pin.go`
 - **THEN** `publish` accepts the path, and refuses `internal/controller/install.go`
 
+#### Scenario: cli's embedded controller CRDs
+
+- **WHEN** cli's task commit changes `internal/controller/crds/platforms.opmodel.dev.yaml`, a CRD
+  manifest `hack/controller-pin` writes beside the pin
+- **THEN** `publish` accepts the path, and refuses `internal/controller/crds/crds.go`
+- **AND** it refuses a commit that adds or deletes a manifest there (status other than `M`), so a
+  module version that changes the CRD set needs a human
+
 #### Scenario: The controller's module
 
 - **WHEN** an opm-controller bot commit changes `modules/opm_controller/cue.mod/module.cue`
@@ -181,7 +189,9 @@ module (`github.com/open-platform-model/opm-controller` and
 
 `fresh`, `rebuild` and `recreate` SHALL start from `origin/main`. `merge` SHALL check out
 `origin/deps/cascade` and run `git merge --no-edit origin/main`: when only derived files conflict
-(`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/controller/pin.go`), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let
+(`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/controller/pin.go` and its
+`internal/controller/crds/*.yaml` manifests), it SHALL take `main`'s side, commit
+`Merge origin/main into deps/cascade` and let
 the task regenerate them; any other conflict SHALL abort the merge and give mode `conflict` with
 the conflicting paths. The bot SHALL never rebase and never drop a human commit.
 

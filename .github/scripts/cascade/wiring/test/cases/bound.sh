@@ -411,11 +411,13 @@ no_paths opm-controller Dockerfile Makefile config/samples/other.yaml test/fixtu
   test/fixtures/modules/a/b/identity/identity.cue hack/boilerplate.go.txt internal/x.go Taskfile.yml \
   modules/opm_controller/cue.mod/module.cue modules/opm_controller/identity/identity.cue
 ok_paths cli go.mod go.sum internal/controller/pin.go hack/kind-platform.yaml \
+  internal/controller/crds/moduleinstances.opmodel.dev.yaml internal/controller/crds/platforms.opmodel.dev.yaml \
   hack/platform/cue.mod/module.cue templates/minimal/cue.mod/module.cue templates/advanced/identity/identity.cue \
   tests/fixtures/modules/podinfo/identity/identity.cue tests/e2e/testdata/controller-owned/cue.mod/module.cue \
   internal/workflow/render/testdata/skip-unprovided/cue.mod/module.cue examples/cue.mod/module.cue
 no_paths cli hack/docskit-dump/main.go hack/platform/main.cue hack/other/cue.mod/module.cue \
   internal/controller/install.go internal/controller/names.go hack/controller-pin/main.go \
+  internal/controller/crds/crds.go internal/controller/crds/crds_test.go internal/controller/crds/x/a.yaml \
   .opm-cli-version Taskfile.yml .github/scripts/release-pin-check.sh tests/fixtures/modules/other/identity/identity.cue
 ok_paths cascade-sandbox-down UPSTREAM_VERSION fixtures/data.txt
 no_paths cascade-sandbox-down README.md .github/workflows/touch.yml

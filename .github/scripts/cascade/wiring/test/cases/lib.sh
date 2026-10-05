@@ -65,10 +65,12 @@ expect "map: the drift check reads every product receiver" 0 "catalog_opm librar
 check "map: the five bot labels have colours and descriptions" bash -c '
   . "$1"; for l in $BOT_LABELS; do label_color "$l" >/dev/null && label_description "$l" >/dev/null || exit 1; done
   ! label_color e2e-verified' _ "$WIRING/lib.sh"
-for p in go.mod sub/go.sum cue.mod/module.cue src/x/cue.mod/module.cue internal/controller/pin.go; do
+for p in go.mod sub/go.sum cue.mod/module.cue src/x/cue.mod/module.cue internal/controller/pin.go \
+  internal/controller/crds/platforms.opmodel.dev.yaml; do
   check "derived path: $p" in_lib is_derived_path "$p"
 done
-for p in README.md x/install.yaml internal/controller/install.go x/internal/controller/pin.go; do
+for p in README.md x/install.yaml internal/controller/install.go x/internal/controller/pin.go \
+  internal/controller/crds/crds.go internal/controller/crds/x/a.yaml x/internal/controller/crds/a.yaml; do
   check "derived path: $p is not derived" bash -c '. "$1"; ! is_derived_path "$2"' _ "$WIRING/lib.sh" "$p"
 done
 
