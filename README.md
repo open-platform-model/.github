@@ -97,7 +97,7 @@ docs. The org rulesets prevent it;
 it if prevention ever fails or is switched off.
 
 Scope: six of the nine releasing repos, `core`, `library`, `catalog_opm`,
-`cli`, `opm-operator` and `opm` (`REPOS` in the workflow). `docs-kit`, `modules`
+`cli`, `opm-controller` and `opm` (`REPOS` in the workflow). `docs-kit`, `modules`
 and `opm-portal` are not scanned yet, although the org tag rulesets cover them
 (owner decision 34).
 
