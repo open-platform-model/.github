@@ -272,6 +272,20 @@ and action to a full commit SHA (owner decision 24 for the actions, extended to 
 Every job's and every action's first step, `Guard`, derives the repo name from
 `GITHUB_REPOSITORY` and refuses a repo outside `open-platform-model`.
 
+**The opm-operator rename.** The repo `opm-operator` is being renamed `opm-controller`. Since
+the name comes from `GITHUB_REPOSITORY`, it flips the moment GitHub renames the repo, whatever
+`.github` commit the caller pins, and every map in `lib.sh` fails closed on a name it does not
+know. Until the rename is done, every map keyed by a receiver or a source therefore accepts both
+names with the same values: `notify_targets`, `receiver_sources`, `g3_upstreams`, `publish_paths`,
+`publish_denied`, `receiver_classes`, `receiver_pins`, `mirror_sources`, `changelog_repos`,
+`expect_pair`, `changelog_source` (and the resolver's `tag_source`, both module trains
+`opm_operator-v*` and `opm_controller-v*`), the resolver's accepted body sources, and cli's pin
+file (`internal/operator/pin.go` or `internal/controller/pin.go`). Two lists keep the old name
+only, because they name a repo GitHub must find: the target lists of `notify_targets` (they set
+the App token's `repositories:`, and a name that does not exist fails the mint for every target)
+and cli's `g3_upstreams` (read by API). A later `.github` change flips those, drops the old name
+and records the renamed repos' new mirror hashes once the rename has merged.
+
 **Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (`main`'s, on
 `main` merged with `deps/cascade`), the new dependency code those tasks build or run, and, for
 G2, the task of every open `release-please--*` head; any write collaborator can push to either
@@ -336,8 +350,8 @@ verify`) bounds the push and writes the PR text itself:
 | --- | --- |
 | catalog_opm | `.opm-cli-version` |
 | library | `opm/schema/loader.go`, `docs/getting-started.md`, `AGENTS.md` |
-| opm-operator | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
-| cli | `go.mod`, `go.sum`, `internal/operator/pin.go`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
+| opm-operator (also as opm-controller) | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
+| cli | `go.mod`, `go.sum`, `internal/operator/pin.go` or `internal/controller/pin.go`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
 
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
 receiver's `.tasks/cascade/` on its `main` (read 2026-10-05: catalog_opm `0560990`, library

@@ -14,5 +14,5 @@ as `docs(openspec): plan accept-controller-repo-name`.
 
 ## 2. README
 
-- [ ] 2.1 "The opm-operator rename" paragraph under Cascade workflows; the allow-list rows of opm-operator and cli
-- [ ] 2.2 Gates green, then commit `docs(cascade): document the opm-operator rename window`
+- [x] 2.1 "The opm-operator rename" paragraph under Cascade workflows; the allow-list rows of opm-operator and cli
+- [x] 2.2 Gates green, then commit `docs(cascade): document the opm-operator rename window`
