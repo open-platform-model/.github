@@ -69,13 +69,15 @@ release_published() {
 
 # tag_source <pin key>: prints "<repo> <tag prefix>" when the pin's versions
 # are release tags of an org repo (a Go module at the repo root, with or
-# without /vN, a release repo, core and the opm catalog on GHCR); exit 1 for
-# any other pin (fixtures, templates, oci), which has no tag to check.
+# without /vN, a release repo, and on GHCR core, the opm catalog and
+# opm-operator's operator module); exit 1 for any other pin (fixtures,
+# templates, oci), which has no tag to check.
 tag_source() {
   local k="$1" r rest
   case "$k" in
     opmodel.dev/core@v[0-9]*) echo "core " ;;
     opmodel.dev/catalogs/opm@v[0-9]*) echo "catalog_opm opm-" ;;
+    opmodel.dev/modules/opm_operator@v[0-9]*) echo "opm-operator opm_operator-" ;;
     github.com/open-platform-model/*)
       r="${k#github.com/open-platform-model/}"
       rest=""
