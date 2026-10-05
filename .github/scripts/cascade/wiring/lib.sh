@@ -247,7 +247,9 @@ is_derived_path() {
 # (catalog_opm 0560990, library ca7c56b, opm-operator 53ccaab, cli bd4d1a7c,
 # 2026-10-05) and live here, never in the receiver's tree, because publish
 # trusts only this SHA-pinned code. A receiver whose task starts writing
-# another file needs this list changed, and its pin moved, first.
+# another file needs this list changed, and its pin moved, first; the sha256
+# of each cascade.sh read is in mirror_sources, so publish refuses a receiver
+# whose cascade.sh changed since, instead of judging paths by a stale list.
 
 # publish_paths <receiver>: the anchored EREs of the paths its task writes.
 # cue.mod/module.cue at any depth: only module versions live there, which is
@@ -455,32 +457,41 @@ receiver_pins() {
 # --- the mirrors' sources -----------------------------------------------------
 # The receiver files the mirrors above copy, with the sha256 of the version on
 # main they were written from (same commits as above; the archived sandbox's
-# from its last main): pins.sh, the lib.sh it sources, and classes. publish
-# refuses a push or recreate when the receiver's main holds another version of
-# any of them (receive-publish.sh, check_mirror), and cascade-mirror-drift.yml
-# reports the drift daily. A receiver that changes one of these files needs
-# this table, the mirror and the .github pin moved together.
+# from its last main): pins.sh, the lib.sh it sources, classes, and, for the
+# four product receivers, the cascade.sh that publish_paths was read from.
+# publish refuses a push or recreate when the receiver's main holds another
+# version of any of them (receive-publish.sh, check_mirror), and
+# cascade-mirror-drift.yml reports the drift daily. A receiver that changes one
+# of these files needs this table, the mirror or allow-list and the .github pin
+# moved together. Code cascade.sh only runs (cli's hack/operator-pin, a
+# Taskfile task) is not hashed: a change there that writes a new path still
+# ends in a path refusal. The sandbox records no cascade.sh: the suite's toy
+# receiver carries its own test task in its place.
 
 # mirror_sources <receiver>: "<path> <sha256>" per mirrored file.
 mirror_sources() {
   case "$1" in
     catalog_opm)
       printf '%s\n' '.tasks/cascade/pins.sh 264c6f70bf10629c93a3dc86df0f82aeaccbceb707d3ca21281021f46c16b8aa' \
-        '.tasks/cascade/classes 83e67ce0d82150b3847a13100ef36dab818a37338a6ba6b9c9e77f30cd5e24e1'
+        '.tasks/cascade/classes 83e67ce0d82150b3847a13100ef36dab818a37338a6ba6b9c9e77f30cd5e24e1' \
+        '.tasks/cascade/cascade.sh c5605510fd56160f520c172bb0bbd30e50faff490b72cc37e08704ae061dd766'
       ;;
     library)
       printf '%s\n' '.tasks/cascade/pins.sh 4b18bf587622e5a06276e8f92d32ab5658494367f259e0ef50f5a024cfd84382' \
         '.tasks/cascade/lib.sh 83cb4592f5e97e85e74c820e0efe1059486cf3d14def4814d6ed80de6f71bbd7' \
-        '.tasks/cascade/classes e9c3926e0f2b7324e4d9770b553ecac24df39273813eb33cf60716ef43f54c10'
+        '.tasks/cascade/classes e9c3926e0f2b7324e4d9770b553ecac24df39273813eb33cf60716ef43f54c10' \
+        '.tasks/cascade/cascade.sh 4f0f4e44b62c9906f6780f645760729c22403bb14c6d8bf922dc02eb231e1717'
       ;;
     opm-operator)
       printf '%s\n' '.tasks/cascade/pins.sh 3ec912b5736303f1a74dc6d457e4edae7bc3868129a839ddd3fc7c82068e3825' \
         '.tasks/cascade/lib.sh d72bca993a94d836cb91959b869fdeba5a0d9043a1263af0ecef7135d0f3b7aa' \
-        '.tasks/cascade/classes d761876b3bafc8078207f8aae04b5beb2da1c8a821cd529e4ebba2af16f1ba40'
+        '.tasks/cascade/classes d761876b3bafc8078207f8aae04b5beb2da1c8a821cd529e4ebba2af16f1ba40' \
+        '.tasks/cascade/cascade.sh f741dec56ae8d5f2dce214b057e7ce4cdb35fc83c359e3c2802419d62c8b94c6'
       ;;
     cli)
       printf '%s\n' '.tasks/cascade/pins.sh 3c3f50ed302da918627a89459de330b1e18c7d449d0b748db90fc36f029ae3e1' \
-        '.tasks/cascade/classes 4a0a74ffea8d3415b2edcb634ab143a7d84011bc7da0eecf39f3d66536d0e528'
+        '.tasks/cascade/classes 4a0a74ffea8d3415b2edcb634ab143a7d84011bc7da0eecf39f3d66536d0e528' \
+        '.tasks/cascade/cascade.sh 55223391fbc6a8df74360b9e3305fe410aa2319aebb1d1246cfb305f544e0387'
       ;;
     cascade-sandbox-down)
       printf '%s\n' '.tasks/cascade/pins.sh 70791e2e9c6124a01bdddfd5647c9e5fde6283109c2ff61bd082efd619b51147' \

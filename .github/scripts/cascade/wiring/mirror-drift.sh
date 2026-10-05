@@ -2,7 +2,7 @@
 # shellcheck source-path=SCRIPTDIR
 # The daily drift check of the publish mirrors (cascade-mirror-drift.yml):
 # reads, from each product receiver's main, every file the .github mirrors
-# copy (mirror_sources in lib.sh) and compares its sha256 with the recorded
+# copy or were read from (mirror_sources in lib.sh) and compares its sha256 with the recorded
 # one, so a receiver change that leaves the mirror stale shows up red within a
 # day instead of at its next live publish, which refuses it too
 # (receive-publish.sh, check_mirror).

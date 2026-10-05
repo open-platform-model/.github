@@ -49,9 +49,13 @@ check "map: every receiver records the sha256 of its pins.sh and classes" bash -
     src=$(mirror_sources "$r") || exit 1
     grep -qx "\.tasks/cascade/pins\.sh [0-9a-f]\{64\}" <<<"$src" || exit 1
     grep -qx "\.tasks/cascade/classes [0-9a-f]\{64\}" <<<"$src" || exit 1
-    ! grep -vx "\.tasks/cascade/\(pins\.sh\|lib\.sh\|classes\) [0-9a-f]\{64\}" <<<"$src" || exit 1
+    ! grep -vx "\.tasks/cascade/\(pins\.sh\|lib\.sh\|classes\|cascade\.sh\) [0-9a-f]\{64\}" <<<"$src" || exit 1
   done
   ! mirror_sources core' _ "$WIRING/lib.sh"
+check "map: every product receiver records the cascade.sh its allow-list was read from" bash -c '
+  . "$1"
+  for r in $MIRROR_RECEIVERS; do mirror_sources "$r" | grep -qx "\.tasks/cascade/cascade\.sh [0-9a-f]\{64\}" || exit 1; done
+  ! mirror_sources cascade-sandbox-down | grep -q cascade\.sh' _ "$WIRING/lib.sh"
 check "map: the receivers whose pins.sh sources lib.sh record it" bash -c '
   . "$1"; for r in library opm-operator; do mirror_sources "$r" | grep -q "^\.tasks/cascade/lib\.sh " || exit 1; done' _ "$WIRING/lib.sh"
 expect "map: the drift check reads every product receiver" 0 "catalog_opm library opm-operator cli" -- bash -c '. "$1"; printf "%s" "$MIRROR_RECEIVERS"' _ "$WIRING/lib.sh"

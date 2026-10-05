@@ -52,8 +52,9 @@ new_fx
 gh_accept "api -H Accept: application/vnd.github.raw repos/open-platform-model/*/contents/.tasks/cascade/*?ref=main"
 run bash "$DRIFT"
 check "drift: by default every product receiver's mirrored files are read" bash -c '
-  [ "$1" = 1 ] && [ "$(grep -c "^DRIFT " <<<"$2")" = 10 ] \
+  [ "$1" = 1 ] && [ "$(grep -c "^DRIFT " <<<"$2")" = 14 ] \
     && [ "$(grep -c "repos/open-platform-model/library/contents/.tasks/cascade/lib.sh?ref=main" "$3")" = 1 ] \
+    && [ "$(grep -c "repos/open-platform-model/cli/contents/.tasks/cascade/cascade.sh?ref=main" "$3")" = 1 ] \
     && ! grep -q cascade-sandbox-down "$3"' _ "$RC" "$OUT" "$GHFX/log"
 : >"$GHFX/accept"
 

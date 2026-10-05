@@ -27,8 +27,8 @@
 # CASCADE_LABELS_MANAGED (act; true: labels must already exist).
 #
 # For a push or recreate, verify first checks that the .github mirrors are
-# current: each receiver file they copy (mirror_sources in lib.sh) has, on
-# origin/main, the sha256 recorded there. Then it bounds what a push may
+# current: each receiver file they copy or were read from (mirror_sources in
+# lib.sh) has, on origin/main, the sha256 recorded there. Then it bounds what a push may
 # carry: the bot's own commits (at most a merge of main and one task commit,
 # authored and committed by the bot) may change only the receiver's
 # allow-listed paths (publish_paths in lib.sh), and a push never drops a
@@ -148,8 +148,9 @@ check_increment() {
 
 # check_mirror: every receiver file the .github mirrors copy (mirror_sources
 # in lib.sh) is, on origin/main, the version the mirror was written from. A
-# stale mirror would name the wrong pins in the body or refuse a path the
-# task now writes, so publish stops first and says which file moved.
+# stale mirror would name the wrong pins in the body, and an allow-list read
+# from an older cascade.sh would refuse a path the task now writes or accept
+# one it no longer should, so publish stops first and says which file moved.
 check_mirror() {
   local srcs path want have
   srcs=$(mirror_sources "$REPO") || refuse "no mirror sources recorded for $REPO"
