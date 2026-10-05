@@ -29,5 +29,5 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 4. README
 
-- [ ] 4.1 Allow-list table (cli), deny-list (opm-operator `modules/**`), "Keeping the mirrors in step" (hashes, refusal, drift check, merge order, how to prove a mirror), the drift workflow next to the live checks, residual risk (stale mirror halts a receiver; the module pin's tag is not checked against `main`)
-- [ ] 4.2 Gates green (the README-shape cases still pass), then commit `docs(cascade): document the mirror hashes and the drift check`
+- [x] 4.1 Allow-list table (cli), deny-list (opm-operator `modules/**`), "Keeping the mirrors in step" (hashes, refusal, drift check, merge order, how to prove a mirror), the drift workflow next to the live checks, residual risk (stale mirror halts a receiver; the module pin's tag is not checked against `main`)
+- [x] 4.2 Gates green (the README-shape cases still pass), then commit `docs(cascade): document the mirror hashes and the drift check`

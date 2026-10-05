@@ -239,8 +239,9 @@ the date are faked, and nothing touches the network.
 pinned `shellcheck`, `actionlint` and go-task releases and both suites on every PR and push to
 `main`, with no path filter, as the job **`Resolver tests`**.
 [`cascade-resolver-live.yml`](.github/workflows/cascade-resolver-live.yml)
-checks read-only invariants against GHCR and GitHub weekly and on dispatch;
-it is never required.
+checks read-only invariants against GHCR and GitHub weekly and on dispatch, and
+[`cascade-mirror-drift.yml`](.github/workflows/cascade-mirror-drift.yml) checks the publish
+mirrors against the receivers daily (below); neither is ever required.
 
 **Owner step after merge:** add `Resolver tests` to the ruleset on `main` of
 this repo (workspace `RELEASING.md`, section "Rulesets on main").
@@ -315,7 +316,8 @@ verify`) bounds the push and writes the PR text itself:
   (`git merge-tree --write-tree`), its second parent on `main`, except derived files carrying
   `main`'s content. A deny-list always wins: `.github/**`, `.tasks/**`, any `Taskfile*`,
   `hack/**` (but cli's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), any
-  `*.sh`, any `CODEOWNERS`, the release-please files, `.cascade-frozen` and `.cascade-hold`.
+  `*.sh`, any `CODEOWNERS`, the release-please files, `.cascade-frozen` and `.cascade-hold`,
+  and opm-operator's `modules/**` (its operator module moves only through `module-deps.yml`).
 - *Human commits.* A push that does not contain the old tip is refused when the old branch holds
   a commit the bot did not make, a `recreate` over such a branch is refused, and `close` keeps
   such a branch.
@@ -334,17 +336,25 @@ verify`) bounds the push and writes the PR text itself:
 | catalog_opm | `.opm-cli-version` |
 | library | `opm/schema/loader.go`, `docs/getting-started.md`, `AGENTS.md` |
 | opm-operator | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
-| cli | `go.mod`, `go.sum`, `internal/operator/manifest.go`, `internal/operator/dist/install.yaml`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
+| cli | `go.mod`, `go.sum`, `internal/operator/pin.go`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
 
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
-receiver's `.tasks/cascade/` on its `main` (read 2026-10-04: catalog_opm `3288406`, library
-`93a892f`, opm-operator `6a14adb`, cli `5f00930`; opm-operator's `pins.sh`, `classes` and its
-`deps:cascade` repo scope rechecked unchanged through `05d0396`). A receiver change to what its task writes, to
-its `pins.sh` or to its `classes` needs the matching change here, merged and pinned, before the
-receiver's own change merges: otherwise `publish` refuses its plans (a new path) or renders a
-body without a new pin, and the title-mismatch notice in the publish log is the signal. To
-check a mirror, run the receiver's `pins.sh` and `CASCADE_PINS_REPO=<repo>
-.github/scripts/cascade/wiring/pins.sh` on the same commits of its checkout and compare.
+receiver's `.tasks/cascade/` on its `main` (read 2026-10-05: catalog_opm `0560990`, library
+`ca7c56b`, opm-operator `53ccaab`, cli `bd4d1a7c`). `mirror_sources` in `wiring/lib.sh` records
+the sha256 of every receiver file the mirrors copy: `pins.sh`, the `lib.sh` it sources (library,
+opm-operator) and `classes`. For a push or recreate, `publish` first reads those files on the
+receiver's `origin/main` and refuses, naming the receiver, the file and both hashes, when one
+differs, so a stale mirror stops the run instead of rendering a body without a new pin or
+refusing a path the task now writes. [`cascade-mirror-drift.yml`](.github/workflows/cascade-mirror-drift.yml)
+runs the same comparison daily (`wiring/mirror-drift.sh`, read-only, with the run's own token)
+and fails red on drift. A receiver change to what its task writes, to its `pins.sh`, the `lib.sh` it
+sources or its `classes` therefore needs the matching change here (mirror, allow-list
+and hash) merged first, and the receiver's change should carry its pin bump to that `.github`
+commit, so both land together; until both have, publish refuses that receiver's plans, which is
+the intended fail-closed state. To check a mirror, run the receiver's `pins.sh` and
+`CASCADE_PINS_REPO=<repo> .github/scripts/cascade/wiring/pins.sh` on the same commits of its
+checkout and compare; to check an allow-list, run the receiver's own cascade suite with its
+sandboxes kept and pass every changed path through `publish_path_ok`.
 
 **What stays open (residual risk).**
 
@@ -363,7 +373,13 @@ check a mirror, run the receiver's `pins.sh` and `CASCADE_PINS_REPO=<repo>
   stall or relabel its own receiver's cascade PR as conflicted, but cannot publish anything
   outside the bounds above.
 - `setup-go` installs Go from the receiver's `go.mod` version without a checksum held here.
-- The mirrors drift unless kept in step (above).
+- The mirrors drift unless kept in step (above); a stale mirror now stops publish instead of
+  misleading it, which halts that receiver's cascade until `.github` and its pin move.
+- The cli's operator module pin (`opmodel.dev/modules/opm_operator@v0`) is not a tag the
+  resolver checks against `main` (`tag_source` in `lib/release.sh` maps no module path), so
+  neither `newest` nor publish's `tag-on-main` refuses a module version whose
+  `opm_operator-v*` tag is off opm-operator's `main`. Only opm-operator's `release.yml`
+  publishes that module.
 
 **Pinning and bumps.** Owner decision 24 pins the two cascade actions by SHA in every repo,
 replacing `@main` (decision 13) for them; the supervisor extended it to the two reusable
