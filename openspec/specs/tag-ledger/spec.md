@@ -11,7 +11,7 @@ workspace `AGENTS.md`, section "Release Tags Are Immutable", and workspace RELEA
 ### Requirement: Scanned repos
 
 The `tag-ledger` workflow SHALL scan exactly these `open-platform-model` repos: `core`,
-`library`, `catalog_opm`, `cli`, `opm-operator` and `opm`. `release-flow-sandbox`, which is in
+`library`, `catalog_opm`, `cli`, `opm-controller` and `opm`. `release-flow-sandbox`, which is in
 the workspace immutable-tag scope, SHALL stay excluded until the owner decides whether the ledger
 covers it. A scanned repo that cannot be read SHALL fail the run, not drop out of the scan. Each
 scanned repo SHALL get the same treatment, with no per-repo exceptions:
@@ -43,7 +43,7 @@ list the same six repos as the workflow.
 #### Scenario: The summary names every scanned repo
 
 - **WHEN** any run completes
-- **THEN** its job summary contains `Repos: core library catalog_opm cli opm-operator opm.`
+- **THEN** its job summary contains `Repos: core library catalog_opm cli opm-controller opm.`
 
 ### Requirement: Joining and leaving the scan
 
