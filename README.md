@@ -285,6 +285,8 @@ only, because they name a repo GitHub must find: the target lists of `notify_tar
 the App token's `repositories:`, and a name that does not exist fails the mint for every target)
 and cli's `g3_upstreams` (read by API). A later `.github` change flips those, drops the old name
 and records the renamed repos' new mirror hashes once the rename has merged.
+`MIRROR_RECEIVERS` (read by the drift run from `.github` `main`, unpinned) and tag-ledger
+`REPOS` also keep `opm-operator` only; each flips in its own change after the rename.
 
 **Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (`main`'s, on
 `main` merged with `deps/cascade`), the new dependency code those tasks build or run, and, for
