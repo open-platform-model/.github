@@ -2,7 +2,7 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 `.github/scripts/` and on every test shim; `actionlint` on `.github/workflows/*.yml`;
 `bash .github/scripts/cascade/test/run.sh` and `bash .github/scripts/cascade/wiring/test/run.sh`;
 `openspec validate --all --strict`. All run offline. Design references are to this change's
-`design.md` (D1 to D4). The planning artifacts are committed first as
+`design.md` (D1 to D5). The planning artifacts are committed first as
 `docs(openspec): plan sync-cli-mirror-and-guard-drift`.
 
 ## 1. The mirrors follow the receivers' main
@@ -31,3 +31,12 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 - [x] 4.1 Allow-list table (cli), deny-list (opm-operator `modules/**`), "Keeping the mirrors in step" (hashes, refusal, drift check, merge order, how to prove a mirror), the drift workflow next to the live checks, residual risk (stale mirror halts a receiver; the module pin's tag is not checked against `main`)
 - [x] 4.2 Gates green (the README-shape cases still pass), then commit `docs(cascade): document the mirror hashes and the drift check`
+
+## 5. Review follow-ups
+
+- [x] 5.1 `mirror_sources`: each product receiver's `.tasks/cascade/cascade.sh` sha256 (catalog_opm `c5605510`, library `4f0f4e44`, opm-operator `f741dec5`, cli `55223391` on `main`); comments in `lib.sh`, `receive-publish.sh`, `mirror-drift.sh` (D3)
+- [x] 5.2 Cases: every product receiver records `cascade.sh`, the sandbox none; the drift default reads fourteen files; `close`, `conflict` and `too_long` verify with a stale `pins.sh` on main (checked by moving `check_mirror` above the `case`: three failures); the cli mirror follows `PinnedModuleVersion` from `0.1.0` to `0.2.0`
+- [x] 5.3 Gates green, then commit `fix(cascade): hash each receiver's cascade.sh in the mirror sources`
+- [x] 5.4 `lib/release.sh`: `tag_source` maps the operator module to `opm-operator opm_operator-`; resolver cases: on-main `v0.1.0` exits 0 and fetches `opm_operator-v0.1.0`, an off-main `v0.2.0` exits 3 (D5)
+- [x] 5.5 Gates green, then commit `fix(cascade): check the operator module's tags against opm-operator main`
+- [x] 5.6 README and specs: the `cascade.sh` hash and what it leaves out, the resolver's tag list, the module residual-risk note dropped; live drift run, 14 of 14 `ok`

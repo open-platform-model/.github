@@ -206,8 +206,8 @@ only). Versions are always `v`-prefixed SemVer.
 `newest` proposes only a version whose release tag is on its repo's `main`,
 for every pin whose versions are tags of an org repo (`go
 github.com/open-platform-model/<repo>`, `release`, `opm-cli`, and the `cue`
-modules `opmodel.dev/core` and `opmodel.dev/catalogs/opm`, whose tags are
-`opm-v*`). A tag made on a commit `main` never had (the release App can create
+modules `opmodel.dev/core`, `opmodel.dev/catalogs/opm`, whose tags are `opm-v*`, and
+`opmodel.dev/modules/opm_operator`, whose tags are opm-operator's `opm_operator-v*`). A tag made on a commit `main` never had (the release App can create
 one) is still served by the Go proxy and listed by git, so `newest` clones the
 repo once per run, bare and without trees, fetches each probed tag and skips,
 with a warning, one whose commit is not an ancestor of `main`. `tag-on-main
@@ -341,14 +341,17 @@ verify`) bounds the push and writes the PR text itself:
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
 receiver's `.tasks/cascade/` on its `main` (read 2026-10-05: catalog_opm `0560990`, library
 `ca7c56b`, opm-operator `53ccaab`, cli `bd4d1a7c`). `mirror_sources` in `wiring/lib.sh` records
-the sha256 of every receiver file the mirrors copy: `pins.sh`, the `lib.sh` it sources (library,
-opm-operator) and `classes`. For a push or recreate, `publish` first reads those files on the
-receiver's `origin/main` and refuses, naming the receiver, the file and both hashes, when one
-differs, so a stale mirror stops the run instead of rendering a body without a new pin or
-refusing a path the task now writes. [`cascade-mirror-drift.yml`](.github/workflows/cascade-mirror-drift.yml)
+the sha256 of every receiver file the mirrors copy or were read from: `pins.sh`, the `lib.sh` it
+sources (library, opm-operator), `classes`, and the `cascade.sh` each allow-list was read from.
+For a push or recreate, `publish` first reads those files on the receiver's `origin/main` and
+refuses, naming the receiver, the file and both hashes, when one differs, so a stale pin mirror
+or a stale allow-list stops the run before it renders a body or judges a path. Code that
+`cascade.sh` only runs (cli's `hack/operator-pin`, a Taskfile task) is not hashed: when a change
+there makes the task write a new path, publish still refuses that path as one the task never
+writes, and the allow-list needs the same update. [`cascade-mirror-drift.yml`](.github/workflows/cascade-mirror-drift.yml)
 runs the same comparison daily (`wiring/mirror-drift.sh`, read-only, with the run's own token)
-and fails red on drift. A receiver change to what its task writes, to its `pins.sh`, the `lib.sh` it
-sources or its `classes` therefore needs the matching change here (mirror, allow-list
+and fails red on drift. A receiver change to its `cascade.sh` (or to what its task writes), its
+`pins.sh`, the `lib.sh` it sources or its `classes` therefore needs the matching change here (mirror, allow-list
 and hash) merged first, and the receiver's change should carry its pin bump to that `.github`
 commit, so both land together; until both have, publish refuses that receiver's plans, which is
 the intended fail-closed state. To check a mirror, run the receiver's `pins.sh` and
@@ -375,11 +378,6 @@ sandboxes kept and pass every changed path through `publish_path_ok`.
 - `setup-go` installs Go from the receiver's `go.mod` version without a checksum held here.
 - The mirrors drift unless kept in step (above); a stale mirror now stops publish instead of
   misleading it, which halts that receiver's cascade until `.github` and its pin move.
-- The cli's operator module pin (`opmodel.dev/modules/opm_operator@v0`) is not a tag the
-  resolver checks against `main` (`tag_source` in `lib/release.sh` maps no module path), so
-  neither `newest` nor publish's `tag-on-main` refuses a module version whose
-  `opm_operator-v*` tag is off opm-operator's `main`. Only opm-operator's `release.yml`
-  publishes that module.
 
 **Pinning and bumps.** Owner decision 24 pins the two cascade actions by SHA in every repo,
 replacing `@main` (decision 13) for them; the supervisor extended it to the two reusable

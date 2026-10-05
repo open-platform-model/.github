@@ -19,7 +19,7 @@ check.
 #### Scenario: Every mirror current
 
 - **WHEN** every recorded file on every receiver's `main` has its recorded sha256
-- **THEN** the run passes and prints one `ok` line per file
+- **THEN** the run passes and prints one `ok` line per file, fourteen in all (each receiver's `pins.sh`, `classes` and `cascade.sh`, and library's and opm-operator's `lib.sh`)
 
 #### Scenario: A file cannot be read
 

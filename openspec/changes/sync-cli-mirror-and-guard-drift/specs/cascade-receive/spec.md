@@ -108,8 +108,10 @@ fails, so a forged tag is refused even when `compute` skipped the resolver.
 ### Requirement: Publish refuses a stale mirror
 
 `.github` (`wiring/lib.sh`, `mirror_sources`) SHALL record, per receiver, the sha256 of each
-receiver file its publish mirrors copy: `.tasks/cascade/pins.sh`, `.tasks/cascade/classes`, and
-the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does (library, opm-operator). For
+receiver file its publish mirrors copy or were read from: `.tasks/cascade/pins.sh`,
+`.tasks/cascade/classes`, the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does
+(library, opm-operator), and, for catalog_opm, library, opm-operator and cli, the
+`.tasks/cascade/cascade.sh` its allow-list (`publish_paths`) was read from. For
 `push` and `recreate`, `publish` SHALL, before it reads the bundle, runs the workflows guard or
 bounds the increment, and before any token exists, read each recorded file on the receiver's
 `origin/main` and refuse the plan when its sha256 differs from the recorded one or the file is
@@ -129,6 +131,16 @@ core.
 
 - **WHEN** the receiver's `main` has no `.tasks/cascade/classes`
 - **THEN** `publish` refuses naming `.tasks/cascade/classes` with sha256 `missing`
+
+#### Scenario: cascade.sh changed on main
+
+- **WHEN** cli's `main` holds a `.tasks/cascade/cascade.sh` whose sha256 is not the recorded one, while its `pins.sh`, `lib.sh` and `classes` are unchanged, and `compute` planned a `push`
+- **THEN** `publish` refuses naming `.tasks/cascade/cascade.sh` and mints no token
+
+#### Scenario: A stale mirror does not hold a close
+
+- **WHEN** the receiver's `main` holds a `pins.sh` the mirror was not written from, and `compute` planned `close`, `conflict` or `too_long`
+- **THEN** `publish` verifies the plan as it would with a current mirror
 
 #### Scenario: An unrelated change on main
 

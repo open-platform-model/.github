@@ -47,6 +47,17 @@ for its parsing helpers (`dep_v`, `loader_core`, `go_require_v`, `yaml_version_a
 changes (it has not changed since either repo's cascade landed), but without it a parser change
 there would slip past the guard.
 
+The four product receivers also record `.tasks/cascade/cascade.sh`, the file `publish_paths` was
+read from. Without it a receiver that changes only `cascade.sh` passes the guard while the
+allow-list is stale: opm-operator `6a14adb..53ccaab` added `CASCADE_SCOPE=module`, which writes
+`modules/opm_operator/cue.mod/module.cue`, without touching `pins.sh`, `lib.sh` or `classes`, and
+the generic `cue.mod/module.cue` entry would have accepted that path. `cascade.sh` changes more
+often than `pins.sh`, so this costs more false alarms; each one is a prompt to re-read the
+allow-list, which is the point. Code `cascade.sh` only runs (cli's `hack/operator-pin`, Taskfile
+tasks) is not hashed: a change there that writes a new path still ends in the path refusal, and
+hashing every program a task calls would turn every unrelated edit into a stop. The sandbox
+records no `cascade.sh`: the suite's toy receiver carries its own test task.
+
 For `push` and `recreate`, `verify` MUST, after fetching `origin/main` and before the bundle,
 the workflows guard and the increment, compute `sha256` of `git show origin/main:<path>` for
 each source (`missing` when it is not a blob there) and refuse with
@@ -58,7 +69,8 @@ wiring/lib.sh, then move the .github pin
 ```
 
 (one line). `close`, `conflict` and `too_long` do not read the mirror and are not refused: a
-stale mirror must not keep a stale PR open. `origin/main` is the receiver's `main` that `verify`
+stale mirror must not keep a stale PR open. The suite proves it: each of the three is computed,
+then `main`'s `pins.sh` moves, and verify still passes the plan. `origin/main` is the receiver's `main` that `verify`
 already fetched; the mirror copies `main`'s files, and the pins at the new tip are read with
 them. A receiver's change to a mirrored file and its pin bump to the `.github` commit that
 mirrors it should land in one PR; between the two merges publish refuses, which is the
@@ -111,3 +123,12 @@ weekly.
   `pins.sh` and the mirror in `compute`: rejected, `compute` is untrusted. (c) Hash the source
   files, chosen: plain `git show` in publish, no receiver code, and a hash change is exactly the
   event that needs a human to re-read the mirror.
+
+### D5: The operator module's tags
+
+`tag_source` maps `opmodel.dev/modules/opm_operator@v[0-9]*` to `opm-operator opm_operator-`, the
+same prefix `changelog_source` already uses. `newest` (cli's module lane) then skips a published
+module version whose tag is off opm-operator's `main`, and publish's `tag-on-main` refuses a
+moved module pin with such a tag. Safe today: the one release, `opm_operator-v0.1.0`, is
+`8dc24b3` on opm-operator `main`. Before this, the pin had no tag source, so both checks exited
+0 for it.
