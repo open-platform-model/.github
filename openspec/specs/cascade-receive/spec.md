@@ -147,8 +147,7 @@ branch named `deps/cascade` SHALL never be read, edited or closed.
 
 `fresh`, `rebuild` and `recreate` SHALL start from `origin/main`. `merge` SHALL check out
 `origin/deps/cascade` and run `git merge --no-edit origin/main`: when only derived files conflict
-(`go.mod`, `go.sum`, any `cue.mod/module.cue`, `internal/operator/dist/install.yaml`,
-`manifest.go`), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let
+(`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/operator/pin.go`), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let
 the task regenerate them; any other conflict SHALL abort the merge and give mode `conflict` with
 the conflicting paths. The bot SHALL never rebase and never drop a human commit.
 
@@ -382,8 +381,9 @@ carrying the second parent's content. The allow-lists SHALL live in `.github` (`
 keyed by the receiver, never read from the receiver's tree. The deny-list SHALL be `.github/**`,
 `.tasks/**`, any `Taskfile*`, `hack/**` (except cli's `hack/kind-platform.yaml` and
 `hack/platform/cue.mod/module.cue`), `*.sh`, any `CODEOWNERS`, `release-please-config.json`,
-`.release-please-manifest.json`, `.cascade-frozen` and `.cascade-hold`, and SHALL win over the
-allow-list. When a `push` does not contain the old tip and `origin/main..old` holds a commit the
+`.release-please-manifest.json`, `.cascade-frozen`, `.cascade-hold` and, for opm-operator,
+`modules/**` (its operator module moves only through its own `module-deps.yml`), and SHALL win
+over the allow-list. When a `push` does not contain the old tip and `origin/main..old` holds a commit the
 bot did not make, `publish` SHALL refuse; it SHALL refuse a `recreate` whenever `origin/main..old`
 holds such a commit, since `recreate` rebuilds the branch on `main`; `close` SHALL then keep the
 branch and delete only a bot-only one. For every pin whose version differs between the merge
@@ -431,6 +431,16 @@ fails, so a forged tag is refused even when `compute` skipped the resolver.
 - **WHEN** the branch holds a human commit that changes `.tasks/` and the bot merges `main` and commits a pin move
 - **THEN** `publish` accepts: the human commit is not in the increment, and the bot's merge and pin commits pass
 
+#### Scenario: cli's operator module pin file
+
+- **WHEN** cli's task commit changes `internal/operator/pin.go`
+- **THEN** `publish` accepts the path, and refuses `internal/operator/manifest.go` or `internal/operator/dist/install.yaml`
+
+#### Scenario: opm-operator's module
+
+- **WHEN** an opm-operator bot commit changes `modules/opm_operator/cue.mod/module.cue`
+- **THEN** `publish` refuses it, although any other `cue.mod/module.cue` is allowed
+
 ### Requirement: Publish renders the PR text
 
 For `push` and `recreate`, `publish` SHALL check the new tip out into a scratch worktree outside
@@ -452,3 +462,50 @@ SHALL refuse.
 
 - **WHEN** `compute`'s `body.md` carries other text below the Notes marker than the live PR
 - **THEN** `publish` keeps the live PR's Notes
+
+### Requirement: Publish refuses a stale mirror
+
+`.github` (`wiring/lib.sh`, `mirror_sources`) SHALL record, per receiver, the sha256 of each
+receiver file its publish mirrors copy or were read from: `.tasks/cascade/pins.sh`,
+`.tasks/cascade/classes`, the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does
+(library, opm-operator), and, for catalog_opm, library, opm-operator and cli, the
+`.tasks/cascade/cascade.sh` its allow-list (`publish_paths`) was read from. For
+`push` and `recreate`, `publish` SHALL, before it reads the bundle, runs the workflows guard or
+bounds the increment, and before any token exists, read each recorded file on the receiver's
+`origin/main` and refuse the plan when its sha256 differs from the recorded one or the file is
+missing there, with one message naming the receiver, the path, the sha256 found (or `missing`)
+and the recorded sha256. `close`, `conflict` and `too_long` SHALL NOT be refused for a stale
+mirror. The mirror of each receiver's `pins.sh` SHALL report the same rows as that receiver's
+own `pins.sh` on its `main`: for cli, the library, the operator release and the operator module
+(`opmodel.dev/modules/opm_operator@v0`, from `internal/operator/pin.go`), the opm catalog and
+core.
+
+#### Scenario: pins.sh changed on main
+
+- **WHEN** the receiver's `main` holds a `.tasks/cascade/pins.sh` whose sha256 is not the recorded one, and `compute` planned a `push`
+- **THEN** `publish` refuses with "the .github mirror of <receiver> is stale: .tasks/cascade/pins.sh on its main has sha256 <found>, the mirror was written from <recorded>" and mints no token
+
+#### Scenario: classes removed from main
+
+- **WHEN** the receiver's `main` has no `.tasks/cascade/classes`
+- **THEN** `publish` refuses naming `.tasks/cascade/classes` with sha256 `missing`
+
+#### Scenario: cascade.sh changed on main
+
+- **WHEN** cli's `main` holds a `.tasks/cascade/cascade.sh` whose sha256 is not the recorded one, while its `pins.sh`, `lib.sh` and `classes` are unchanged, and `compute` planned a `push`
+- **THEN** `publish` refuses naming `.tasks/cascade/cascade.sh` and mints no token
+
+#### Scenario: A stale mirror does not hold a close
+
+- **WHEN** the receiver's `main` holds a `pins.sh` the mirror was not written from, and `compute` planned `close`, `conflict` or `too_long`
+- **THEN** `publish` verifies the plan as it would with a current mirror
+
+#### Scenario: An unrelated change on main
+
+- **WHEN** `main` changed only files the mirrors do not copy
+- **THEN** the mirror check passes and `publish` verifies the plan as before
+
+#### Scenario: cli's module pin in the body
+
+- **WHEN** cli's `internal/operator/pin.go` moves `PinnedModuleVersion` from `0.1.0` to `0.2.0`
+- **THEN** the mirrored pin report shows `opmodel.dev/modules/opm_operator@v0` moving from `v0.1.0` to `v0.2.0`, as cli's own `pins.sh` does

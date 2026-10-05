@@ -26,10 +26,13 @@
 # client_payload as JSON, read from the event, never from compute),
 # CASCADE_LABELS_MANAGED (act; true: labels must already exist).
 #
-# verify bounds what a push may carry: the bot's own commits (at most a merge
-# of main and one task commit, authored and committed by the bot) may change
-# only the receiver's allow-listed paths (publish_paths in lib.sh), and a push
-# never drops a commit the bot did not make. It renders the PR title, body
+# For a push or recreate, verify first checks that the .github mirrors are
+# current: each receiver file they copy or were read from (mirror_sources in
+# lib.sh) has, on origin/main, the sha256 recorded there. Then it bounds what a push may
+# carry: the bot's own commits (at most a merge of main and one task commit,
+# authored and committed by the bot) may change only the receiver's
+# allow-listed paths (publish_paths in lib.sh), and a push never drops a
+# commit the bot did not make. It renders the PR title, body
 # and labels itself, with the resolver and the .github mirror of the
 # receiver's pins.sh and classes (pins.sh here, lib.sh), in a scratch
 # worktree of the new tip under CASCADE_T: compute's body.md and titles are
@@ -141,6 +144,26 @@ check_increment() {
     fi
     if [ -n "$p2" ]; then check_merge "$c" "$p1" "$p2"; else check_paths "$c" "$p1"; fi
   done < <(g rev-list --parents "${range[@]}")
+}
+
+# check_mirror: every receiver file the .github mirrors copy (mirror_sources
+# in lib.sh) is, on origin/main, the version the mirror was written from. A
+# stale mirror would name the wrong pins in the body, and an allow-list read
+# from an older cascade.sh would refuse a path the task now writes or accept
+# one it no longer should, so publish stops first and says which file moved.
+check_mirror() {
+  local srcs path want have
+  srcs=$(mirror_sources "$REPO") || refuse "no mirror sources recorded for $REPO"
+  while read -r path want; do
+    [ -n "$path" ] || continue
+    if [ "$(g cat-file -t "origin/main:$path" 2>/dev/null)" = blob ]; then
+      have=$(g show "origin/main:$path" | sha256sum) || die "cannot read $path on origin/main"
+      have="${have%% *}"
+    else
+      have=missing
+    fi
+    [ "$have" = "$want" ] || refuse "$(mirror_stale_text "$REPO" "$path" "$have" "$want")"
+  done <<<"$srcs"
 }
 
 # filter_warnings <in> <out>: the task's warning lines publish lets into the
@@ -384,6 +407,8 @@ verify() {
   case "$action" in
     push | recreate)
       [ -n "$new" ] || refuse "$action without a new tip"
+      # The mirrors first: a stale one would misjudge everything below.
+      check_mirror
       if [ "$new" = "$old" ]; then
         [ "$action" = push ] || refuse "recreate needs a new tip"
         g update-ref refs/cascade/new "$old"

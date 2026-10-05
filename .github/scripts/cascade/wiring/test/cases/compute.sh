@@ -334,7 +334,9 @@ check "title: a human retitle is kept, the marker carries the computed title" ba
   _ "$CASCADE_T/plan.json" "$CASCADE_T/body.md" "$CASCADE_T/state"
 
 # --- labels and the breaking check --------------------------------------------
-new_fx; mk_toy; fresh_checkout
+new_fx; mk_toy
+seed_commit main human .tasks/cascade/pins.sh "$TOY_LABEL_PINS" "toy: pins with labels"
+fresh_checkout
 printf 'v0.4.0\n' >"$TOY_TARGET"
 gh_prs '[]'
 gh_rels $'v0.5.0\ttrue\nv0.4.0\tfalse\nv0.3.0\ttrue\nv0.2.0\tfalse\nv0.1.0\ttrue\nlatest\ttrue'

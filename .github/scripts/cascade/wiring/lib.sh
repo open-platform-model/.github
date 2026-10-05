@@ -177,6 +177,8 @@ changelog_source() {
     opmodel.dev/catalogs/opm@v4) echo "catalog_opm opm-" ;;
     github.com/open-platform-model/library) echo "library " ;;
     github.com/open-platform-model/opm-operator) echo "opm-operator " ;;
+    # The operator module, released from opm-operator on its own train.
+    opmodel.dev/modules/opm_operator@v0) echo "opm-operator opm_operator-" ;;
     github.com/open-platform-model/cli) echo "cli " ;;
     github.com/open-platform-model/cascade-sandbox-up) echo "cascade-sandbox-up " ;;
     *) return 1 ;;
@@ -231,20 +233,23 @@ label_description() {
 is_bot_label() { [[ " $BOT_LABELS " == *" $1 "* ]]; }
 
 # is_derived_path <path>: a merge conflict here takes main's side and the
-# task regenerates the file.
+# task regenerates the file. internal/operator/pin.go is the cli's operator
+# module pin, which its task rewrites with hack/operator-pin.
 is_derived_path() {
-  case "${1##*/}" in go.mod | go.sum | manifest.go) return 0 ;; esac
-  case "$1" in cue.mod/module.cue | */cue.mod/module.cue | internal/operator/dist/install.yaml) return 0 ;; esac
+  case "${1##*/}" in go.mod | go.sum) return 0 ;; esac
+  case "$1" in cue.mod/module.cue | */cue.mod/module.cue | internal/operator/pin.go) return 0 ;; esac
   return 1
 }
 
 # --- what publish accepts from compute ----------------------------------------
 # The bot's own commits may change only the files the receiver's task writes.
 # The lists are read from each receiver's .tasks/cascade/cascade.sh on main
-# (catalog_opm 3288406, library 93a892f, opm-operator 6a14adb, cli 5f00930,
-# 2026-10-04) and live here, never in the receiver's tree, because publish
+# (catalog_opm 0560990, library ca7c56b, opm-operator 53ccaab, cli bd4d1a7c,
+# 2026-10-05) and live here, never in the receiver's tree, because publish
 # trusts only this SHA-pinned code. A receiver whose task starts writing
-# another file needs this list changed, and its pin moved, first.
+# another file needs this list changed, and its pin moved, first; the sha256
+# of each cascade.sh read is in mirror_sources, so publish refuses a receiver
+# whose cascade.sh changed since, instead of judging paths by a stale list.
 
 # publish_paths <receiver>: the anchored EREs of the paths its task writes.
 # cue.mod/module.cue at any depth: only module versions live there, which is
@@ -262,7 +267,7 @@ publish_paths() {
         '^test/fixtures/modules/[^/]+/moduleinstance\.yaml$'
       ;;
     cli)
-      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/operator/(manifest\.go|dist/install\.yaml)$' \
+      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/operator/pin\.go$' \
         '^hack/kind-platform\.yaml$' '^(templates/[^/]+|tests/fixtures/modules/podinfo)/identity/identity\.cue$'
       ;;
     cascade-sandbox-down) printf '%s\n' '^UPSTREAM_VERSION$' '^fixtures/' ;;
@@ -274,9 +279,12 @@ publish_paths() {
 # change, whatever publish_paths says: workflow and action code, the task
 # code, scripts, code owners, the release configs and the steering files.
 # cli's two hack/ data files (the kind Platform and its catalog pins) are the
-# only exception; hack/ holds Go programs and scripts otherwise.
+# only exception; hack/ holds Go programs and scripts otherwise. opm-operator's
+# operator module (modules/) moves through its own module/deps publisher,
+# never through deps:cascade, whose repo scope leaves it alone.
 publish_denied() {
   case "$1:$2" in cli:hack/kind-platform.yaml | cli:hack/platform/cue.mod/module.cue) return 1 ;; esac
+  case "$1:$2" in opm-operator:modules/*) return 0 ;; esac
   case "$2" in .github/* | .tasks/* | hack/* | *.sh | release-please-config.json | .release-please-manifest.json) return 0 ;; esac
   case "${2##*/}" in Taskfile* | CODEOWNERS | .cascade-frozen | .cascade-hold) return 0 ;; esac
   return 1
@@ -395,7 +403,7 @@ pins_opm_operator() {
 }
 
 pins_cli() {
-  local ref="$1" f
+  local ref="$1" f mv
   # cli_row KEY DISPLAY VERSION: as the cli's row(), empty is no row.
   cli_row() {
     [ -n "$3" ] || return 0
@@ -413,9 +421,13 @@ pins_cli() {
     cli_row github.com/open-platform-model/library library \
       "$(awk -v m=github.com/open-platform-model/library '$1 == m {print $2; exit}' <<<"$f")"
   fi
-  if f=$(pin_blob "$ref" internal/operator/manifest.go); then
+  # The operator module pin and the operator release it deploys, both from
+  # internal/operator/pin.go; the module version is bare there.
+  if f=$(pin_blob "$ref" internal/operator/pin.go); then
     cli_row github.com/open-platform-model/opm-operator opm-operator \
       "$(sed -n 's/^const PinnedOperatorVersion = "\(.*\)"$/\1/p' <<<"$f")"
+    mv=$(sed -n 's/^const PinnedModuleVersion = "\(.*\)"$/\1/p' <<<"$f")
+    cli_row opmodel.dev/modules/opm_operator@v0 "opm-operator module" "${mv:+v$mv}"
   fi
   if f=$(pin_blob "$ref" templates/minimal/cue.mod/module.cue); then
     cli_row opmodel.dev/catalogs/opm@v4 "opm catalog" "$(cli_dep opmodel.dev/catalogs/opm@v4 <<<"$f")"
@@ -440,6 +452,64 @@ receiver_pins() {
     cascade-sandbox-down) pins_sandbox "$2" ;;
     *) return 1 ;;
   esac
+}
+
+# --- the mirrors' sources -----------------------------------------------------
+# The receiver files the mirrors above copy, with the sha256 of the version on
+# main they were written from (same commits as above; the archived sandbox's
+# from its last main): pins.sh, the lib.sh it sources, classes, and, for the
+# four product receivers, the cascade.sh that publish_paths was read from.
+# publish refuses a push or recreate when the receiver's main holds another
+# version of any of them (receive-publish.sh, check_mirror), and
+# cascade-mirror-drift.yml reports the drift daily. A receiver that changes one
+# of these files needs this table, the mirror or allow-list and the .github pin
+# moved together. Code cascade.sh only runs (cli's hack/operator-pin, a
+# Taskfile task) is not hashed: a change there that writes a new path still
+# ends in a path refusal. The sandbox records no cascade.sh: the suite's toy
+# receiver carries its own test task in its place.
+
+# mirror_sources <receiver>: "<path> <sha256>" per mirrored file.
+mirror_sources() {
+  case "$1" in
+    catalog_opm)
+      printf '%s\n' '.tasks/cascade/pins.sh 264c6f70bf10629c93a3dc86df0f82aeaccbceb707d3ca21281021f46c16b8aa' \
+        '.tasks/cascade/classes 83e67ce0d82150b3847a13100ef36dab818a37338a6ba6b9c9e77f30cd5e24e1' \
+        '.tasks/cascade/cascade.sh c5605510fd56160f520c172bb0bbd30e50faff490b72cc37e08704ae061dd766'
+      ;;
+    library)
+      printf '%s\n' '.tasks/cascade/pins.sh 4b18bf587622e5a06276e8f92d32ab5658494367f259e0ef50f5a024cfd84382' \
+        '.tasks/cascade/lib.sh 83cb4592f5e97e85e74c820e0efe1059486cf3d14def4814d6ed80de6f71bbd7' \
+        '.tasks/cascade/classes e9c3926e0f2b7324e4d9770b553ecac24df39273813eb33cf60716ef43f54c10' \
+        '.tasks/cascade/cascade.sh 4f0f4e44b62c9906f6780f645760729c22403bb14c6d8bf922dc02eb231e1717'
+      ;;
+    opm-operator)
+      printf '%s\n' '.tasks/cascade/pins.sh 3ec912b5736303f1a74dc6d457e4edae7bc3868129a839ddd3fc7c82068e3825' \
+        '.tasks/cascade/lib.sh d72bca993a94d836cb91959b869fdeba5a0d9043a1263af0ecef7135d0f3b7aa' \
+        '.tasks/cascade/classes d761876b3bafc8078207f8aae04b5beb2da1c8a821cd529e4ebba2af16f1ba40' \
+        '.tasks/cascade/cascade.sh f741dec56ae8d5f2dce214b057e7ce4cdb35fc83c359e3c2802419d62c8b94c6'
+      ;;
+    cli)
+      printf '%s\n' '.tasks/cascade/pins.sh 3c3f50ed302da918627a89459de330b1e18c7d449d0b748db90fc36f029ae3e1' \
+        '.tasks/cascade/classes 4a0a74ffea8d3415b2edcb634ab143a7d84011bc7da0eecf39f3d66536d0e528' \
+        '.tasks/cascade/cascade.sh 55223391fbc6a8df74360b9e3305fe410aa2319aebb1d1246cfb305f544e0387'
+      ;;
+    cascade-sandbox-down)
+      printf '%s\n' '.tasks/cascade/pins.sh 70791e2e9c6124a01bdddfd5647c9e5fde6283109c2ff61bd082efd619b51147' \
+        '.tasks/cascade/classes 921a950ca5ad36fa5a4fc0802d4dd8d2d915633c04fc22bbfd0976b60e2d19f7'
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# The receivers cascade-mirror-drift.yml reads: every product receiver. The
+# sandbox is archived and private, so a run's token cannot read it.
+MIRROR_RECEIVERS="catalog_opm library opm-operator cli"
+
+# mirror_stale_text <receiver> <path> <have> <want>: the refusal both checks
+# print. <have> is a sha256 or "missing".
+mirror_stale_text() {
+  printf 'the .github mirror of %s is stale: %s on its main has sha256 %s, the mirror was written from %s; update the mirror and mirror_sources in wiring/lib.sh, then move the .github pin' \
+    "$1" "$2" "$3" "$4"
 }
 
 # --- tokens and repo code -----------------------------------------------------

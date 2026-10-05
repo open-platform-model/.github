@@ -276,6 +276,12 @@ expect "tag-on-main: the opm catalog's opm- prefix" 0 "" -- "$R" tag-on-main opm
 check "tag-on-main: catalog_opm, opm-v4.6.0" bash -c '
   grep -qF "https://github.com/open-platform-model/catalog_opm " "$1" && grep -q "^git fetch .*+refs/tags/opm-v4.6.0:refs/tags/opm-v4.6.0$" "$1"' _ "$FX/git.log"
 new_fx
+expect "tag-on-main: the operator module's opm_operator- prefix" 0 "" -- "$R" tag-on-main opmodel.dev/modules/opm_operator@v0 v0.1.0
+check "tag-on-main: opm-operator, opm_operator-v0.1.0" bash -c '
+  grep -qF "https://github.com/open-platform-model/opm-operator " "$1" && grep -q "^git fetch .*+refs/tags/opm_operator-v0.1.0:refs/tags/opm_operator-v0.1.0$" "$1"' _ "$FX/git.log"
+echo opm_operator-v0.2.0 >"$FX/git/opm-operator.offmain"
+expect "tag-on-main: an operator module tag off main" 3 "" -- "$R" tag-on-main opmodel.dev/modules/opm_operator@v0 v0.2.0
+new_fx
 expect "tag-on-main: a pin with no tag source" 0 "" -- "$R" tag-on-main example.com/mod v0.2.0
 check "tag-on-main: no clone for it" bash -c '! grep -q "^git clone" "$1/git.log" 2>/dev/null' _ "$FX"
 expect "tag-on-main: a malformed version is usage" 2 "" "is not a v-prefixed SemVer version" -- "$R" tag-on-main "$LIB" 1.2

@@ -1,0 +1,38 @@
+name: cascade-mirror-drift
+
+# Daily: each cascade receiver's .tasks/cascade/pins.sh, the lib.sh it
+# sources and classes on main still have the sha256 the publish mirrors in
+# wiring/lib.sh were written from (mirror_sources). Publish refuses a stale
+# mirror on its own; this run makes the drift visible within a day, before a
+# live cascade run hits it. Read-only, never a required check.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cascade-mirror-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Mirror drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare the receivers' mirrored files with the recorded sha256
+        env:
+          # The run's read-only token; the receivers are public repos.
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/cascade/wiring/mirror-drift.sh

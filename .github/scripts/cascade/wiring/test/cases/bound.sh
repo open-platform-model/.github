@@ -46,6 +46,94 @@ bound_refuses() {
   check "bound: refuses $1" bash -c '[ "$1" = 1 ] && [[ $2 == *"$3"* ]] && [ ! -e "$4/plan.json" ]' _ "$RC" "$ERR" "$2" "$PV"
 }
 
+# --- a stale mirror ----------------------------------------------------------------
+# mirror_sha <path>: the sha256 of the file on origin's main.
+mirror_sha() { git --git-dir="$ORIGIN" show "main:$1" | sha256sum | cut -c1-64; }
+SBX_PINS_SHA=70791e2e9c6124a01bdddfd5647c9e5fde6283109c2ff61bd082efd619b51147
+SBX_CLASSES_SHA=921a950ca5ad36fa5a4fc0802d4dd8d2d915633c04fc22bbfd0976b60e2d19f7
+planned_push
+check "mirror: the toy's pins.sh is the sandbox's, as recorded" test "$(mirror_sha .tasks/cascade/pins.sh)" = "$SBX_PINS_SHA"
+check "mirror: the toy's classes is the sandbox's, as recorded" test "$(mirror_sha .tasks/cascade/classes)" = "$SBX_CLASSES_SHA"
+# The bot's commit also touches a denied path: the mirror refusal must come first.
+printf '# planted\n' >>"$WS/repo/.tasks/cascade/pins.sh"
+as_bot commit -q -a --amend --no-edit
+replan
+seed_commit main human .tasks/cascade/pins.sh "# a pins.sh the mirror does not copy" "pins: changed on main"
+bound_refuses "a pins.sh on main the mirror was not written from" \
+  "the .github mirror of cascade-sandbox-down is stale: .tasks/cascade/pins.sh on its main has sha256 $(mirror_sha .tasks/cascade/pins.sh), the mirror was written from $SBX_PINS_SHA"
+check "mirror: the stale-mirror refusal comes before the path checks" bash -c '[[ $1 != *"never writes"* ]] && ! grep -q publish=true "$2"' _ "$ERR" "$GITHUB_OUTPUT"
+
+planned_push
+git -C "$SEED" checkout -q main
+git -C "$SEED" pull -q origin main
+git -C "$SEED" rm -q .tasks/cascade/classes
+git -C "$SEED" commit -q -m "classes: removed on main"
+git -C "$SEED" push -q origin main
+bound_refuses "a classes file gone from main" \
+  "the .github mirror of cascade-sandbox-down is stale: .tasks/cascade/classes on its main has sha256 missing, the mirror was written from $SBX_CLASSES_SHA"
+
+planned_push
+seed_commit main human README.md "unrelated" "docs: unrelated change on main"
+publish_job
+gh_reset_p
+gh_prs '[]'
+publish verify
+check "mirror: an unrelated change on main passes the mirror check" bash -c '[ "$1" = 0 ] && [[ $2 == "plan verified: push" ]]' _ "$RC" "$OUT"
+
+# close, conflict and too_long never read the mirror: a stale one must not
+# keep a stale PR open. Each plan is computed first, then main's pins.sh moves.
+# stale_pins_on_main: main's pins.sh gains a comment line, so its sha256
+# differs from the recorded one while it still reports the same row.
+stale_pins_on_main() {
+  seed_commit main human .tasks/cascade/pins.sh \
+    "$(git --git-dir="$ORIGIN" show main:.tasks/cascade/pins.sh)"$'\n# moved' "pins: changed on main"
+}
+# verify_stale <action> <live PR json>: verify passes the computed plan.
+verify_stale() {
+  check "mirror: the fixture planned $1" test "$(plan .action)" = "$1"
+  stale_pins_on_main
+  check "mirror: main's pins.sh is not the recorded one" test "$(mirror_sha .tasks/cascade/pins.sh)" != "$SBX_PINS_SHA"
+  publish_job
+  gh_reset_p
+  gh_prs "$2"
+  publish verify
+  check "mirror: a stale mirror does not refuse $1" bash -c '[ "$1" = 0 ] && [[ $2 == "plan verified: $3" ]]' _ "$RC" "$OUT" "$1"
+}
+
+new_fx; mk_toy
+bot_branch v0.2.0
+body_with "fix(deps): bump up to v0.2.0" ""
+PR=$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/body.in")
+seed_commit main human UPSTREAM_VERSION v0.2.0 "fix(deps): bumped by hand"
+fresh_checkout
+printf 'v0.2.0\n' >"$TOY_TARGET"
+gh_prs "[$PR]"
+compute "${COMPUTE_STEPS[@]}"
+verify_stale close "[$PR]"
+
+new_fx; mk_toy
+seed_commit main human README.md "main" "docs: main"
+seed_commit deps/cascade human README.md "branch" "docs: branch"
+body_with "fix(deps): x" ""
+PR=$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/body.in" deps-cascade)
+seed_commit main human README.md "main 2" "docs: main 2"
+fresh_checkout
+gh_prs "[$PR]"
+compute "${COMPUTE_STEPS[@]}"
+verify_stale conflict "[$PR]"
+
+new_fx; mk_toy
+bot_branch v0.2.0
+head -c 70000 /dev/zero | tr '\0' 'n' >"$FX/big"
+body_with "fix(deps): bump up to v0.2.0" "$(cat "$FX/big")"
+PR=$(pr_json 5 "fix(deps): bump up to v0.2.0" "$FX/body.in")
+fresh_checkout
+printf 'v0.3.0\n' >"$TOY_TARGET"
+gh_prs "[$PR]"
+gh_fx 0 "$(printf '%s' "$NO_BREAK")" -- "${REL_ARGS[@]}"
+compute "${COMPUTE_STEPS[@]}"
+verify_stale too_long "[$PR]"
+
 # --- the increment ---------------------------------------------------------------
 planned_push
 printf '# planted\n' >>"$WS/repo/.tasks/cascade/pins.sh"
@@ -320,12 +408,14 @@ ok_paths opm-operator go.mod go.sum .opm-cli-version config/samples/opmodel.dev_
   test/fixtures/modules/hello/moduleinstance.yaml test/fixtures/catalogs/provider/identity/identity.cue \
   test/fixtures/catalogs/provider/cue.mod/module.cue test/fixtures/modulepackages/hello/cue.mod/module.cue
 no_paths opm-operator Dockerfile Makefile config/samples/other.yaml test/fixtures/modules/hello/main.cue \
-  test/fixtures/modules/a/b/identity/identity.cue hack/boilerplate.go.txt internal/x.go Taskfile.yml
-ok_paths cli go.mod go.sum internal/operator/manifest.go internal/operator/dist/install.yaml hack/kind-platform.yaml \
+  test/fixtures/modules/a/b/identity/identity.cue hack/boilerplate.go.txt internal/x.go Taskfile.yml \
+  modules/opm_operator/cue.mod/module.cue modules/opm_operator/identity/identity.cue
+ok_paths cli go.mod go.sum internal/operator/pin.go hack/kind-platform.yaml \
   hack/platform/cue.mod/module.cue templates/minimal/cue.mod/module.cue templates/advanced/identity/identity.cue \
   tests/fixtures/modules/podinfo/identity/identity.cue tests/e2e/testdata/operator-owned/cue.mod/module.cue \
   internal/workflow/render/testdata/skip-unprovided/cue.mod/module.cue examples/cue.mod/module.cue
 no_paths cli hack/docskit-dump/main.go hack/platform/main.cue hack/other/cue.mod/module.cue internal/operator/install.go \
+  internal/operator/manifest.go internal/operator/dist/install.yaml hack/operator-pin/main.go \
   .opm-cli-version Taskfile.yml .github/scripts/release-pin-check.sh tests/fixtures/modules/other/identity/identity.cue
 ok_paths cascade-sandbox-down UPSTREAM_VERSION fixtures/data.txt
 no_paths cascade-sandbox-down README.md .github/workflows/touch.yml
@@ -365,10 +455,16 @@ mirror_repo "$D"
 expect "mirror: opm-operator" 0 $'github.com/open-platform-model/library\tlibrary\tshipped\tv1.0.0-beta.4\t\nopmodel.dev/catalogs/opm@v4\topm catalog\ttest\tv4.6.0\t\nopmodel.dev/core@v2\tcore\ttest\tv2.0.0-beta.2\t\ngithub.com/open-platform-model/cli\topm CLI\trelease-tool\tv1.0.0-beta.9\t' -- mirror opm-operator
 rm -rf "$D"; mkdir -p "$D/internal/operator" "$D/templates/minimal/cue.mod"
 printf 'module x\n\nrequire (\n\tgithub.com/open-platform-model/library v1.0.0-beta.4\n)\n' >"$D/go.mod"
-printf 'package operator\n\nconst PinnedOperatorVersion = "v1.0.0-beta.3"\n' >"$D/internal/operator/manifest.go"
+printf '// Code generated by task operator:pin; DO NOT EDIT.\n\npackage operator\n\nconst PinnedModuleVersion = "0.1.0"\n\nconst PinnedOperatorVersion = "v1.0.0-beta.8"\n' >"$D/internal/operator/pin.go"
 printf 'deps: {\n\t"opmodel.dev/catalogs/opm@v4": {\n\t\tv: "v4.6.0"\n\t}\n\t"opmodel.dev/core@v2": {\n\t\tv: "v2.0.0-beta.2"\n\t}\n}\n' >"$D/templates/minimal/cue.mod/module.cue"
 mirror_repo "$D"
-expect "mirror: cli" 0 $'github.com/open-platform-model/library\tlibrary\tshipped\tv1.0.0-beta.4\t\ngithub.com/open-platform-model/opm-operator\topm-operator\tshipped\tv1.0.0-beta.3\t\nopmodel.dev/catalogs/opm@v4\topm catalog\tshipped\tv4.6.0\t\nopmodel.dev/core@v2\tcore\tshipped\tv2.0.0-beta.2\t' -- mirror cli
+expect "mirror: cli" 0 $'github.com/open-platform-model/library\tlibrary\tshipped\tv1.0.0-beta.4\t\ngithub.com/open-platform-model/opm-operator\topm-operator\tshipped\tv1.0.0-beta.8\t\nopmodel.dev/modules/opm_operator@v0\topm-operator module\tshipped\tv0.1.0\t\nopmodel.dev/catalogs/opm@v4\topm catalog\tshipped\tv4.6.0\t\nopmodel.dev/core@v2\tcore\tshipped\tv2.0.0-beta.2\t' -- mirror cli
+# cli's module pin moves: the report at each commit follows pin.go.
+sed -i 's/PinnedModuleVersion = "0.1.0"/PinnedModuleVersion = "0.2.0"/' "$FX/mirror/internal/operator/pin.go"
+git -C "$FX/mirror" commit -q -a -m "module 0.2.0"
+check "mirror: cli's module pin moves from v0.1.0 to v0.2.0" bash -c '
+  [ "$(grep "^opmodel.dev/modules/opm_operator@v0	" <<<"$1" | cut -f4)" = v0.1.0 ] &&
+  [ "$(grep "^opmodel.dev/modules/opm_operator@v0	" <<<"$2" | cut -f4)" = v0.2.0 ]' _ "$(mirror cli HEAD~1)" "$(mirror cli HEAD)"
 printf 'not-a-version\n' >"$FX/mirror/.opm-cli-version"
 expect "mirror: reads git, not the disk" 0 "$(mirror cli)" -- mirror cli HEAD
 expect "mirror: an unknown receiver" 1 "" "not a cascade receiver" -- mirror core
