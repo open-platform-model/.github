@@ -96,8 +96,9 @@ in the receiver's allowlist and `tags` is an array of 1 to 8 strings each matchi
 for that source; unknown keys SHALL be ignored. A `source` or tag holding a control character
 (U+0000 to U+001F or U+007F) SHALL make the payload invalid, and each tag SHALL be matched whole,
 so a tag with a trailing newline is refused. Allowlists: `catalog_opm` accepts `core`, `cli`;
-`library` accepts `core`, `catalog_opm`; `opm-operator` accepts `catalog_opm`, `library`, `cli`;
-`cli` accepts `catalog_opm`, `library`, `opm-operator`; `cascade-sandbox-down` accepts
+`library` accepts `core`, `catalog_opm`; `opm-operator` and `opm-controller` (its name after the
+rename) accept `catalog_opm`, `library`, `cli`; `cli` accepts `catalog_opm`, `library`,
+`opm-operator`, `opm-controller`; `cascade-sandbox-down` accepts
 `cascade-sandbox-up`. A receiver outside this list SHALL fail with "not a cascade receiver". A
 valid payload SHALL set `CASCADE_SOURCE`, `CASCADE_TAGS` and one `CASCADE_EXPECT` pair built from
 the last tag (`catalog_opm` tags lose their `opm-` prefix). An invalid payload SHALL be dropped
@@ -120,6 +121,11 @@ itself, with the same validation, never from `compute`.
 
 - **WHEN** the payload for cli is `{"source":"library","tags":["v1.0.0\n","v1.0.1"]}`
 - **THEN** the whole payload is dropped and the run continues as a sweep
+
+#### Scenario: The renamed repo's release reaches cli
+
+- **WHEN** cli receives `{"source":"opm-controller","tags":["v1.0.0-beta.9"]}`
+- **THEN** the payload is valid and `CASCADE_EXPECT` is `github.com/open-platform-model/opm-controller=v1.0.0-beta.9`
 
 ### Requirement: The cascade PR is the bot's own same-repo PR
 
@@ -147,7 +153,8 @@ branch named `deps/cascade` SHALL never be read, edited or closed.
 
 `fresh`, `rebuild` and `recreate` SHALL start from `origin/main`. `merge` SHALL check out
 `origin/deps/cascade` and run `git merge --no-edit origin/main`: when only derived files conflict
-(`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/operator/pin.go`), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let
+(`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/operator/pin.go` or, after cli's
+rename, `internal/controller/pin.go`), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let
 the task regenerate them; any other conflict SHALL abort the merge and give mode `conflict` with
 the conflicting paths. The bot SHALL never rebase and never drop a human commit.
 
@@ -381,8 +388,9 @@ carrying the second parent's content. The allow-lists SHALL live in `.github` (`
 keyed by the receiver, never read from the receiver's tree. The deny-list SHALL be `.github/**`,
 `.tasks/**`, any `Taskfile*`, `hack/**` (except cli's `hack/kind-platform.yaml` and
 `hack/platform/cue.mod/module.cue`), `*.sh`, any `CODEOWNERS`, `release-please-config.json`,
-`.release-please-manifest.json`, `.cascade-frozen`, `.cascade-hold` and, for opm-operator,
-`modules/**` (its operator module moves only through its own `module-deps.yml`), and SHALL win
+`.release-please-manifest.json`, `.cascade-frozen`, `.cascade-hold` and, for opm-operator
+under either of its names (`opm-controller` after the rename), `modules/**` (its module moves
+only through its own `module-deps.yml`), and SHALL win
 over the allow-list. When a `push` does not contain the old tip and `origin/main..old` holds a commit the
 bot did not make, `publish` SHALL refuse; it SHALL refuse a `recreate` whenever `origin/main..old`
 holds such a commit, since `recreate` rebuilds the branch on `main`; `close` SHALL then keep the
@@ -435,10 +443,16 @@ fails, so a forged tag is refused even when `compute` skipped the resolver.
 
 - **WHEN** cli's task commit changes `internal/operator/pin.go`
 - **THEN** `publish` accepts the path, and refuses `internal/operator/manifest.go` or `internal/operator/dist/install.yaml`
+- **AND** it accepts `internal/controller/pin.go`, the same file after cli's rename
 
 #### Scenario: opm-operator's module
 
 - **WHEN** an opm-operator bot commit changes `modules/opm_operator/cue.mod/module.cue`
+- **THEN** `publish` refuses it, although any other `cue.mod/module.cue` is allowed
+
+#### Scenario: The renamed repo's module
+
+- **WHEN** an `opm-controller` bot commit changes `modules/opm_controller/cue.mod/module.cue`
 - **THEN** `publish` refuses it, although any other `cue.mod/module.cue` is allowed
 
 ### Requirement: Publish renders the PR text
@@ -476,9 +490,13 @@ bounds the increment, and before any token exists, read each recorded file on th
 missing there, with one message naming the receiver, the path, the sha256 found (or `missing`)
 and the recorded sha256. `close`, `conflict` and `too_long` SHALL NOT be refused for a stale
 mirror. The mirror of each receiver's `pins.sh` SHALL report the same rows as that receiver's
-own `pins.sh` on its `main`: for cli, the library, the operator release and the operator module
-(`opmodel.dev/modules/opm_operator@v0`, from `internal/operator/pin.go`), the opm catalog and
-core.
+own `pins.sh` on its `main`: for cli, the library, the controller release and the controller
+module (`github.com/open-platform-model/opm-controller` and
+`opmodel.dev/modules/opm_controller@v0`, from `PinnedControllerVersion` and
+`PinnedModuleVersion` in `internal/controller/pin.go`; before cli's rename
+`github.com/open-platform-model/opm-operator` and `opmodel.dev/modules/opm_operator@v0` from
+`internal/operator/pin.go`), the opm catalog and core. `opm-controller` SHALL have the same
+recorded files and hashes as `opm-operator` until the renamed repo's own change to them.
 
 #### Scenario: pins.sh changed on main
 
@@ -509,3 +527,8 @@ core.
 
 - **WHEN** cli's `internal/operator/pin.go` moves `PinnedModuleVersion` from `0.1.0` to `0.2.0`
 - **THEN** the mirrored pin report shows `opmodel.dev/modules/opm_operator@v0` moving from `v0.1.0` to `v0.2.0`, as cli's own `pins.sh` does
+
+#### Scenario: cli's pin file after its rename
+
+- **WHEN** cli's `main` holds `internal/controller/pin.go` with `PinnedControllerVersion = "v1.0.0-beta.9"` and `PinnedModuleVersion = "0.2.0"`
+- **THEN** the mirrored pin report has the rows `github.com/open-platform-model/opm-controller` (`opm-controller`, `v1.0.0-beta.9`) and `opmodel.dev/modules/opm_controller@v0` (`opm-controller module`, `v0.2.0`)
