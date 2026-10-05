@@ -164,7 +164,7 @@ for f in "$WORKFLOWS"/*.yml; do
   check "static: $n names the version after every SHA" bash -c '
     ! grep -nE "^ *(- )?uses:" "$1" | grep -vE "uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]"' _ "$f"
 done
-check "static: CODEOWNERS names the owners of /.github/" grep -qxE '/\.github/ +@emil-jacero @orvis98' "$ORG_ROOT/.github/CODEOWNERS"
+check "static: CODEOWNERS names the owners of /.github/" grep -qxE '/\.github/ +@emil-jacero' "$ORG_ROOT/.github/CODEOWNERS"
 check "static: Dependabot keeps this repo's action SHAs moving, with a cooldown" bash -c '
   [ "$(yq -r ".updates[] | select(.\"package-ecosystem\" == \"github-actions\") | .cooldown.\"default-days\" > 0" "$1")" = true ]' _ "$ORG_ROOT/.github/dependabot.yml"
 check "static: CI installs the Task version compute installs" bash -c '
