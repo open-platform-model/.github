@@ -177,6 +177,8 @@ changelog_source() {
     opmodel.dev/catalogs/opm@v4) echo "catalog_opm opm-" ;;
     github.com/open-platform-model/library) echo "library " ;;
     github.com/open-platform-model/opm-operator) echo "opm-operator " ;;
+    # The operator module, released from opm-operator on its own train.
+    opmodel.dev/modules/opm_operator@v0) echo "opm-operator opm_operator-" ;;
     github.com/open-platform-model/cli) echo "cli " ;;
     github.com/open-platform-model/cascade-sandbox-up) echo "cascade-sandbox-up " ;;
     *) return 1 ;;
@@ -231,18 +233,19 @@ label_description() {
 is_bot_label() { [[ " $BOT_LABELS " == *" $1 "* ]]; }
 
 # is_derived_path <path>: a merge conflict here takes main's side and the
-# task regenerates the file.
+# task regenerates the file. internal/operator/pin.go is the cli's operator
+# module pin, which its task rewrites with hack/operator-pin.
 is_derived_path() {
-  case "${1##*/}" in go.mod | go.sum | manifest.go) return 0 ;; esac
-  case "$1" in cue.mod/module.cue | */cue.mod/module.cue | internal/operator/dist/install.yaml) return 0 ;; esac
+  case "${1##*/}" in go.mod | go.sum) return 0 ;; esac
+  case "$1" in cue.mod/module.cue | */cue.mod/module.cue | internal/operator/pin.go) return 0 ;; esac
   return 1
 }
 
 # --- what publish accepts from compute ----------------------------------------
 # The bot's own commits may change only the files the receiver's task writes.
 # The lists are read from each receiver's .tasks/cascade/cascade.sh on main
-# (catalog_opm 3288406, library 93a892f, opm-operator 6a14adb, cli 5f00930,
-# 2026-10-04) and live here, never in the receiver's tree, because publish
+# (catalog_opm 0560990, library ca7c56b, opm-operator 53ccaab, cli bd4d1a7c,
+# 2026-10-05) and live here, never in the receiver's tree, because publish
 # trusts only this SHA-pinned code. A receiver whose task starts writing
 # another file needs this list changed, and its pin moved, first.
 
@@ -262,7 +265,7 @@ publish_paths() {
         '^test/fixtures/modules/[^/]+/moduleinstance\.yaml$'
       ;;
     cli)
-      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/operator/(manifest\.go|dist/install\.yaml)$' \
+      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/operator/pin\.go$' \
         '^hack/kind-platform\.yaml$' '^(templates/[^/]+|tests/fixtures/modules/podinfo)/identity/identity\.cue$'
       ;;
     cascade-sandbox-down) printf '%s\n' '^UPSTREAM_VERSION$' '^fixtures/' ;;
@@ -274,9 +277,12 @@ publish_paths() {
 # change, whatever publish_paths says: workflow and action code, the task
 # code, scripts, code owners, the release configs and the steering files.
 # cli's two hack/ data files (the kind Platform and its catalog pins) are the
-# only exception; hack/ holds Go programs and scripts otherwise.
+# only exception; hack/ holds Go programs and scripts otherwise. opm-operator's
+# operator module (modules/) moves through its own module/deps publisher,
+# never through deps:cascade, whose repo scope leaves it alone.
 publish_denied() {
   case "$1:$2" in cli:hack/kind-platform.yaml | cli:hack/platform/cue.mod/module.cue) return 1 ;; esac
+  case "$1:$2" in opm-operator:modules/*) return 0 ;; esac
   case "$2" in .github/* | .tasks/* | hack/* | *.sh | release-please-config.json | .release-please-manifest.json) return 0 ;; esac
   case "${2##*/}" in Taskfile* | CODEOWNERS | .cascade-frozen | .cascade-hold) return 0 ;; esac
   return 1
@@ -395,7 +401,7 @@ pins_opm_operator() {
 }
 
 pins_cli() {
-  local ref="$1" f
+  local ref="$1" f mv
   # cli_row KEY DISPLAY VERSION: as the cli's row(), empty is no row.
   cli_row() {
     [ -n "$3" ] || return 0
@@ -413,9 +419,13 @@ pins_cli() {
     cli_row github.com/open-platform-model/library library \
       "$(awk -v m=github.com/open-platform-model/library '$1 == m {print $2; exit}' <<<"$f")"
   fi
-  if f=$(pin_blob "$ref" internal/operator/manifest.go); then
+  # The operator module pin and the operator release it deploys, both from
+  # internal/operator/pin.go; the module version is bare there.
+  if f=$(pin_blob "$ref" internal/operator/pin.go); then
     cli_row github.com/open-platform-model/opm-operator opm-operator \
       "$(sed -n 's/^const PinnedOperatorVersion = "\(.*\)"$/\1/p' <<<"$f")"
+    mv=$(sed -n 's/^const PinnedModuleVersion = "\(.*\)"$/\1/p' <<<"$f")
+    cli_row opmodel.dev/modules/opm_operator@v0 "opm-operator module" "${mv:+v$mv}"
   fi
   if f=$(pin_blob "$ref" templates/minimal/cue.mod/module.cue); then
     cli_row opmodel.dev/catalogs/opm@v4 "opm catalog" "$(cli_dep opmodel.dev/catalogs/opm@v4 <<<"$f")"

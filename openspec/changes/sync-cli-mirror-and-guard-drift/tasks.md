@@ -7,10 +7,10 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 1. The mirrors follow the receivers' main
 
-- [ ] 1.1 `lib.sh`: `publish_paths cli` allows `internal/operator/pin.go` instead of `manifest.go` and `dist/install.yaml`; `pins_cli` reads `pin.go` and prints the operator and operator module rows; `is_derived_path` takes `internal/operator/pin.go` and drops the deleted files; `changelog_source` maps the module pin; `publish_denied` refuses opm-operator's `modules/**`; the read commits in the comment (D1, D2)
-- [ ] 1.2 Cases: the cli mirror reports the module row; cli's allow-list takes `pin.go` and refuses the deleted files and `hack/operator-pin`; opm-operator refuses `modules/opm_operator/**`; derived paths; the module's changelog source
-- [ ] 1.3 Proof outside the suite (recorded in the PR body): each receiver's real `pins.sh` against the mirror on its last 150 `main` commits; `classes` against `receiver_classes`; each receiver's own cascade suite from `origin/main` with its sandboxes kept, every changed path through `publish_path_ok`
-- [ ] 1.4 Gates green, then commit `fix(cascade): follow cli's operator module pin in the publish mirror`
+- [x] 1.1 `lib.sh`: `publish_paths cli` allows `internal/operator/pin.go` instead of `manifest.go` and `dist/install.yaml`; `pins_cli` reads `pin.go` and prints the operator and operator module rows; `is_derived_path` takes `internal/operator/pin.go` and drops the deleted files; `changelog_source` maps the module pin; `publish_denied` refuses opm-operator's `modules/**`; the read commits in the comment (D1, D2)
+- [x] 1.2 Cases: the cli mirror reports the module row; cli's allow-list takes `pin.go` and refuses the deleted files and `hack/operator-pin`; opm-operator refuses `modules/opm_operator/**`; derived paths; the module's changelog source
+- [x] 1.3 Proof outside the suite (recorded in the PR body): each receiver's real `pins.sh` against the mirror on its last 150 `main` commits; `classes` against `receiver_classes`; each receiver's own cascade suite from `origin/main` with its sandboxes kept, every changed path through `publish_path_ok`
+- [x] 1.4 Gates green, then commit `fix(cascade): follow cli's operator module pin in the publish mirror`
 
 ## 2. Publish refuses a stale mirror
 

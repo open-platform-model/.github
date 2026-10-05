@@ -40,14 +40,17 @@ expect "map: expect pair for library" 0 "github.com/open-platform-model/library=
 expect "map: expect pair for the sandbox" 0 "github.com/open-platform-model/cascade-sandbox-up=v0.2.0" -- in_lib expect_pair cascade-sandbox-up v0.2.0
 expect "map: changelog source of the catalog pin" 0 "catalog_opm opm-" -- in_lib changelog_source opmodel.dev/catalogs/opm@v4
 expect "map: a third-party pin has no changelog source" 1 "" -- in_lib changelog_source cue.dev/x/k8s.io@v0
+expect "map: changelog source of the operator module pin" 0 "opm-operator opm_operator-" -- in_lib changelog_source opmodel.dev/modules/opm_operator@v0
 expect "map: only the sandbox receiver widens the sources" 0 "cascade-sandbox-up|" -- bash -c '. "$1"; printf "%s|%s" "$(extra_sources cascade-sandbox-down)" "$(extra_sources cli)"' _ "$WIRING/lib.sh"
 check "map: the five bot labels have colours and descriptions" bash -c '
   . "$1"; for l in $BOT_LABELS; do label_color "$l" >/dev/null && label_description "$l" >/dev/null || exit 1; done
   ! label_color e2e-verified' _ "$WIRING/lib.sh"
-for p in go.mod sub/go.sum cue.mod/module.cue src/x/cue.mod/module.cue internal/operator/dist/install.yaml pkg/manifest.go; do
+for p in go.mod sub/go.sum cue.mod/module.cue src/x/cue.mod/module.cue internal/operator/pin.go; do
   check "derived path: $p" in_lib is_derived_path "$p"
 done
-check "derived path: README.md is not derived" bash -c '. "$1"; ! is_derived_path README.md && ! is_derived_path x/install.yaml' _ "$WIRING/lib.sh"
+for p in README.md x/install.yaml internal/operator/manifest.go internal/operator/dist/install.yaml x/internal/operator/pin.go; do
+  check "derived path: $p is not derived" bash -c '. "$1"; ! is_derived_path "$2"' _ "$WIRING/lib.sh" "$p"
+done
 
 # --- payload ------------------------------------------------------------------
 pv() { # pv <receiver> <json>: prints rc|source|tags|expect|reason
