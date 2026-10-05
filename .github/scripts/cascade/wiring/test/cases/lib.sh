@@ -90,6 +90,8 @@ pv() { # pv <receiver> <json>: prints rc|source|tags|expect|reason
 }
 expect "payload: one valid tag" 0 "0|library|v1.0.0-beta.4|github.com/open-platform-model/library=v1.0.0-beta.4|" -- \
   pv cli '{"source":"library","tags":["v1.0.0-beta.4"]}'
+expect "payload: the renamed repo's release reaches cli" 0 "0|opm-controller|v1.0.0-beta.9|github.com/open-platform-model/opm-controller=v1.0.0-beta.9|" -- \
+  pv cli '{"source":"opm-controller","tags":["v1.0.0-beta.9"]}'
 expect "payload: eight tags, expect from the last" 0 "0|core|v2.0.1 v2.0.2 v2.0.3 v2.0.4 v2.0.5 v2.0.6 v2.0.7 v2.0.8|opmodel.dev/core@v2=v2.0.8|" -- \
   pv library '{"source":"core","tags":["v2.0.1","v2.0.2","v2.0.3","v2.0.4","v2.0.5","v2.0.6","v2.0.7","v2.0.8"]}'
 expect "payload: nine tags dropped" 0 "1||||tags is not an array of 1 to 8 strings" -- \

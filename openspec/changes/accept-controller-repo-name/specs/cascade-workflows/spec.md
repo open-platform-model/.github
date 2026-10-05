@@ -3,7 +3,8 @@
 ### Requirement: The renamed controller repo answers to both names
 
 While the repo `opm-operator` is renamed `opm-controller`, every fixed map in `wiring/lib.sh`
-keyed by a receiver or a source SHALL give `opm-operator` and `opm-controller` the same answer,
+keyed by a receiver or a source SHALL give `opm-operator` and `opm-controller` the same answer
+(`expect_pair` differing only in the repo name it prints),
 so a run of the renamed repo works at a pinned `.github` commit on both sides of the GitHub
 rename. A value that names a repo GitHub must find (the target lists of `notify_targets`, which
 set the App token's `repositories:`, and the upstreams G3 reads through the API) SHALL keep
