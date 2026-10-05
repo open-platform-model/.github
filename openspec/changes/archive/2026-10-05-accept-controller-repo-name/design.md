@@ -50,7 +50,10 @@ renamed `pins.sh` MUST print, since they become PR titles) and falls back to
 ### D5: What stays out
 
 `MIRROR_RECEIVERS` and tag-ledger `REPOS` read the repo by name on `.github` `main` (not pinned);
-`opm-controller` 404s before the rename, so both flip in `retire-operator-repo-name`.
+`opm-controller` 404s before the rename, so neither can name it here. `REPOS` flips in
+`scan-controller-in-tag-ledger`, merged right after the rename (after it the ruleset listing of
+the old name answers 301 and fails every ledger run); `MIRROR_RECEIVERS` flips in
+`retire-operator-repo-name`.
 `wiring-check.sh` (comments only) is byte-copied into five repos; editing it now would add a copy
 re-sync to every pin PR of this round.
 

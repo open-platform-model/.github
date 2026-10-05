@@ -43,7 +43,8 @@ names and drops the old ones.
 - **README:** a paragraph on the rename window and the two allow-list rows.
 
 Not in this change: any receiver repo, the GitHub rename, rulesets or repo settings, and the
-flip of the lists named above (owner steps and `retire-operator-repo-name`).
+flip of the lists named above (owner steps; tag-ledger `REPOS` in `scan-controller-in-tag-ledger`
+right after the rename, the rest in `retire-operator-repo-name`).
 
 ## Capabilities
 
