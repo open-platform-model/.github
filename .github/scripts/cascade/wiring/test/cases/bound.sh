@@ -46,6 +46,40 @@ bound_refuses() {
   check "bound: refuses $1" bash -c '[ "$1" = 1 ] && [[ $2 == *"$3"* ]] && [ ! -e "$4/plan.json" ]' _ "$RC" "$ERR" "$2" "$PV"
 }
 
+# --- a stale mirror ----------------------------------------------------------------
+# mirror_sha <path>: the sha256 of the file on origin's main.
+mirror_sha() { git --git-dir="$ORIGIN" show "main:$1" | sha256sum | cut -c1-64; }
+SBX_PINS_SHA=70791e2e9c6124a01bdddfd5647c9e5fde6283109c2ff61bd082efd619b51147
+SBX_CLASSES_SHA=921a950ca5ad36fa5a4fc0802d4dd8d2d915633c04fc22bbfd0976b60e2d19f7
+planned_push
+check "mirror: the toy's pins.sh is the sandbox's, as recorded" test "$(mirror_sha .tasks/cascade/pins.sh)" = "$SBX_PINS_SHA"
+check "mirror: the toy's classes is the sandbox's, as recorded" test "$(mirror_sha .tasks/cascade/classes)" = "$SBX_CLASSES_SHA"
+# The bot's commit also touches a denied path: the mirror refusal must come first.
+printf '# planted\n' >>"$WS/repo/.tasks/cascade/pins.sh"
+as_bot commit -q -a --amend --no-edit
+replan
+seed_commit main human .tasks/cascade/pins.sh "# a pins.sh the mirror does not copy" "pins: changed on main"
+bound_refuses "a pins.sh on main the mirror was not written from" \
+  "the .github mirror of cascade-sandbox-down is stale: .tasks/cascade/pins.sh on its main has sha256 $(mirror_sha .tasks/cascade/pins.sh), the mirror was written from $SBX_PINS_SHA"
+check "mirror: the stale-mirror refusal comes before the path checks" bash -c '[[ $1 != *"never writes"* ]] && ! grep -q publish=true "$2"' _ "$ERR" "$GITHUB_OUTPUT"
+
+planned_push
+git -C "$SEED" checkout -q main
+git -C "$SEED" pull -q origin main
+git -C "$SEED" rm -q .tasks/cascade/classes
+git -C "$SEED" commit -q -m "classes: removed on main"
+git -C "$SEED" push -q origin main
+bound_refuses "a classes file gone from main" \
+  "the .github mirror of cascade-sandbox-down is stale: .tasks/cascade/classes on its main has sha256 missing, the mirror was written from $SBX_CLASSES_SHA"
+
+planned_push
+seed_commit main human README.md "unrelated" "docs: unrelated change on main"
+publish_job
+gh_reset_p
+gh_prs '[]'
+publish verify
+check "mirror: an unrelated change on main passes the mirror check" bash -c '[ "$1" = 0 ] && [[ $2 == "plan verified: push" ]]' _ "$RC" "$OUT"
+
 # --- the increment ---------------------------------------------------------------
 planned_push
 printf '# planted\n' >>"$WS/repo/.tasks/cascade/pins.sh"

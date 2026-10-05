@@ -452,6 +452,55 @@ receiver_pins() {
   esac
 }
 
+# --- the mirrors' sources -----------------------------------------------------
+# The receiver files the mirrors above copy, with the sha256 of the version on
+# main they were written from (same commits as above; the archived sandbox's
+# from its last main): pins.sh, the lib.sh it sources, and classes. publish
+# refuses a push or recreate when the receiver's main holds another version of
+# any of them (receive-publish.sh, check_mirror), and cascade-mirror-drift.yml
+# reports the drift daily. A receiver that changes one of these files needs
+# this table, the mirror and the .github pin moved together.
+
+# mirror_sources <receiver>: "<path> <sha256>" per mirrored file.
+mirror_sources() {
+  case "$1" in
+    catalog_opm)
+      printf '%s\n' '.tasks/cascade/pins.sh 264c6f70bf10629c93a3dc86df0f82aeaccbceb707d3ca21281021f46c16b8aa' \
+        '.tasks/cascade/classes 83e67ce0d82150b3847a13100ef36dab818a37338a6ba6b9c9e77f30cd5e24e1'
+      ;;
+    library)
+      printf '%s\n' '.tasks/cascade/pins.sh 4b18bf587622e5a06276e8f92d32ab5658494367f259e0ef50f5a024cfd84382' \
+        '.tasks/cascade/lib.sh 83cb4592f5e97e85e74c820e0efe1059486cf3d14def4814d6ed80de6f71bbd7' \
+        '.tasks/cascade/classes e9c3926e0f2b7324e4d9770b553ecac24df39273813eb33cf60716ef43f54c10'
+      ;;
+    opm-operator)
+      printf '%s\n' '.tasks/cascade/pins.sh 3ec912b5736303f1a74dc6d457e4edae7bc3868129a839ddd3fc7c82068e3825' \
+        '.tasks/cascade/lib.sh d72bca993a94d836cb91959b869fdeba5a0d9043a1263af0ecef7135d0f3b7aa' \
+        '.tasks/cascade/classes d761876b3bafc8078207f8aae04b5beb2da1c8a821cd529e4ebba2af16f1ba40'
+      ;;
+    cli)
+      printf '%s\n' '.tasks/cascade/pins.sh 3c3f50ed302da918627a89459de330b1e18c7d449d0b748db90fc36f029ae3e1' \
+        '.tasks/cascade/classes 4a0a74ffea8d3415b2edcb634ab143a7d84011bc7da0eecf39f3d66536d0e528'
+      ;;
+    cascade-sandbox-down)
+      printf '%s\n' '.tasks/cascade/pins.sh 70791e2e9c6124a01bdddfd5647c9e5fde6283109c2ff61bd082efd619b51147' \
+        '.tasks/cascade/classes 921a950ca5ad36fa5a4fc0802d4dd8d2d915633c04fc22bbfd0976b60e2d19f7'
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# The receivers cascade-mirror-drift.yml reads: every product receiver. The
+# sandbox is archived and private, so a run's token cannot read it.
+MIRROR_RECEIVERS="catalog_opm library opm-operator cli"
+
+# mirror_stale_text <receiver> <path> <have> <want>: the refusal both checks
+# print. <have> is a sha256 or "missing".
+mirror_stale_text() {
+  printf 'the .github mirror of %s is stale: %s on its main has sha256 %s, the mirror was written from %s; update the mirror and mirror_sources in wiring/lib.sh, then move the .github pin' \
+    "$1" "$2" "$3" "$4"
+}
+
 # --- tokens and repo code -----------------------------------------------------
 
 # run_repo_code <command...>: runs code from the calling repo (its tasks, its

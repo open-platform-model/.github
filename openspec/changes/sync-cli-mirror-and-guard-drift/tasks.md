@@ -14,10 +14,10 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 2. Publish refuses a stale mirror
 
-- [ ] 2.1 `lib.sh`: `mirror_sources` with the sha256 of each receiver's `pins.sh`, `lib.sh` (library, opm-operator) and `classes` on `main`, `MIRROR_RECEIVERS`, `mirror_stale_text` (D3)
-- [ ] 2.2 `receive-publish.sh`: `check_mirror` first in `push` and `recreate`, against `origin/main`; header comment (D3)
-- [ ] 2.3 Test toy: the sandbox's own `pins.sh` byte for byte; the labelled toy `pins.sh` committed by the one compute case that needs it; cases: a changed `pins.sh` on main refuses with both hashes and before the path checks, a removed `classes` refuses with `missing`, an unrelated change on main passes, every receiver records its files
-- [ ] 2.4 Gates green, then commit `fix(cascade): refuse a stale publish mirror`
+- [x] 2.1 `lib.sh`: `mirror_sources` with the sha256 of each receiver's `pins.sh`, `lib.sh` (library, opm-operator) and `classes` on `main`, `MIRROR_RECEIVERS`, `mirror_stale_text` (D3)
+- [x] 2.2 `receive-publish.sh`: `check_mirror` first in `push` and `recreate`, against `origin/main`; header comment (D3)
+- [x] 2.3 Test toy: the sandbox's own `pins.sh` byte for byte; the labelled toy `pins.sh` committed by the one compute case that needs it; cases: a changed `pins.sh` on main refuses with both hashes and before the path checks, a removed `classes` refuses with `missing`, an unrelated change on main passes, every receiver records its files
+- [x] 2.4 Gates green, then commit `fix(cascade): refuse a stale publish mirror`
 
 ## 3. The daily drift check
 

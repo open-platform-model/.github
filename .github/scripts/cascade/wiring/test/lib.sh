@@ -213,18 +213,27 @@ tasks:
     cmds:
       - '"$CASCADE_RESOLVER" body --classes .tasks/cascade/classes --pins .tasks/cascade/pins.sh'
 YAML
+  # The archived sandbox's own pins.sh, byte for byte: publish refuses unless
+  # its sha256 is the one mirror_sources records for cascade-sandbox-down.
   cat >"$d/.tasks/cascade/pins.sh" <<'SH'
 #!/usr/bin/env bash
+# Reports the sandbox's one upstream pin at a ref (Phase 2 cascade contract
+# section 4.1). Usage: pins.sh WORKTREE|<git ref>. Exit 0, or 1 on error.
 set -euo pipefail
+die() { printf 'pins.sh: %s\n' "$1" >&2; exit 1; }
+[ $# -eq 1 ] || die "usage: pins.sh WORKTREE|<git ref>"
 ref="$1"
 cd "$(git rev-parse --show-toplevel)"
 if [ "$ref" = WORKTREE ]; then
   [ -f UPSTREAM_VERSION ] || exit 0
   v=$(cat UPSTREAM_VERSION)
 else
-  v=$(git show "$ref:UPSTREAM_VERSION" 2>/dev/null) || exit 0
+  git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "unknown ref: $ref"
+  [ -n "$(git ls-tree --name-only "$ref" -- UPSTREAM_VERSION)" ] || exit 0
+  v=$(git show "$ref:UPSTREAM_VERSION")
 fi
-printf '%s\t%s\t%s\t%s\t%s\n' github.com/open-platform-model/cascade-sandbox-up up shipped "$v" "${TOY_LABELS:-}"
+[[ $v =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "UPSTREAM_VERSION at $ref is not vX.Y.Z: $v"
+printf '%s\t%s\t%s\t%s\t%s\n' github.com/open-platform-model/cascade-sandbox-up up shipped "$v" ""
 SH
   cat >"$d/.tasks/cascade/cascade.sh" <<'SH'
 #!/usr/bin/env bash
@@ -251,6 +260,21 @@ exit 0
 SH
   chmod +x "$d/.tasks/cascade/pins.sh" "$d/.tasks/cascade/cascade.sh"
 }
+
+# TOY_LABEL_PINS: a toy pins.sh whose row carries $TOY_LABELS, for the
+# compute cases that need a pin label; a case commits it to main itself.
+# shellcheck disable=SC2016 # the script text is literal
+TOY_LABEL_PINS='#!/usr/bin/env bash
+set -euo pipefail
+ref="$1"
+cd "$(git rev-parse --show-toplevel)"
+if [ "$ref" = WORKTREE ]; then
+  [ -f UPSTREAM_VERSION ] || exit 0
+  v=$(cat UPSTREAM_VERSION)
+else
+  v=$(git show "$ref:UPSTREAM_VERSION" 2>/dev/null) || exit 0
+fi
+printf "%s\t%s\t%s\t%s\t%s\n" github.com/open-platform-model/cascade-sandbox-up up shipped "$v" "${TOY_LABELS:-}"'
 
 # mk_toy: a bare origin with the toy on main, a seed clone for "human" and
 # "bot" pushes ($SEED), and the job's checkout at $WS/repo. Sets ORIGIN,
