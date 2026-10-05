@@ -39,7 +39,8 @@ A hash read from a PR head can differ from the squash merge. The `mirror_sources
 `opm-controller` and `cli` MUST be computed from `origin/main` of each repo after its rename PR
 merged, with `git show origin/main:.tasks/cascade/<file> | sha256sum`, and the read commits
 written into the comment above `publish_paths` and the README's "Keeping the mirrors in step".
-Until then the entries carry the pre-rename hashes and a `TODO(cutover)` comment; the change is
+Until then the entries carry the pre-rename hashes and `TODO(cutover)` comments (both arms and
+the `publish_paths` comment); the change is
 not archived before they are recorded.
 
 ### D4: cli is the canary

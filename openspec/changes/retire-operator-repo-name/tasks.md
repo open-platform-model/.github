@@ -24,6 +24,6 @@ archive only after it.
 
 ## 4. Mirror hashes from the merged mains (cutover)
 
-- [ ] 4.1 After the opm-controller and cli rename PRs merge: `git show origin/main:.tasks/cascade/<file> | sha256sum` for opm-controller's `pins.sh`, `lib.sh`, `classes`, `cascade.sh` and cli's `pins.sh`, `classes`, `cascade.sh`; write them into `mirror_sources`, drop both `TODO(cutover)` comments, and record the two read commits (short SHAs) in the `publish_paths` comment and the README's "Keeping the mirrors in step"
+- [ ] 4.1 After the opm-controller and cli rename PRs merge: `git show origin/main:.tasks/cascade/<file> | sha256sum` for opm-controller's `pins.sh`, `lib.sh`, `classes`, `cascade.sh` and cli's `pins.sh`, `classes`, `cascade.sh`; write them into `mirror_sources`, drop the three `TODO(cutover)` comments (`wiring/lib.sh`: the `publish_paths` comment and the `opm-controller` and `cli` arms of `mirror_sources`), and record the two read commits (short SHAs) in the `publish_paths` comment and the README's "Keeping the mirrors in step"
 - [ ] 4.2 Check the cli mirror against cli's real `pins.sh` on its merged main (`CASCADE_PINS_REPO=cli bash .github/scripts/cascade/wiring/pins.sh origin/main` against `.tasks/cascade/pins.sh origin/main` in a cli checkout), and the opm-controller mirror likewise
-- [ ] 4.3 Gates green, then commit `fix(cascade): record the renamed receivers' mirror hashes`
+- [ ] 4.3 `! git grep -n 'TODO(cutover)' -- .github README.md` (no comment left), gates green, then commit `fix(cascade): record the renamed receivers' mirror hashes`
