@@ -16,7 +16,7 @@ release notes, which re-render mentions.
 What the squash commit carries depends on the repo's merge settings. Repos that
 squash with `squash_merge_commit_message: COMMIT_MESSAGES` put the branch commit
 messages into its body. The releasing repos (core, catalog_opm, library,
-opm-operator, cli, opm, docs-kit, modules, opm-portal) and this repo squash only,
+opm-controller, cli, opm, docs-kit, modules, opm-portal) and this repo squash only,
 with a `PR_TITLE` title and a `BLANK` body, so only the PR title reaches `main`
 there (the
 [workspace `RELEASING.md` "Owner settings"](https://github.com/open-platform-model/workspace/blob/main/RELEASING.md#owner-settings)).
@@ -208,7 +208,7 @@ only). Versions are always `v`-prefixed SemVer.
 for every pin whose versions are tags of an org repo (`go
 github.com/open-platform-model/<repo>`, `release`, `opm-cli`, and the `cue`
 modules `opmodel.dev/core`, `opmodel.dev/catalogs/opm`, whose tags are `opm-v*`, and
-`opmodel.dev/modules/opm_operator`, whose tags are opm-operator's `opm_operator-v*`). A tag made on a commit `main` never had (the release App can create
+`opmodel.dev/modules/opm_controller`, whose tags are opm-controller's `opm_controller-v*`). A tag made on a commit `main` never had (the release App can create
 one) is still served by the Go proxy and listed by git, so `newest` clones the
 repo once per run, bare and without trees, fetches each probed tag and skips,
 with a warning, one whose commit is not an ancestor of `main`. `tag-on-main
@@ -272,22 +272,6 @@ and action to a full commit SHA (owner decision 24 for the actions, extended to 
 Every job's and every action's first step, `Guard`, derives the repo name from
 `GITHUB_REPOSITORY` and refuses a repo outside `open-platform-model`.
 
-**The opm-operator rename.** The repo `opm-operator` is being renamed `opm-controller`. Since
-the name comes from `GITHUB_REPOSITORY`, it flips the moment GitHub renames the repo, whatever
-`.github` commit the caller pins, and every map in `lib.sh` fails closed on a name it does not
-know. Until the rename is done, every map keyed by a receiver or a source therefore accepts both
-names with the same values: `notify_targets`, `receiver_sources`, `g3_upstreams`, `publish_paths`,
-`publish_denied`, `receiver_classes`, `receiver_pins`, `mirror_sources`, `changelog_repos`,
-`expect_pair`, `changelog_source` (and the resolver's `tag_source`, both module trains
-`opm_operator-v*` and `opm_controller-v*`), the resolver's accepted body sources, and cli's pin
-file (`internal/operator/pin.go` or `internal/controller/pin.go`). Two lists keep the old name
-only, because they name a repo GitHub must find: the target lists of `notify_targets` (they set
-the App token's `repositories:`, and a name that does not exist fails the mint for every target)
-and cli's `g3_upstreams` (read by API). A later `.github` change flips those, drops the old name
-and records the renamed repos' new mirror hashes once the rename has merged.
-`MIRROR_RECEIVERS` (read by the drift run from `.github` `main`, unpinned) and tag-ledger
-`REPOS` also keep `opm-operator` only; each flips in its own change after the rename.
-
 **Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (`main`'s, on
 `main` merged with `deps/cascade`), the new dependency code those tasks build or run, and, for
 G2, the task of every open `release-please--*` head; any write collaborator can push to either
@@ -334,7 +318,7 @@ verify`) bounds the push and writes the PR text itself:
   `main`'s content. A deny-list always wins: `.github/**`, `.tasks/**`, any `Taskfile*`,
   `hack/**` (but cli's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), any
   `*.sh`, any `CODEOWNERS`, the release-please files, `.cascade-frozen` and `.cascade-hold`,
-  and opm-operator's `modules/**` (its operator module moves only through `module-deps.yml`).
+  and opm-controller's `modules/**` (its controller module moves only through `module-deps.yml`).
 - *Human commits.* A push that does not contain the old tip is refused when the old branch holds
   a commit the bot did not make, a `recreate` over such a branch is refused, and `close` keeps
   such a branch.
@@ -352,18 +336,18 @@ verify`) bounds the push and writes the PR text itself:
 | --- | --- |
 | catalog_opm | `.opm-cli-version` |
 | library | `opm/schema/loader.go`, `docs/getting-started.md`, `AGENTS.md` |
-| opm-operator (also as opm-controller) | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
-| cli | `go.mod`, `go.sum`, `internal/operator/pin.go` or `internal/controller/pin.go`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
+| opm-controller | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
+| cli | `go.mod`, `go.sum`, `internal/controller/pin.go`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
 
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
 receiver's `.tasks/cascade/` on its `main` (read 2026-10-05: catalog_opm `0560990`, library
-`ca7c56b`, opm-operator `53ccaab`, cli `bd4d1a7c`). `mirror_sources` in `wiring/lib.sh` records
+`ca7c56b`, opm-controller `53ccaab`, cli `bd4d1a7c`). `mirror_sources` in `wiring/lib.sh` records
 the sha256 of every receiver file the mirrors copy or were read from: `pins.sh`, the `lib.sh` it
-sources (library, opm-operator), `classes`, and the `cascade.sh` each allow-list was read from.
+sources (library, opm-controller), `classes`, and the `cascade.sh` each allow-list was read from.
 For a push or recreate, `publish` first reads those files on the receiver's `origin/main` and
 refuses, naming the receiver, the file and both hashes, when one differs, so a stale pin mirror
 or a stale allow-list stops the run before it renders a body or judges a path. Code that
-`cascade.sh` only runs (cli's `hack/operator-pin`, a Taskfile task) is not hashed: when a change
+`cascade.sh` only runs (cli's `hack/controller-pin`, a Taskfile task) is not hashed: when a change
 there makes the task write a new path, publish still refuses that path as one the task never
 writes, and the allow-list needs the same update. [`cascade-mirror-drift.yml`](.github/workflows/cascade-mirror-drift.yml)
 runs the same comparison daily (`wiring/mirror-drift.sh`, read-only, with the run's own token)
@@ -385,10 +369,10 @@ sandboxes kept and pass every changed path through `publish_path_ok`.
   code still runs in that `main`-ref run: `hack/` programs and scripts the task calls and the
   `go.mod` toolchain line. Anyone who can push to `deps/cascade` gets this, the same class as
   G2, and the cache sink is closed the same way.
-- A receiver's own publisher outside `cascade-receive.yml` and `cascade-publish` (opm-operator's
+- A receiver's own publisher outside `cascade-receive.yml` and `cascade-publish` (opm-controller's
   `module-deps.yml`, `task deps:cascade:module`, since `4b981c6`) gets only its own repo's
-  bounds. Since opm-operator PR 225 its `publish` job runs in the `release` Environment and
-  takes only plain files under `modules/opm_operator/` from `compute`'s artifact, but the PR
+  bounds. Since opm-controller PR 225 its `publish` job runs in the `release` Environment and
+  takes only plain files under `modules/opm_controller/` from `compute`'s artifact, but the PR
   title and body still come from `compute`, and its tools are not pinned here. Routing it through
   these workflows needs its own mirror entries.
 - `main` requires a pull request but no approval while OPM is in beta (owner decision 36), so a
@@ -415,7 +399,7 @@ by branch). The
 `ref:` of the `open-platform-model/.github` checkout in each receiver's `cascade-task.yml` (the CI
 job that tests the repo's `deps:cascade` task against the resolver; core has none) carries the
 same SHA, so CI tests
-the resolver the receiver runs. Any other checkout of `.github` a repo needs (opm-operator's
+the resolver the receiver runs. Any other checkout of `.github` a repo needs (opm-controller's
 `module-deps.yml`) is declared in its wiring config and carries the same SHA too. A repo uses one
 SHA in all these references. The scripts come
 from that same commit: the two actions run them from their own directory (`GITHUB_ACTION_PATH`),
@@ -436,7 +420,7 @@ reference on its own. To roll a change out:
    --jq .status` must print `identical` or `ahead`. This repo is squash-only, so a branch commit
    left behind by the merge prints `diverged`, and it deletes the PR branch on merge, so pin the
    squash SHA, never a branch commit.
-2. Dry run: the dry-run checks in one receiver (catalog_opm, library, opm-operator or cli; core
+2. Dry run: the dry-run checks in one receiver (catalog_opm, library, opm-controller or cli; core
    has no receiver). Set that repo's variable `CASCADE_DRY_RUN` to `true` if it is not
    already, noting the old value; open and merge its pin PR as in steps 3 and 4; run
    `gh workflow run deps-cascade.yml -R open-platform-model/<receiver>` and check the run succeeds,
@@ -485,14 +469,14 @@ reference on its own. To roll a change out:
      first live publish run and its first live notify run on the new pin have succeeded.
 
    Watch every first live run on the new pin and roll back if one fails.
-3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
+3. In each of the other repos among core, catalog_opm, library, opm-controller and cli, open one
    PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
    every cascade reference and the copy of the wiring check (below) and changes nothing else,
    unless the `.github` change altered an input or a caller shape, in which case the caller edit
    and the `.tasks/cascade/wiring-check.yaml` edit ride the same PR. Find them with
    `grep -rn -A1 'open-platform-model/.github' .github/workflows`: the `uses:` lines and the
    `repository:` line of the `cascade-task.yml` checkout, whose `ref:` the `-A1` prints on the
-   next line (comment lines also match and need no change); opm-operator's `module-deps.yml`
+   next line (comment lines also match and need no change); opm-controller's `module-deps.yml`
    has a second such checkout, declared in its config's `extra-references`. All of a repo's
    cascade references carry the same SHA. Before the PR is opened, `bash
    .tasks/cascade/wiring-check.sh --pin-on-main` passes (the shapes, then the `compare` check of
@@ -596,12 +580,12 @@ reusable-workflow call) is a change here, never a config entry. Each repo's valu
 | core | `false` | `CUE_VERSION`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | (none) |
 | catalog_opm | `true` | `OPM_REGISTRY`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | `false` |
 | library | `true` | (none) | `release.yml`, `docs.yml` | `test.yml`, `test` | `release-please` | `false` |
-| opm-operator | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `release.yml`, `publish-fixtures.yml`, `docs.yml`, `image-pr.yml`, `test-e2e.yml`, `module-image.yml`, `module-deps.yml` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
+| opm-controller | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `release.yml`, `publish-fixtures.yml`, `docs.yml`, `image-pr.yml`, `test-e2e.yml`, `module-image.yml`, `module-deps.yml` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
 | cli | `true` | (none) | `release.yml`, `publish-fixtures.yml`, `docs.yml` | `pr.yml`, `lint` | `release-please`, `goreleaser` | `true` |
 
 `pin-comment` is `.github main` everywhere; `notify.if` and `notify.tag` are each repo's own
-`release.yml` values. Only opm-operator sets `extra-references`, for the resolver checkout in
-`module-deps.yml` (the operator module's own dependency bot, job `compute`):
+`release.yml` values. Only opm-controller sets `extra-references`, for the resolver checkout in
+`module-deps.yml` (the controller module's own dependency bot, job `compute`):
 `extra-references: [{file: module-deps.yml, kind: resolver}]`. catalog_opm's file, for example:
 
 ```yaml
@@ -692,7 +676,7 @@ and never bypass them.
           private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
 ```
 
-**Receiver caller** (`deps-cascade.yml` in catalog_opm, library, opm-operator and cli):
+**Receiver caller** (`deps-cascade.yml` in catalog_opm, library, opm-controller and cli):
 
 ```yaml
 name: Deps cascade
@@ -779,7 +763,7 @@ reports `action: gates-only` and `compute-ok: false` for such a run, from its in
 relies on that. The `publish` job's `if:` repeats the switches only
 so a dry run does not start a `cascade` Environment job; it reads them itself, not from the
 reusable job that ran repo code. `cascade-publish` also refuses any ref but `main` and a plan
-marked as a dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-operator, cli);
+marked as a dry run. `setup-go: true` installs Go from `repo/go.mod` (opm-controller, cli);
 `labels-managed: true` (cli, an input of `cascade-publish`) only checks that the five cascade labels exist instead of
 creating them; `setup-cue` (default true) and `cue-version` (default `v0.17.1`, and only a version
 whose sha256 `wiring/install-tools.sh` holds) install CUE.

@@ -19,8 +19,8 @@ archive only after it.
 
 ## 3. README
 
-- [ ] 3.1 Every repo, module and path name; the rename-window paragraph removed
-- [ ] 3.2 Gates green, then commit `docs(cascade): name opm-controller in the README`
+- [x] 3.1 Every repo, module and path name; the rename-window paragraph removed
+- [x] 3.2 Gates green, then commit `docs(cascade): name opm-controller in the README`
 
 ## 4. Mirror hashes from the merged mains (cutover)
 
