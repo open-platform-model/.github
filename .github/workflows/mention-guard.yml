@@ -11,7 +11,7 @@ name: mention-guard
 #      COMMIT_OR_PR_TITLE, a one-commit PR's subject) and, in repos that
 #      squash with squash_merge_commit_message: COMMIT_MESSAGES, the branch
 #      commit messages.
-#      The release repos (core, catalog_opm, library, opm-operator, cli, opm)
+#      The release repos (core, catalog_opm, library, opm-controller, cli, opm)
 #      move to BLANK, title only, once the owner applies workspace RELEASING.md
 #      "Owner settings"; until then they squash with COMMIT_MESSAGES too.
 #      release-please copies commit text into changelogs and GitHub release

@@ -14,8 +14,8 @@ archive only after it.
 
 ## 2. Workflows and the canonical wiring check
 
-- [ ] 2.1 `tag-ledger.yml` `REPOS` scans `opm-controller` (D2); the `mention-guard.yml` comment; the two `wiring-check.sh` comments (D5) and the wiring-check case fixture `Controller module deps`
-- [ ] 2.2 Gates green, then commit `ci(tag-ledger): scan opm-controller in place of opm-operator`
+- [x] 2.1 The two `wiring-check.sh` comments (D5), the wiring-check case fixture `Controller module deps` and the `mention-guard.yml` comment name `opm-controller`. `tag-ledger.yml` `REPOS` and the README tag-ledger scope are not in this change: they belong to `scan-controller-in-tag-ledger` (D2), and no commit here touches them
+- [x] 2.2 Gates green, then commit `ci(cascade): name opm-controller in the wiring-check and mention-guard comments`
 
 ## 3. README
 

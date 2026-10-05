@@ -3,7 +3,7 @@
 # workflows with the shapes the open-platform-model/.github README documents
 # for the commit this file comes from. Canonical copy:
 # open-platform-model/.github .github/scripts/cascade/wiring-check.sh. Each of
-# core, catalog_opm, library, opm-operator and cli keeps a byte-identical copy
+# core, catalog_opm, library, opm-controller and cli keeps a byte-identical copy
 # at .tasks/cascade/wiring-check.sh, taken from the .github commit its cascade
 # references pin, plus its own values in .tasks/cascade/wiring-check.yaml.
 #
@@ -139,7 +139,7 @@ else
 fi
 
 # More .github references the repo declares, one item each. The only kind is
-# resolver, a checkout of .github (opm-operator's module-deps.yml); each
+# resolver, a checkout of .github (opm-controller's module-deps.yml); each
 # declared one is held to the fixed references' rules below. Only a receiver
 # declares one, at most one per file, and never in a file that already holds
 # a fixed reference (a second resolver beside cascade-task.yml's, or a
