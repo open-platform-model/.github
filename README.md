@@ -426,7 +426,14 @@ reference on its own. To roll a change out:
    `cascade-notify` first meets real GitHub on the first live publish run or the first release
    of an upstream that pins it.
 
-   **Which repos move when** (owner decision 37). It depends on which action the diff touches:
+   **Which repos move when** (owner decision 37). It depends on which action the diff touches.
+   A diff touches an action when it changes any file that action runs: its `action.yml` and
+   every script it calls or sources, directly or through another script. Under
+   `.github/scripts/cascade/`, `cascade-notify` runs `wiring/notify.sh` and `wiring/lib.sh`;
+   `cascade-publish` runs `wiring/receive-publish.sh`, `wiring/lib.sh`, `wiring/pins.sh`,
+   `cascade-resolve.sh` and everything in `lib/`. So a change to `wiring/lib.sh` touches both,
+   and a change to the resolver or its `lib/` touches `cascade-publish`. When unsure, count the
+   file as touched.
 
    - **Neither `cascade-publish` nor `cascade-notify`:** no canary. All five repos may move
      together (steps 3 and 4), live or dry; the only requirement is the dry-run checks above in
@@ -434,20 +441,27 @@ reference on its own. To roll a change out:
    - **`cascade-publish` but not `cascade-notify`, every receiver dry-run** (none has
      `CASCADE_DRY_RUN` set to `false`): all five repos may move together too, with the dry-run
      checks in one receiver after its merge, because no receiver publishes. The canary is the
-     Phase 4 canary: the first receiver set live has the first live publish on the new pin, and
-     every other receiver stays dry until that run has succeeded.
+     Phase 4 canary, the first receiver whose `CASCADE_DRY_RUN` is set to `false` (Phase 4,
+     going live, is planned in the workspace's `RELEASING.md`, "Phases"): it has the first live
+     publish on the new pin, and every other receiver stays dry until that run has succeeded.
    - **`cascade-publish` but not `cascade-notify`, any receiver live:** one live receiver is the
      canary. It moves first and takes the dry-run checks above; every other receiver, live or
      dry, stays on the old pin until the canary's first live publish run on the new pin has
      succeeded.
-   - **`cascade-notify`:** a dry run does not help, because notify has no dry run: it runs live on
-     every release of an upstream, whatever `CASCADE_DRY_RUN` says. So one repo moves first, the
-     canary (a receiver, all four of which release and notify), and takes the dry-run checks
-     above; every other repo stays on the old pin until the canary's first live notify run on
-     the new pin, on its next release, has succeeded. This holds whether every receiver is dry
+   - **`cascade-notify` but not `cascade-publish`:** a dry run does not help, because notify has
+     no dry run: it runs live on every release of an upstream, whatever `CASCADE_DRY_RUN` says.
+     So one upstream (core or a receiver) moves first as the canary; every other repo stays on
+     the old pin until the canary's first live notify run on the new pin, on its next release,
+     has succeeded. A receiver canary takes the dry-run checks above; with core as the canary,
+     the first receiver to move after it takes them. This holds whether every receiver is dry
      or not.
+   - **Both actions:** the `cascade-notify` rule above holds, plus the publish rule for the
+     receivers' state. While every receiver is dry-run, every receiver but the Phase 4 canary
+     also stays dry until the canary's first live publish on the new pin has succeeded. Once any
+     receiver is live, the canary is a live receiver, and no other repo moves until both its
+     first live publish run and its first live notify run on the new pin have succeeded.
 
-   Watch each canary run and roll back (step 4) if it fails.
+   Watch every first live run on the new pin and roll back (step 4) if one fails.
 3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
    PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
    every cascade reference and the copy of the wiring check (below) and changes nothing else,
@@ -464,8 +478,8 @@ reference on its own. To roll a change out:
    `cascade wiring: ok, .github <SHA> (.github main)`: that step runs the same check with
    `--pin-on-main`, so it has also confirmed the SHA is on `.github`'s `main` and the copy is
    the file at that SHA. Otherwise the order does not matter, because a repo runs only its own
-   pin; the limits are step 2's rules for which repos wait after a `cascade-publish` or
-   `cascade-notify` change.
+   pin; the limits are step 2's rules for which repos wait after a change that touches
+   `cascade-publish` or `cascade-notify`.
    To roll back, move the pins back the same way (no canary needed for a SHA the repo
    already ran).
 

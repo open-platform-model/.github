@@ -4,10 +4,14 @@ The README's rollout steps ("Pinning and bumps", step 2) put one receiver's dry-
 every other pin bump, and kept the other repos on the old pin until one canary's first live run
 whenever a change touched `cascade-publish` or `cascade-notify`. The `6938f8e` rollout moved all
 five repos together and ran the dry-run checks afterwards (catalog_opm and library), opm-operator
-last (opm-operator PR 241). Its range, `.github` PRs 14 and 15, changed neither action's files,
-and every receiver is dry-run (`CASCADE_DRY_RUN` is not `false` anywhere), so nothing published.
+last (opm-operator PR 241). Its range, `.github` PRs 14 and 15, changed the resolver's
+`lib/common.sh` and `lib/release.sh`, which `cascade-publish` runs through `cascade-resolve.sh`,
+and no file `cascade-notify` runs; every receiver is dry-run (`CASCADE_DRY_RUN` is not `false`
+anywhere), so nothing published.
 The owner accepted this and asked for it to be written down (security pass, owner decision 37).
-The supervisor's ruling on decision 37 sets the rule:
+The supervisor's ruling on decision 37 sets the rule. A change touches an action when it changes
+any file that action runs: its `action.yml` and every script it calls or sources, directly or
+through another script.
 
 - A change that touches neither action has no canary: all five repos may move together, with
   the dry-run checks in one receiver after its merge.
@@ -16,9 +20,12 @@ The supervisor's ruling on decision 37 sets the rule:
   other receivers stay dry until it succeeds. Once any receiver is live, one live receiver is the
   canary and every other receiver stays on the old pin until its first live publish on the new
   pin succeeds.
-- A change that touches `cascade-notify`: a dry run does not help, because notify has no dry run,
-  so the old rule holds unchanged: one repo moves first, and the others stay on the old pin until
-  its first live notify on the new pin succeeds. No `CASCADE_NOTIFY=off` steps.
+- A change that touches `cascade-notify` but not `cascade-publish`: a dry run does not help,
+  because notify has no dry run, so the old rule holds unchanged: one upstream (core or a
+  receiver) moves first, and the others stay on the old pin until its first live notify on the
+  new pin succeeds. No `CASCADE_NOTIFY=off` steps.
+- A change that touches both actions follows both rules: once any receiver is live, the canary
+  is a live receiver, and the others wait for its first live publish and its first live notify.
 
 Other README text went stale in the same pass:
 
@@ -38,8 +45,9 @@ Other README text went stale in the same pass:
 
 ## What Changes
 
-- **README "Pinning and bumps".** Step 2 states the rule above, one bullet per case, and step
-  4's ordering note points at it. The tag-ledger scope names the six scanned repos of nine.
+- **README "Pinning and bumps".** Step 2 defines what touching an action means and states the
+  rule above, one bullet per case, and step 4's ordering note points at it. The tag-ledger
+  scope names the six scanned repos of nine.
 - **README wiring-check config table.** opm-operator's row lists its seven `publish-workflows`.
 - **README stale lines** listed under Why, and three entries added to "What stays open": no
   required review during the beta, one `opm-cascade` key shared by five repos (owner decision
