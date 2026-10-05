@@ -14,7 +14,7 @@ final mirror hashes, and leaves no `opm-operator` in `.github` outside the archi
 
 ## Decisions
 
-### D1: One round instead of B1, B2, the MIRROR_RECEIVERS PR and the tag-ledger cleanup
+### D1: One round instead of B1, B2 and the MIRROR_RECEIVERS PR
 
 The split rounds existed to shorten the freeze (flip right after the rename, hashes later). The
 owner merges everything in one sitting, so the freeze is that sitting. The hashes need the merged
@@ -23,13 +23,15 @@ lands together, after both rename PRs merge. `MIRROR_RECEIVERS` rides along: bet
 and this merge the drift run reads `opm-operator` through GitHub's redirect and goes red once
 the controller PR merges anyway; it is never required.
 
-### D2: tag-ledger REPOS flips, it does not hold both names
+### D2: tag-ledger REPOS is not in this change
 
 Before the rename, `git ls-remote` of `opm-controller` fails, which fails the whole run, so the
-new name cannot be added early. After the rename, a flip records the renamed repo's tags as new
-`opm-controller` rows and leaves the `opm-operator` rows untouched (the "Joining and leaving the
-scan" rule); the tags are the same objects, and `tags-immutable` forbids moving them. Holding
-both names for a while would only re-read one repo twice through the redirect.
+new name cannot be added early. After the rename, `git ls-remote` of `opm-operator` still follows
+GitHub's redirect, but `tag-ledger.sh` `api_get` calls `curl` without `-L`: the ruleset listing
+of the old name answers HTTP 301 and `check_ruleset` exits 3, so every ledger run fails until
+`REPOS` names the new repo. This change merges only after both rename PRs and their releases, so
+the flip cannot wait for it. It merges on its own as `scan-controller-in-tag-ledger`, right after
+the rename and unpinned (`tag-ledger.yml` runs from `.github` `main`).
 
 ### D3: Hashes from merged mains, at cutover
 

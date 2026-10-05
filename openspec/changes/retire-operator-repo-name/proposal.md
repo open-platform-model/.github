@@ -15,9 +15,12 @@ cannot do wait for the rename and the receivers' own rename PRs:
   traces).
 
 This change flips the cascade to `opm-controller` only. It replaces the earlier plan's three
-steps (a one-line `MIRROR_RECEIVERS` PR at the rename, a hash-neutral flip, then a hash round,
-and a later tag-ledger cleanup) with one merge and one pin round, since the owner runs the whole
-cutover in one sitting and the shorter freeze those splits bought does not matter there.
+cascade steps (a one-line `MIRROR_RECEIVERS` PR at the rename, a hash-neutral flip, then a hash
+round) with one merge and one pin round, since the owner runs the whole cutover in one sitting
+and the shorter freeze those splits bought does not matter there. The tag-ledger `REPOS` flip is
+not part of it: it merges on its own right after the rename (`scan-controller-in-tag-ledger`),
+because after the rename the ruleset listing of the old name answers HTTP 301 and fails every
+ledger run until `REPOS` names the new repo.
 
 ## What Changes
 
@@ -31,9 +34,8 @@ cutover in one sitting and the shorter freeze those splits bought does not matte
   `is_derived_path`).
 - **Resolver:** `tag_source` maps only `opmodel.dev/modules/opm_controller@vN`;
   `CASCADE_SOURCES` lists `opm-controller` only.
-- **Unpinned readers on `.github` main:** `MIRROR_RECEIVERS` and tag-ledger `REPOS` name
-  `opm-controller`. Both take effect at merge, with no pin. The ledger keeps its `opm-operator`
-  rows and records the same tags again under `opm-controller` on its next run (no finding).
+- **Unpinned reader on `.github` main:** `MIRROR_RECEIVERS` names `opm-controller`. It takes
+  effect at merge, with no pin.
 - **Mirror hashes (at cutover):** opm-controller's `pins.sh`, `lib.sh`, `classes`, `cascade.sh`
   and cli's `pins.sh`, `classes`, `cascade.sh`, read from their merged mains, and the read
   commits in the comment and README.
@@ -53,22 +55,23 @@ None.
 ### Modified Capabilities
 
 - `cascade-notify`, `cascade-receive`, `cascade-gates`, `cascade-pr-text`, `cascade-resolver`,
-  `cascade-wiring-check`, `cascade-workflows`, `tag-ledger`: `opm-controller` replaces
+  `cascade-wiring-check`, `cascade-workflows`: `opm-controller` replaces
   `opm-operator`; requirements whose scenarios were named after the old repo are retitled
   (REMOVED plus ADDED); the two-name requirement is removed.
 
 ## Impact
 
 - Scripts: `wiring/lib.sh`, `lib/release.sh`, `lib/prtext.sh`, `wiring-check.sh` (comments);
-  workflows `tag-ledger.yml` (`REPOS`), `mention-guard.yml` (comment); every test suite.
+  workflow `mention-guard.yml` (comment); every cascade test suite.
 - Callers: the five product repos run this code once their pin moves. The diff touches
   `wiring/lib.sh`, so both `cascade-notify` and `cascade-publish` (owner decision 37): canary
   first. **cli is the canary**: it needs this pin before its own release anyway (its target list
   names `opm-controller`), and that release's live notify mints a token for `catalog_opm
   opm-controller`, proving the new-name mint. After it succeeds: catalog_opm, library,
   opm-controller and core. Every pin PR also replaces `.tasks/cascade/wiring-check.sh`.
-- `cascade-mirror-drift.yml` and `tag-ledger.yml` change behaviour at merge (unpinned).
+- `cascade-mirror-drift.yml` changes behaviour at merge (unpinned).
 
 Depends on: `accept-controller-repo-name` merged and pinned in opm-operator and cli before the
-GitHub rename; the GitHub rename; the opm-controller rename PR and the cli rename PR merged
-(their merged mains give the hashes). Later: the cli release, then the downstream follow-ups.
+GitHub rename; the GitHub rename; `scan-controller-in-tag-ledger` (merged right after the
+rename); the opm-controller rename PR and the cli rename PR merged (their merged mains give the
+hashes). Later: the cli release, then the downstream follow-ups.
