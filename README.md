@@ -15,13 +15,13 @@ release notes, which re-render mentions.
 
 What the squash commit carries depends on the repo's merge settings. Repos that
 squash with `squash_merge_commit_message: COMMIT_MESSAGES` put the branch commit
-messages into its body. The release repos (core, catalog_opm, library,
-opm-operator, cli, opm) switch to `BLANK` with a `PR_TITLE` title once the owner
-applies the
-[workspace `RELEASING.md` "Owner settings"](https://github.com/open-platform-model/workspace/blob/main/RELEASING.md#owner-settings),
-so only the PR title reaches `main` there; until then they still squash with
-`COMMIT_MESSAGES`. Every other org repo stays on `COMMIT_MESSAGES`. That page is
-the source of truth for the settings; check it, or `gh api
+messages into its body. The releasing repos (core, catalog_opm, library,
+opm-operator, cli, opm, docs-kit, modules, opm-portal) and this repo squash only,
+with a `PR_TITLE` title and a `BLANK` body, so only the PR title reaches `main`
+there (the
+[workspace `RELEASING.md` "Owner settings"](https://github.com/open-platform-model/workspace/blob/main/RELEASING.md#owner-settings)).
+The other org repos still squash with `COMMIT_MESSAGES`. That page is the
+source of truth for the settings; check it, or `gh api
 repos/open-platform-model/<repo>`, rather than this paragraph.
 
 It fails the PR when it finds:
@@ -356,9 +356,17 @@ check a mirror, run the receiver's `pins.sh` and `CASCADE_PINS_REPO=<repo>
   `go.mod` toolchain line. Anyone who can push to `deps/cascade` gets this, the same class as
   G2, and the cache sink is closed the same way.
 - A receiver's own publisher outside `cascade-receive.yml` and `cascade-publish` (opm-operator's
-  `module-deps.yml`, `task deps:cascade:module`, since `4b981c6`) gets none of these bounds:
-  no allow-list, no rendered text, no pinned tools. It needs its own hardening in that repo or
-  a route through these workflows with its own mirror entries.
+  `module-deps.yml`, `task deps:cascade:module`, since `4b981c6`) gets only its own repo's
+  bounds. Since opm-operator PR 225 its `publish` job runs in the `release` Environment and
+  takes only plain files under `modules/opm_operator/` from `compute`'s artifact, but the PR
+  title and body still come from `compute`, and its tools are not pinned here. Routing it through
+  these workflows needs its own mirror entries.
+- `main` requires a pull request but no approval while OPM is in beta (owner decision 36), so a
+  write collaborator, or the `opm-cascade` bot, can merge a PR whose required checks pass
+  without anyone reviewing it, a change to `.tasks/cascade/` included.
+- One `opm-cascade` key sits in all five `cascade` Environments (owner decision 31): a leak
+  reaches every receiver at once. The workspace `RELEASING.md`, "Rotating the cascade App key",
+  is the response.
 - `compute` still chooses the action (push, close, conflict, too long). A hostile `compute` can
   stall or relabel its own receiver's cascade PR as conflicted, but cannot publish anything
   outside the bounds above.
@@ -371,7 +379,8 @@ workflows, because the receive workflow runs the scripts of its own commit, so a
 `main` with an action at a SHA would mix compute and publish script versions (the `plan.json`
 between them). Each caller names `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and
 `cascade-gates.yml` by the full 40-character SHA of a commit on this repo's `main`, never by a
-branch or tag (opm-operator's `sha_pinning_required` refuses an action named by branch). The
+branch or tag (every product repo has `sha_pinning_required` on, which refuses an action named
+by branch). The
 `ref:` of the `open-platform-model/.github` checkout in each receiver's `cascade-task.yml` (the CI
 job that tests the repo's `deps:cascade` task against the resolver; core has none) carries the
 same SHA, so CI tests
@@ -406,12 +415,21 @@ reference on its own. To roll a change out:
    `cascade/settled`, and that its `cascade-task.yml` (by `workflow_dispatch`) checks the
    resolver out at `<SHA>` and passes. Then set `CASCADE_DRY_RUN` back. A dry run skips
    `Publish` and notify runs only on a release, so a change to `cascade-publish` or
-   `cascade-notify` first meets real GitHub on the canary's next live run or the next release
-   of an upstream that pins it; watch that run and roll back (step 4) if it fails. **When the
-   diff touches `cascade-publish` or `cascade-notify`, the other repos stay on the old pin until
-   the canary's first live publish (or notify) run has succeeded**, so that first live run
-   happens in one repo only. A diff that touches neither goes on to step 3 after the dry-run
-   checks.
+   `cascade-notify` first meets real GitHub on the first live publish run or the first release
+   of an upstream that pins it.
+
+   **Which repos move next** (owner decision 37). While every receiver is dry-run (none has
+   `CASCADE_DRY_RUN` set to `false`), the other repos may move to the new pin together (step 3)
+   after the dry-run checks, whatever the diff touches, since none of them publishes. **When the
+   diff touches `cascade-publish` or `cascade-notify`, the first live publish (or notify) run on
+   the new pin happens in one repo only**, the canary (Phase 4: the first repo to go live),
+   and the others stay dry until that run has succeeded; watch it and roll back (step 4) if it
+   fails. Notify has no dry run: it runs on every release of an upstream whose `CASCADE_NOTIFY`
+   is not `off`, so for notify, staying dry means the other upstreams make no release, or have
+   `CASCADE_NOTIFY=off`, until the canary's first notify has succeeded. A receiver that is
+   already live when such a change arrives stays on the old pin until the canary's first live
+   run on the new pin has succeeded. A diff that touches neither action goes on to step 3 after
+   the dry-run checks, live or dry.
 3. In each of the other repos among core, catalog_opm, library, opm-operator and cli, open one
    PR titled `ci(deps): pin the cascade to .github <first 7 of the SHA>` that replaces the SHA in
    every cascade reference and the copy of the wiring check (below) and changes nothing else,
@@ -427,9 +445,10 @@ reference on its own. To roll a change out:
 4. Merge each after its CI is green and its "Verify the cascade wiring" step printed
    `cascade wiring: ok, .github <SHA> (.github main)`: that step runs the same check with
    `--pin-on-main`, so it has also confirmed the SHA is on `.github`'s `main` and the copy is
-   the file at that SHA. After the canary (its dry-run checks, or its first successful live run for a
-   `cascade-publish` or `cascade-notify` change, step 2) the order does not matter, because a
-   repo runs only its own pin. To roll back, move the pins back the same way (no canary needed for a SHA the repo
+   the file at that SHA. After the canary's dry-run checks the order does not matter, because a
+   repo runs only its own pin; the one limit is step 2's rule for the first live publish or
+   notify after a `cascade-publish` or `cascade-notify` change.
+   To roll back, move the pins back the same way (no canary needed for a SHA the repo
    already ran).
 
 **The wiring check.** One script,
@@ -522,7 +541,7 @@ reusable-workflow call) is a change here, never a config entry. Each repo's valu
 | core | `false` | `CUE_VERSION`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | (none) |
 | catalog_opm | `true` | `OPM_REGISTRY`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | `false` |
 | library | `true` | (none) | `release.yml`, `docs.yml` | `test.yml`, `test` | `release-please` | `false` |
-| opm-operator | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `release.yml`, `publish-fixtures.yml`, `docs.yml` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
+| opm-operator | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `release.yml`, `publish-fixtures.yml`, `docs.yml`, `image-pr.yml`, `test-e2e.yml`, `module-image.yml`, `module-deps.yml` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
 | cli | `true` | (none) | `release.yml`, `publish-fixtures.yml`, `docs.yml` | `pr.yml`, `lint` | `release-please`, `goreleaser` | `true` |
 
 `pin-comment` is `.github main` everywhere; `notify.if` and `notify.tag` are each repo's own
@@ -566,8 +585,10 @@ a container or service, a `run:` step before the wiring step), but an earlier SH
 can still set the step's environment through `GITHUB_ENV` or `GITHUB_PATH`, so a reviewer reads
 any change to the CI workflow, and to the copy, as a change to the check. The copy and the
 config live in the repo's own tree, so a PR can change them along with the workflows: the check
-guards against mistakes, and review (CODEOWNERS on `/.tasks/`) plus the `main` ruleset guard against a
-deliberate edit. Offline (`task cascade:wiring:check`) the copy is not compared, and the check
+guards against mistakes, and only review guards against a deliberate edit. CODEOWNERS on
+`/.tasks/` requests that review, but while OPM is in beta the `main` ruleset requires a pull
+request and no approval (owner decision 36), so nothing enforces it.
+Offline (`task cascade:wiring:check`) the copy is not compared, and the check
 says so.
 
 **When the wiring step's API call fails.** The required step makes two GitHub API requests (the
