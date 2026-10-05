@@ -7,10 +7,10 @@ archive only after it.
 
 ## 1. The cascade names opm-controller only
 
-- [ ] 1.1 `wiring/lib.sh`: flip the three target lists; `opm-controller` only in `receiver_sources`, `g3_upstreams`, `expect_pair`, `changelog_source`, `changelog_repos`, `publish_paths`, `publish_denied`, `receiver_classes`, `receiver_pins`, `mirror_sources`; drop `same_repo`; cli's pin file `internal/controller/pin.go` only; `MIRROR_RECEIVERS`
-- [ ] 1.2 `lib/release.sh` `tag_source` and `lib/prtext.sh` `CASCADE_SOURCES` drop the old name
-- [ ] 1.3 Cases follow; `git mv test/fixtures/git/opm-operator.refs test/fixtures/git/opm-controller.refs`; cli's e2e fixture path `tests/e2e/testdata/controller-owned`
-- [ ] 1.4 Gates green, then commit `refactor(cascade)!: name opm-controller only in the cascade maps`
+- [x] 1.1 `wiring/lib.sh`: flip the three target lists; `opm-controller` only in `receiver_sources`, `g3_upstreams`, `expect_pair`, `changelog_source`, `changelog_repos`, `publish_paths`, `publish_denied`, `receiver_classes`, `receiver_pins`, `mirror_sources`; drop `same_repo`; cli's pin file `internal/controller/pin.go` only; `MIRROR_RECEIVERS`
+- [x] 1.2 `lib/release.sh` `tag_source` and `lib/prtext.sh` `CASCADE_SOURCES` drop the old name
+- [x] 1.3 Cases follow; `git mv test/fixtures/git/opm-operator.refs test/fixtures/git/opm-controller.refs`; cli's e2e fixture path `tests/e2e/testdata/controller-owned`
+- [x] 1.4 Gates green, then commit `refactor(cascade)!: name opm-controller only in the cascade maps`
 
 ## 2. Workflows and the canonical wiring check
 

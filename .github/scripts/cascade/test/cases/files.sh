@@ -71,7 +71,7 @@ cat >"$H/.cascade-hold" <<'EOF'
 holds:
   - pin: github.com/open-platform-model/library
     max: v1.0.0-beta.2
-    reason: "beta.3 breaks the operator build"
+    reason: "beta.3 breaks the controller build"
     expires: 2026-10-10
   - pin: opmodel.dev/core@v2
     max: v2.0.0-beta.1
