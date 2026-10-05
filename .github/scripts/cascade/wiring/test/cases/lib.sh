@@ -11,40 +11,52 @@ expect "map: core notifies catalog_opm and library" 0 "catalog_opm library" -- i
 expect "map: catalog_opm notifies library, opm-operator, cli" 0 "library opm-operator cli" -- in_lib notify_targets catalog_opm
 expect "map: library notifies opm-operator and cli" 0 "opm-operator cli" -- in_lib notify_targets library
 expect "map: opm-operator notifies cli" 0 "cli" -- in_lib notify_targets opm-operator
+expect "map: opm-controller, the renamed opm-operator, notifies cli" 0 "cli" -- in_lib notify_targets opm-controller
 expect "map: cli notifies catalog_opm and opm-operator" 0 "catalog_opm opm-operator" -- in_lib notify_targets cli
 expect "map: the sandbox up notifies the sandbox down" 0 "cascade-sandbox-down" -- in_lib notify_targets cascade-sandbox-up
 expect "map: a repo outside the notify map" 1 "" -- in_lib notify_targets modules
-expect "map: cli receives from catalog_opm, library, opm-operator" 0 "catalog_opm library opm-operator" -- in_lib receiver_sources cli
+expect "map: cli receives from catalog_opm, library, the controller repo under both names" 0 "catalog_opm library opm-operator opm-controller" -- in_lib receiver_sources cli
 expect "map: opm-operator receives from catalog_opm, library, cli" 0 "catalog_opm library cli" -- in_lib receiver_sources opm-operator
+expect "map: opm-controller receives from catalog_opm, library, cli" 0 "catalog_opm library cli" -- in_lib receiver_sources opm-controller
 expect "map: library receives from core and catalog_opm" 0 "core catalog_opm" -- in_lib receiver_sources library
 expect "map: catalog_opm receives from core and cli" 0 "core cli" -- in_lib receiver_sources catalog_opm
 expect "map: core is no receiver" 1 "" -- in_lib receiver_sources core
-expect "map: receivers invert the notify edges" 0 "" -- bash -c '
+expect "map: receivers invert the notify edges, either name of the renamed repo counting" 0 "" -- bash -c '
   . "$1"
-  for s in core catalog_opm library opm-operator cli cascade-sandbox-up; do
+  for s in core catalog_opm library opm-operator opm-controller cli cascade-sandbox-up; do
     for t in $(notify_targets "$s"); do
       [[ " $(receiver_sources "$t") " == *" $s "* ]] || { echo "$s -> $t missing"; exit 1; }
     done
   done
-  for r in catalog_opm library opm-operator cli cascade-sandbox-down; do
+  for r in catalog_opm library opm-operator opm-controller cli cascade-sandbox-down; do
     for s in $(receiver_sources "$r"); do
-      [[ " $(notify_targets "$s") " == *" $r "* ]] || { echo "$r <- $s missing"; exit 1; }
+      ok=1
+      for t in $(notify_targets "$s"); do same_repo "$t" "$r" && ok=0; done
+      [ "$ok" = 0 ] || { echo "$r <- $s missing"; exit 1; }
     done
   done' _ "$WIRING/lib.sh"
+check "map: same_repo pairs the two names of the renamed repo only" bash -c '
+  . "$1"
+  same_repo opm-operator opm-controller && same_repo opm-controller opm-operator && same_repo cli cli \
+    && ! same_repo cli library && ! same_repo opm-operator cli' _ "$WIRING/lib.sh"
 expect "map: G3 upstreams of cli skip nothing but the release-tool edge" 0 "catalog_opm library opm-operator" -- in_lib g3_upstreams cli
+expect "map: G3 upstreams of opm-controller" 0 "catalog_opm library" -- in_lib g3_upstreams opm-controller
 expect "map: G3 upstreams of library" 0 "core catalog_opm" -- in_lib g3_upstreams library
 expect "map: G3 upstreams of catalog_opm leave out cli" 0 "core" -- in_lib g3_upstreams catalog_opm
 expect "map: expect pair for a catalog tag drops opm-" 0 "opmodel.dev/catalogs/opm@v4=v4.5.1" -- in_lib expect_pair catalog_opm opm-v4.5.1
 expect "map: expect pair for core" 0 "opmodel.dev/core@v2=v2.0.0-beta.3" -- in_lib expect_pair core v2.0.0-beta.3
 expect "map: expect pair for library" 0 "github.com/open-platform-model/library=v1.0.0-beta.4" -- in_lib expect_pair library v1.0.0-beta.4
+expect "map: expect pair for opm-controller" 0 "github.com/open-platform-model/opm-controller=v1.0.0-beta.9" -- in_lib expect_pair opm-controller v1.0.0-beta.9
 expect "map: expect pair for the sandbox" 0 "github.com/open-platform-model/cascade-sandbox-up=v0.2.0" -- in_lib expect_pair cascade-sandbox-up v0.2.0
 expect "map: changelog source of the catalog pin" 0 "catalog_opm opm-" -- in_lib changelog_source opmodel.dev/catalogs/opm@v4
 expect "map: a third-party pin has no changelog source" 1 "" -- in_lib changelog_source cue.dev/x/k8s.io@v0
 expect "map: changelog source of the operator module pin" 0 "opm-operator opm_operator-" -- in_lib changelog_source opmodel.dev/modules/opm_operator@v0
+expect "map: changelog source of the controller module pin" 0 "opm-controller opm_controller-" -- in_lib changelog_source opmodel.dev/modules/opm_controller@v0
+expect "map: changelog source of the controller release pin" 0 "opm-controller " -- in_lib changelog_source github.com/open-platform-model/opm-controller
 expect "map: only the sandbox receiver widens the sources" 0 "cascade-sandbox-up|" -- bash -c '. "$1"; printf "%s|%s" "$(extra_sources cascade-sandbox-down)" "$(extra_sources cli)"' _ "$WIRING/lib.sh"
 check "map: every receiver records the sha256 of its pins.sh and classes" bash -c '
   . "$1"
-  for r in catalog_opm library opm-operator cli cascade-sandbox-down; do
+  for r in catalog_opm library opm-operator opm-controller cli cascade-sandbox-down; do
     receiver_classes "$r" >/dev/null || exit 1
     src=$(mirror_sources "$r") || exit 1
     grep -qx "\.tasks/cascade/pins\.sh [0-9a-f]\{64\}" <<<"$src" || exit 1
@@ -57,15 +69,18 @@ check "map: every product receiver records the cascade.sh its allow-list was rea
   for r in $MIRROR_RECEIVERS; do mirror_sources "$r" | grep -qx "\.tasks/cascade/cascade\.sh [0-9a-f]\{64\}" || exit 1; done
   ! mirror_sources cascade-sandbox-down | grep -q cascade\.sh' _ "$WIRING/lib.sh"
 check "map: the receivers whose pins.sh sources lib.sh record it" bash -c '
-  . "$1"; for r in library opm-operator; do mirror_sources "$r" | grep -q "^\.tasks/cascade/lib\.sh " || exit 1; done' _ "$WIRING/lib.sh"
+  . "$1"; for r in library opm-operator opm-controller; do mirror_sources "$r" | grep -q "^\.tasks/cascade/lib\.sh " || exit 1; done' _ "$WIRING/lib.sh"
+check "map: the renamed repo has one mirror under both names until the rename lands" bash -c '
+  . "$1"; [ "$(mirror_sources opm-operator)" = "$(mirror_sources opm-controller)" ] && [ "$(receiver_classes opm-operator)" = "$(receiver_classes opm-controller)" ] \
+    && [ "$(publish_paths opm-operator)" = "$(publish_paths opm-controller)" ]' _ "$WIRING/lib.sh"
 expect "map: the drift check reads every product receiver" 0 "catalog_opm library opm-operator cli" -- bash -c '. "$1"; printf "%s" "$MIRROR_RECEIVERS"' _ "$WIRING/lib.sh"
 check "map: the five bot labels have colours and descriptions" bash -c '
   . "$1"; for l in $BOT_LABELS; do label_color "$l" >/dev/null && label_description "$l" >/dev/null || exit 1; done
   ! label_color e2e-verified' _ "$WIRING/lib.sh"
-for p in go.mod sub/go.sum cue.mod/module.cue src/x/cue.mod/module.cue internal/operator/pin.go; do
+for p in go.mod sub/go.sum cue.mod/module.cue src/x/cue.mod/module.cue internal/operator/pin.go internal/controller/pin.go; do
   check "derived path: $p" in_lib is_derived_path "$p"
 done
-for p in README.md x/install.yaml internal/operator/manifest.go internal/operator/dist/install.yaml x/internal/operator/pin.go; do
+for p in README.md x/install.yaml internal/operator/manifest.go internal/operator/dist/install.yaml x/internal/operator/pin.go x/internal/controller/pin.go; do
   check "derived path: $p is not derived" bash -c '. "$1"; ! is_derived_path "$2"' _ "$WIRING/lib.sh" "$p"
 done
 
@@ -235,8 +250,10 @@ expect "tokens: repo code sees no runner command file or Actions service variabl
   ACTIONS_ID_TOKEN_REQUEST_TOKEN=it GIT_CONFIG_KEY_3=k3 GIT_CONFIG_VALUE_3=v3 bash -c '. "$1"; run_repo_code bash -c '"'"'printf "%s|%s|%s|%s|%s|%s|%s|%s|%s" "${GITHUB_ENV:-}" "${GITHUB_PATH:-}" "${GITHUB_OUTPUT:-}" "${GITHUB_STEP_SUMMARY:-}" "${GITHUB_STATE:-}" "${ACTIONS_RUNTIME_TOKEN:-}" "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" "${GIT_CONFIG_KEY_3:-}" "${GIT_CONFIG_VALUE_3:-}"'"'"'' _ "$WIRING/lib.sh"
 expect "tokens: repo code keeps the variables a task may read" 0 "true|/w|/tmp/r" -- \
   env GITHUB_ACTIONS=true GITHUB_WORKSPACE=/w RUNNER_TEMP=/tmp/r bash -c '. "$1"; run_repo_code bash -c '"'"'printf "%s|%s|%s" "${GITHUB_ACTIONS:-}" "${GITHUB_WORKSPACE:-}" "${RUNNER_TEMP:-}"'"'"'' _ "$WIRING/lib.sh"
-expect "maps: changelog_repos of a receiver is every other product repo" 0 "core catalog_opm library opm-operator" -- \
+expect "maps: changelog_repos of a receiver is every other product repo" 0 "core catalog_opm library opm-operator opm-controller" -- \
   bash -c '. "$1"; r=$(changelog_repos cli); printf "%s" "${r% }"' _ "$WIRING/lib.sh"
+expect "maps: changelog_repos of the renamed repo leaves out both its names" 0 "core catalog_opm library cli|core catalog_opm library cli" -- \
+  bash -c '. "$1"; a=$(changelog_repos opm-operator); b=$(changelog_repos opm-controller); printf "%s|%s" "${a% }" "${b% }"' _ "$WIRING/lib.sh"
 expect "maps: changelog_repos of the sandbox receiver" 0 "cascade-sandbox-up" -- bash -c '. "$1"; changelog_repos cascade-sandbox-down' _ "$WIRING/lib.sh"
 expect "maps: core has no changelog_repos" 1 "" -- bash -c '. "$1"; changelog_repos core' _ "$WIRING/lib.sh"
 expect "tokens: git_read passes the header to that git call only" 0 "AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46c2VjcmV0" -- \
