@@ -1,16 +1,24 @@
 ## Why
 
-The README's rollout steps ("Pinning and bumps", step 2) say that when a `.github` change touches
-`cascade-publish` or `cascade-notify`, the other receivers stay on the old pin until one canary's
-first live publish has succeeded. The `6938f8e` rollout did not follow that: every receiver is
-dry-run (`CASCADE_DRY_RUN` is not `false` anywhere), nothing publishes, so all five repos moved to
-`6938f8e` together, opm-operator last (opm-operator PR 241). The owner accepted this and asked for
-it to be written down (security pass, owner decision 37): while every receiver is dry-run, all
-receivers may move to a new pin together, even when the change touches `cascade-publish` or
-`cascade-notify`; the first live publish after such a change happens in one repo only (the Phase 4
-canary), and the others stay dry until it succeeds. Notify has no dry run, so a `cascade-notify`
-change gets its own canary: every other upstream sets `CASCADE_NOTIFY` to `off` until the notify
-canary's first notify succeeds (decision 37 does not name notify; this is the review's reading).
+The README's rollout steps ("Pinning and bumps", step 2) put one receiver's dry-run checks before
+every other pin bump, and kept the other repos on the old pin until one canary's first live run
+whenever a change touched `cascade-publish` or `cascade-notify`. The `6938f8e` rollout moved all
+five repos together and ran the dry-run checks afterwards (catalog_opm and library), opm-operator
+last (opm-operator PR 241). Its range, `.github` PRs 14 and 15, changed neither action's files,
+and every receiver is dry-run (`CASCADE_DRY_RUN` is not `false` anywhere), so nothing published.
+The owner accepted this and asked for it to be written down (security pass, owner decision 37).
+The supervisor's ruling on decision 37 sets the rule:
+
+- A change that touches neither action has no canary: all five repos may move together, with
+  the dry-run checks in one receiver after its merge.
+- A change that touches `cascade-publish` but not `cascade-notify`: while every receiver is
+  dry-run, all five may move together; the Phase 4 canary has the first live publish, and the
+  other receivers stay dry until it succeeds. Once any receiver is live, one live receiver is the
+  canary and every other receiver stays on the old pin until its first live publish on the new
+  pin succeeds.
+- A change that touches `cascade-notify`: a dry run does not help, because notify has no dry run,
+  so the old rule holds unchanged: one repo moves first, and the others stay on the old pin until
+  its first live notify on the new pin succeeds. No `CASCADE_NOTIFY=off` steps.
 
 Other README text went stale in the same pass:
 
@@ -30,13 +38,8 @@ Other README text went stale in the same pass:
 
 ## What Changes
 
-- **README "Pinning and bumps".** Step 2 states the rule of owner decision 37 with one canary
-  per rollout: a dry-run check in one receiver first; while every receiver is dry-run, all may
-  then move together; the first live publish after a `cascade-publish` change happens in the
-  canary while the others stay dry (or, once a receiver is live, on the old pin) until it
-  succeeds; after a `cascade-notify` change every upstream but the notify canary sets
-  `CASCADE_NOTIFY` to `off` until the canary's first notify succeeds. Step 4's ordering note
-  follows. The tag-ledger scope names the six scanned repos of nine.
+- **README "Pinning and bumps".** Step 2 states the rule above, one bullet per case, and step
+  4's ordering note points at it. The tag-ledger scope names the six scanned repos of nine.
 - **README wiring-check config table.** opm-operator's row lists its seven `publish-workflows`.
 - **README stale lines** listed under Why, and three entries added to "What stays open": no
   required review during the beta, one `opm-cascade` key shared by five repos (owner decision
@@ -44,7 +47,7 @@ Other README text went stale in the same pass:
 - **Spec.** `cascade-workflows` gains a requirement for what the README's rollout order says.
 
 Docs only: no script, workflow, test or setting changes. Depends on nothing. The workspace
-`RELEASING.md` ("Rolling out a .github change") needs the same rule; that edit is a workspace PR,
+`RELEASING.md` ("Moving the cascade pin") needs the same rule; that edit is a workspace PR,
 not part of this change.
 
 ## Capabilities
