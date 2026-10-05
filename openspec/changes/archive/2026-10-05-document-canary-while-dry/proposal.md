@@ -7,8 +7,10 @@ dry-run (`CASCADE_DRY_RUN` is not `false` anywhere), nothing publishes, so all f
 `6938f8e` together, opm-operator last (opm-operator PR 241). The owner accepted this and asked for
 it to be written down (security pass, owner decision 37): while every receiver is dry-run, all
 receivers may move to a new pin together, even when the change touches `cascade-publish` or
-`cascade-notify`; the first live publish (or notify) after such a change happens in one repo only
-(the Phase 4 canary), and the others stay dry until it succeeds.
+`cascade-notify`; the first live publish after such a change happens in one repo only (the Phase 4
+canary), and the others stay dry until it succeeds. Notify has no dry run, so a `cascade-notify`
+change gets its own canary: every other upstream sets `CASCADE_NOTIFY` to `off` until the notify
+canary's first notify succeeds (decision 37 does not name notify; this is the review's reading).
 
 Other README text went stale in the same pass:
 
@@ -23,20 +25,22 @@ Other README text went stale in the same pass:
 - The residual-risk list says opm-operator's `module-deps.yml` gets none of the publish bounds.
   Since opm-operator PR 225 its publish job runs in the `release` Environment and accepts only
   plain files under `modules/opm_operator/`; the title, the body and the tools are still unbounded.
-- "Pinning and bumps" cites opm-operator's `sha_pinning_required`; all ten releasing repos and
+- "Pinning and bumps" cites opm-operator's `sha_pinning_required`; all nine releasing repos and
   this one now have it (owner decision 30).
 
 ## What Changes
 
-- **README "Pinning and bumps".** Step 2 states the rule of owner decision 37: a dry-run check in
-  one receiver first; while every receiver is dry-run, all may then move together whatever the
-  diff touches; the first live publish or notify after a `cascade-publish` or `cascade-notify`
-  change happens in one repo (the Phase 4 canary) while the others stay dry until it succeeds.
-  Step 4's ordering note follows.
+- **README "Pinning and bumps".** Step 2 states the rule of owner decision 37 with one canary
+  per rollout: a dry-run check in one receiver first; while every receiver is dry-run, all may
+  then move together; the first live publish after a `cascade-publish` change happens in the
+  canary while the others stay dry (or, once a receiver is live, on the old pin) until it
+  succeeds; after a `cascade-notify` change every upstream but the notify canary sets
+  `CASCADE_NOTIFY` to `off` until the canary's first notify succeeds. Step 4's ordering note
+  follows. The tag-ledger scope names the six scanned repos of nine.
 - **README wiring-check config table.** opm-operator's row lists its seven `publish-workflows`.
-- **README stale lines** listed under Why, and two accepted risks added to "What stays open":
-  no required review during the beta, and one `opm-cascade` key shared by five repos (owner
-  decision 31).
+- **README stale lines** listed under Why, and three entries added to "What stays open": no
+  required review during the beta, one `opm-cascade` key shared by five repos (owner decision
+  31), and the cli mirror left behind by cli PR 307 (issue 18).
 - **Spec.** `cascade-workflows` gains a requirement for what the README's rollout order says.
 
 Docs only: no script, workflow, test or setting changes. Depends on nothing. The workspace
