@@ -372,8 +372,9 @@ versions and paths in backticks and contain no `@` that is not preceded by a wor
 For a pin whose versions are tags of an `open-platform-model` repo, `newest` SHALL answer a
 published candidate only when its tag's commit is reachable from that repo's `main`: `go
 github.com/open-platform-model/<repo>` (with or without `/vN`, tag `v<x>`), `release <repo>` and
-`opm-cli` (tag `v<x>`), `cue opmodel.dev/core@vN` (repo `core`, tag `v<x>`) and `cue
-opmodel.dev/catalogs/opm@vN` (repo `catalog_opm`, tag `opm-v<x>`). A candidate whose tag is not on
+`opm-cli` (tag `v<x>`), `cue opmodel.dev/core@vN` (repo `core`, tag `v<x>`), `cue
+opmodel.dev/catalogs/opm@vN` (repo `catalog_opm`, tag `opm-v<x>`) and `cue
+opmodel.dev/modules/opm_operator@vN` (repo `opm-operator`, tag `opm_operator-v<x>`). A candidate whose tag is not on
 `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on
 `<repo>` main; skipped", and the walk SHALL continue with the next candidate. The resolver SHALL
 learn this with git only (a tree-less bare clone of the repo and a fetch of the one tag, isolated
@@ -393,6 +394,11 @@ failure after four attempts.
 
 - **WHEN** `newest cue opmodel.dev/catalogs/opm@v4` finds `v4.6.0` published
 - **THEN** it checks the tag `opm-v4.6.0` of `catalog_opm` against `main`
+
+#### Scenario: Operator module tags carry their prefix
+
+- **WHEN** `tag-on-main opmodel.dev/modules/opm_operator@v0 v0.2.0` runs and the tag `opm_operator-v0.2.0` of `opm-operator` points to a commit not on its `main`
+- **THEN** it exits 3, and for `v0.1.0`, whose tag `opm_operator-v0.1.0` is on `main`, it exits 0
 
 #### Scenario: One version checked on its own
 
