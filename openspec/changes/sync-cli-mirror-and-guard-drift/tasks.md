@@ -21,11 +21,11 @@ Gates for every section (the repo's Validation Gates): `shellcheck` on every `*.
 
 ## 3. The daily drift check
 
-- [ ] 3.1 `wiring/mirror-drift.sh` (D4)
-- [ ] 3.2 `.github/workflows/cascade-mirror-drift.yml` (D4)
-- [ ] 3.3 Cases (`wiring/test/cases/drift.sh`): matching files pass; a changed file fails naming receiver, file and both hashes; a failed read fails and the rest is still checked; an unknown receiver is usage; the default reads the ten product files; the workflow is read-only, daily, secret-free and keeps no credentials
-- [ ] 3.4 Live run of the script against the four receivers (recorded in the PR body)
-- [ ] 3.5 Gates green, then commit `ci(cascade): check the publish mirrors against the receivers daily`
+- [x] 3.1 `wiring/mirror-drift.sh` (D4)
+- [x] 3.2 `.github/workflows/cascade-mirror-drift.yml` (D4)
+- [x] 3.3 Cases (`wiring/test/cases/drift.sh`): matching files pass; a changed file fails naming receiver, file and both hashes; a failed read fails and the rest is still checked; an unknown receiver is usage; the default reads the ten product files; the workflow is read-only, daily, secret-free and keeps no credentials
+- [x] 3.4 Live run of the script against the four receivers (recorded in the PR body)
+- [x] 3.5 Gates green, then commit `ci(cascade): check the publish mirrors against the receivers daily`
 
 ## 4. README
 
