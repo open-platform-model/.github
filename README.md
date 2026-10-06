@@ -339,6 +339,13 @@ verify`) bounds the push and writes the PR text itself:
 | opm-controller | `go.mod`, `go.sum`, `.opm-cli-version`, the sample Platform and ModuleInstance, `test/fixtures/catalog.go`, the fixture modules' and provider's `identity/identity.cue`, the fixture modules' `moduleinstance.yaml` |
 | cli | `go.mod`, `go.sum`, `internal/controller/pin.go`, the CRD manifests in `internal/controller/crds/`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
 
+The derived files (`is_derived_path`) are `go.mod`, `go.sum`, any `cue.mod/module.cue`, and
+cli's `internal/controller/pin.go` and `internal/controller/crds/<name>.yaml`: when a `merge`
+conflicts only in these, the bot takes `main`'s side and the task regenerates them. A controller
+module version that adds or drops a CRD makes cli's task add or delete a manifest (status `A` or
+`D`), which `publish` refuses: a human lands that pin bump. Only in-place rewrites of existing
+manifests go through the bot.
+
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
 receiver's `.tasks/cascade/` on its `main` (read 2026-10-05: catalog_opm `0560990`, library
 `ca7c56b`, opm-controller `53ccaab`, cli `bd4d1a7c`). `mirror_sources` in `wiring/lib.sh` records

@@ -41,6 +41,10 @@ merged, with `git show origin/main:.tasks/cascade/<file> | sha256sum`, and the r
 written into the comment above `publish_paths` and the README's "Keeping the mirrors in step".
 Until then the entries carry the pre-rename hashes and three `TODO(cutover)` comments (both arms
 and the `publish_paths` comment); the change is not archived before they are recorded.
+A hash only says the file is the one read; the paths the allow-lists hold must be re-read from
+the same merged mains before the hashes are recorded: every path `cascade.sh` writes, and every
+path the programs it runs write (cli's `hack/controller-pin`: `internal/controller/pin.go` and
+`internal/controller/crds/<name>.yaml`).
 
 ### D4: cli is the canary
 
@@ -63,9 +67,11 @@ equal to the pinned `accept-controller-repo-name` commit until this round.
   within a day; read the hashes after the last merge in that repo.
 - [cli's cascade task writes more than `pin.go`] -> after cli's rename `hack/controller-pin` also
   rewrites the embedded CRD manifests in `internal/controller/crds/`; `publish_paths cli` accepts
-  them (task 1.5). A module version that adds or drops a CRD is a status `A`/`D` change, which
-  `publish` refuses: a human lands that bump. The allow-list re-check at cutover reads what
-  `hack/controller-pin` writes, not only `cascade.sh`.
+  them, and `is_derived_path` lists them, so a `merge` conflict only in them takes `main`'s side
+  like `pin.go` (task 1.5). A module version that adds or drops a CRD is a status `A`/`D` change,
+  which `publish` refuses: a human lands that bump (supervisor default 2026-10-06, kept: widening
+  the status rule would let the bot add files). The allow-list re-check at cutover (task 4.1)
+  reads what `hack/controller-pin` writes, not only `cascade.sh`.
 - [Old-name rows in the tag ledger] -> data, not code; the ledger is append-only by design.
 
 ## Rollout
