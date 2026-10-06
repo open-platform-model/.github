@@ -69,10 +69,9 @@ equal to the pinned `accept-controller-repo-name` commit until this round.
   rewrites the embedded CRD manifests in `internal/controller/crds/`; `publish_paths cli` accepts
   them, and `is_derived_path` lists them, so a `merge` conflict only in them takes `main`'s side
   like `pin.go` (task 1.5). A module version that adds or drops a CRD is a status `A`/`D` change,
-  which `publish` refuses: a human lands that bump (supervisor default 2026-10-06, kept: widening
-  the status rule would let the bot add files). Until then every cli cascade run, which carries all
-  of cli's pins, is refused at publish; the human lands the bump as an ordinary PR to cli's `main`
-  (supervisor default 2026-10-06). An open bot cascade PR is rebuilt on that `main` by the next run
+  which `publish` refuses: a human lands that bump, because widening
+  the status rule would let the bot add files. Until then every cli cascade run, which carries all
+  of cli's pins, is refused at publish; the human lands the bump as an ordinary PR to cli's `main`. An open bot cascade PR is rebuilt on that `main` by the next run
   (or closed and recreated), and later bot runs rewrite the manifest in place (status `M`). A human
   commit on `deps/cascade` is not the remedy: with no bot PR open, `compute` plans `recreate`,
   `check_increment` refuses a recreate over a non-bot commit, and `cascade_pr` reads only the bot's
