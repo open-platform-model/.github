@@ -340,10 +340,12 @@ verify`) bounds the push and writes the PR text itself:
 | cli | `go.mod`, `go.sum`, `internal/controller/pin.go`, the CRD manifests in `internal/controller/crds/`, `hack/kind-platform.yaml`, the templates' and podinfo's `identity/identity.cue` |
 
 The derived files (`is_derived_path`) are `go.mod`, `go.sum`, any `cue.mod/module.cue`, and
-cli's `internal/controller/pin.go` and `internal/controller/crds/<name>.yaml`: when a `merge`
-conflicts only in these, the bot takes `main`'s side and the task regenerates them. A controller
-module version that adds or drops a CRD makes cli's task add or delete a manifest (status `A` or
-`D`), which `publish` refuses: a human lands that pin bump. Only in-place rewrites of existing
+the paths `internal/controller/pin.go` and `internal/controller/crds/<name>.yaml` (written only by
+cli): when a `merge` conflicts only in these, the bot takes `main`'s side and the task regenerates
+them. A controller module version that adds or drops a CRD makes cli's task add or delete a
+manifest (status `A` or `D`), which `publish` refuses: a human lands that pin bump. Until then
+every cli cascade run is refused at publish. Land the bump as a human commit on `deps/cascade`
+(add or delete the manifest); later runs rewrite it in place. Only in-place rewrites of existing
 manifests go through the bot.
 
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each

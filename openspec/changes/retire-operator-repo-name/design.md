@@ -70,7 +70,10 @@ equal to the pinned `accept-controller-repo-name` commit until this round.
   them, and `is_derived_path` lists them, so a `merge` conflict only in them takes `main`'s side
   like `pin.go` (task 1.5). A module version that adds or drops a CRD is a status `A`/`D` change,
   which `publish` refuses: a human lands that bump (supervisor default 2026-10-06, kept: widening
-  the status rule would let the bot add files). The allow-list re-check at cutover (task 4.1)
+  the status rule would let the bot add files). Until then every cli cascade run, which carries all
+  of cli's pins, is refused at publish; the human commits the bump on `deps/cascade`, and later bot
+  runs build on that tip (`check_increment` leaves the old tip's commits out) and rewrite the
+  manifest in place (status `M`). The allow-list re-check at cutover (task 4.1)
   reads what `hack/controller-pin` writes, not only `cascade.sh`.
 - [Old-name rows in the tag ledger] -> data, not code; the ledger is append-only by design.
 
