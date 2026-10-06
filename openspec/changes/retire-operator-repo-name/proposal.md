@@ -14,7 +14,7 @@ cannot do wait for the rename and the receivers' own rename PRs:
 - The old name and its two-name plumbing are a trace the owner wants gone (no aliases, no
   traces).
 
-This change flips the cascade to `opm-controller` only. It replaces the earlier plan's three
+This change flips the cascade to `opm-controller` only. It replaces three separate
 cascade steps (a one-line `MIRROR_RECEIVERS` PR at the rename, a hash-neutral flip, then a hash
 round) with one merge and one pin round, since the owner runs the whole cutover in one sitting
 and the shorter freeze those splits bought does not matter there. The tag-ledger `REPOS` flip is

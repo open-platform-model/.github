@@ -14,7 +14,7 @@ final mirror hashes, and leaves no `opm-operator` in `.github` outside the archi
 
 ## Decisions
 
-### D1: One round instead of B1, B2 and the MIRROR_RECEIVERS PR
+### D1: One round instead of two flip rounds and the MIRROR_RECEIVERS PR
 
 The split rounds existed to shorten the freeze (flip right after the rename, hashes later). The
 owner merges everything in one sitting, so the freeze is that sitting. The hashes need the merged
