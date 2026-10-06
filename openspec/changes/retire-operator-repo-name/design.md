@@ -71,10 +71,13 @@ equal to the pinned `accept-controller-repo-name` commit until this round.
   like `pin.go` (task 1.5). A module version that adds or drops a CRD is a status `A`/`D` change,
   which `publish` refuses: a human lands that bump (supervisor default 2026-10-06, kept: widening
   the status rule would let the bot add files). Until then every cli cascade run, which carries all
-  of cli's pins, is refused at publish; the human commits the bump on `deps/cascade`, and later bot
-  runs build on that tip (`check_increment` leaves the old tip's commits out) and rewrite the
-  manifest in place (status `M`). The allow-list re-check at cutover (task 4.1)
-  reads what `hack/controller-pin` writes, not only `cascade.sh`.
+  of cli's pins, is refused at publish; the human lands the bump as an ordinary PR to cli's `main`
+  (supervisor default 2026-10-06). An open bot cascade PR is rebuilt on that `main` by the next run
+  (or closed and recreated), and later bot runs rewrite the manifest in place (status `M`). A human
+  commit on `deps/cascade` is not the remedy: with no bot PR open, `compute` plans `recreate`,
+  `check_increment` refuses a recreate over a non-bot commit, and `cascade_pr` reads only the bot's
+  own PR, so every run is refused until someone deletes the branch. The allow-list re-check at
+  cutover (task 4.1) reads what `hack/controller-pin` writes, not only `cascade.sh`.
 - [Old-name rows in the tag ledger] -> data, not code; the ledger is append-only by design.
 
 ## Rollout

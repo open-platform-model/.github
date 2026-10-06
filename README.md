@@ -344,9 +344,14 @@ the paths `internal/controller/pin.go` and `internal/controller/crds/<name>.yaml
 cli): when a `merge` conflicts only in these, the bot takes `main`'s side and the task regenerates
 them. A controller module version that adds or drops a CRD makes cli's task add or delete a
 manifest (status `A` or `D`), which `publish` refuses: a human lands that pin bump. Until then
-every cli cascade run is refused at publish. Land the bump as a human commit on `deps/cascade`
-(add or delete the manifest); later runs rewrite it in place. Only in-place rewrites of existing
-manifests go through the bot.
+every cli cascade run is refused at publish. Land the bump as an ordinary PR to cli's `main` that
+moves the pin and adds or deletes the manifest. An open bot cascade PR needs nothing: the next run
+rebuilds it on that `main` (or close it, and the next run recreates it). Later runs rewrite the
+manifest in place (status `M`); only in-place rewrites of existing manifests go through the bot.
+Do not commit the bump on `deps/cascade`. Without an open bot PR, `compute` plans `recreate`, and
+`publish` refuses a recreate over a commit the bot did not make. A human PR from the branch does
+not help, since only the bot's own PR counts, so every run stays refused until someone deletes the
+branch.
 
 **Keeping the mirrors in step.** The allow-lists, the pin parsers and the classes copy each
 receiver's `.tasks/cascade/` on its `main` (read 2026-10-05: catalog_opm `0560990`, library
