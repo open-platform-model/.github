@@ -20,8 +20,10 @@ The split rounds existed to shorten the freeze (flip right after the rename, has
 owner merges everything in one sitting, so the freeze is that sitting. The hashes need the merged
 rename PRs; so does the flip's purpose (the cli release needs the flip pinned). So everything
 lands together, after both rename PRs merge. `MIRROR_RECEIVERS` rides along: between the rename
-and this merge the drift run reads `opm-operator` through GitHub's redirect and goes red once
-the controller PR merges anyway; it is never required.
+and this merge the drift run asks for `opm-operator` with `gh api` (`mirror-drift.sh`). Whether
+that REST read follows the rename's redirect is not verified, so the run is either red at once
+or red once the controller PR merges; it is never required, and it is green again after this
+merge.
 
 ### D2: tag-ledger REPOS is not in this change
 
