@@ -19,8 +19,8 @@ cascade steps (a one-line `MIRROR_RECEIVERS` PR at the rename, a hash-neutral fl
 round) with one merge and one pin round, since the owner runs the whole cutover in one sitting
 and the shorter freeze those splits bought does not matter there. The tag-ledger `REPOS` flip is
 not part of it: it merges on its own right after the rename (`scan-controller-in-tag-ledger`),
-because after the rename the ruleset listing of the old name answers HTTP 301 and fails every
-ledger run until `REPOS` names the new repo.
+because after the rename the ruleset listing of the old name is expected to fail every ledger
+run until `REPOS` names the new repo (an assumption, see design D2).
 
 ## What Changes
 

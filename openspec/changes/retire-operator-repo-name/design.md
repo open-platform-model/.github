@@ -29,9 +29,12 @@ merge.
 
 Before the rename, `git ls-remote` of `opm-controller` fails, which fails the whole run, so the
 new name cannot be added early. After the rename, `git ls-remote` of `opm-operator` still follows
-GitHub's redirect, but `tag-ledger.sh` `api_get` calls `curl` without `-L`: the ruleset listing
-of the old name answers HTTP 301 and `check_ruleset` exits 3, so every ledger run fails until
-`REPOS` names the new repo. This change merges only after both rename PRs and their releases, so
+GitHub's redirect, but `tag-ledger.sh` `api_get` calls `curl` without `-L`, and `check_ruleset`
+goes on only at HTTP 200. The assumption, not verified against a renamed repository, is that the
+ruleset listing of the old name answers 301: `check_ruleset` then exits 3 and every ledger run
+fails until `REPOS` names the new repo. If the answer is 404, the run records a finding for the
+old name instead; either way the old name cannot stay in `REPOS`. The cutover checks which of
+the two happens. This change merges only after both rename PRs and their releases, so
 the flip cannot wait for it. It merges on its own as `scan-controller-in-tag-ledger`, right after
 the rename and unpinned (`tag-ledger.yml` runs from `.github` `main`).
 
