@@ -286,7 +286,9 @@ the App token's `repositories:`, and a name that does not exist fails the mint f
 and cli's `g3_upstreams` (read by API). A later `.github` change flips those, drops the old name
 and records the renamed repos' new mirror hashes once the rename has merged.
 `MIRROR_RECEIVERS` (read by the drift run from `.github` `main`, unpinned) and tag-ledger
-`REPOS` also keep `opm-operator` only; each flips in its own change after the rename.
+`REPOS` also keep `opm-operator` only. `MIRROR_RECEIVERS` flips in that later `.github` change,
+together with the target lists and cli's `g3_upstreams`, once the rename PRs have merged. `REPOS`
+flips in its own change.
 
 **Repo code in `compute`.** `compute` runs the receiver's tasks and `pins.sh` (`main`'s, on
 `main` merged with `deps/cascade`), the new dependency code those tasks build or run, and, for
