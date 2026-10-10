@@ -9,8 +9,9 @@
 # @ precedes, followed by a letter or digit, is a GitHub mention.
 MENTION_RE='(?<![\w@])@[A-Za-z0-9]'
 # The triggering sources body accepts. cmd_body adds the names in
-# CASCADE_EXTRA_SOURCES, which only the sandbox receiver sets.
-CASCADE_SOURCES=" core catalog_opm library opm-operator cli "
+# CASCADE_EXTRA_SOURCES, which only the sandbox receiver sets. The controller
+# repo is listed under both names while it is renamed from opm-operator.
+CASCADE_SOURCES=" core catalog_opm library opm-operator opm-controller cli "
 TAG_RE='^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$'
 
 abs_path() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$PWD" "$1" ;; esac; }
