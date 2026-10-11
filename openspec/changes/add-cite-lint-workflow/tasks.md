@@ -1,9 +1,9 @@
 ## 1. The workflow and its static cases
 
-- [ ] 1.1 Add `.github/workflows/cite-lint.yml` as the design says; verify with `actionlint .github/workflows/*.yml` (exit 0 with the repo's `.github/actionlint.yaml`) and a zizmor offline run with no finding on the file
-- [ ] 1.2 Run the two shell steps of the workflow against a scratch repo with a bad and a good Go file and verify: a 40-hex `enh-ref` passes, `main` and a short SHA fail, `../x`, `/etc` and `-n` fail, a clean run exits 0 and a decision number exits 1 with `path:line` lines
-- [ ] 1.3 Add the `cite-lint.yml` block to `.github/scripts/cascade/wiring/test/cases/static.sh` (design D7) and verify `bash .github/scripts/cascade/wiring/test/run.sh` ends with 0 failed
-- [ ] 1.4 `actionlint`, `shellcheck` on the test cases, the wiring test suite and `openspec validate --all --strict` green, then commit `feat(cite-lint): add the shared cite-lint workflow`
+- [x] 1.1 Add `.github/workflows/cite-lint.yml` as the design says; verify with `actionlint .github/workflows/*.yml` (exit 0 with the repo's `.github/actionlint.yaml`) and a zizmor offline run with no finding on the file
+- [x] 1.2 Run the two shell steps of the workflow against a scratch repo with a bad and a good Go file and verify: a 40-hex `enh-ref` passes, `main` and a short SHA fail, `../x`, `/etc` and `-n` fail, a clean run exits 0 and a decision number exits 1 with `path:line` lines
+- [x] 1.3 Add the `cite-lint.yml` block to `.github/scripts/cascade/wiring/test/cases/static.sh` (design D7) and verify `bash .github/scripts/cascade/wiring/test/run.sh` ends with 0 failed
+- [x] 1.4 `actionlint`, `shellcheck` on the test cases, the wiring test suite and `openspec validate --all --strict` green, then commit `feat(cite-lint): add the shared cite-lint workflow`
 
 ## 2. The rule text and the references
 
