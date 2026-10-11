@@ -13,8 +13,8 @@
 
 ## 3. The README
 
-- [ ] 3.1 Add a `cite-lint` section to `README.md`: what the workflow checks, its inputs, how a repo calls it (one example with the SHA pin form callers use), where the pin lives and how it moves; verify the example `uses:` line has the form of the existing `cascade-gates.yml` example and that `grep -n cite-lint README.md` finds the section
-- [ ] 3.2 `openspec validate --all --strict` green, then commit `docs: document the cite-lint workflow`
+- [x] 3.1 Add a `cite-lint` section to `README.md`: what the workflow checks, its inputs, how a repo calls it (one example with the SHA pin form callers use), where the pin lives and how it moves; verify the example `uses:` line has the form of the existing `cascade-gates.yml` example and that `grep -n cite-lint README.md` finds the section; narrow the static case that counts the README's pinned `.github` references to the four cascade ones, since the example adds a fifth
+- [x] 3.2 `openspec validate --all --strict` green, then commit `docs: document the cite-lint workflow`
 
 ## Workflow follow-up
 
