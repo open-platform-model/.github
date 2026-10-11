@@ -65,3 +65,16 @@ cl_refuses "a parent path is refused" "$CL_SHA" "../x" "path [../x] must be rela
 cl_refuses "a nested parent path is refused" "$CL_SHA" "a/../b" "path [a/../b] must be relative"
 cl_refuses "an absolute path is refused" "$CL_SHA" "/etc" "path [/etc] must be relative"
 cl_refuses "a path that looks like a flag is refused" "$CL_SHA" "-n" "path [-n] must be relative"
+
+# The Lint step reads the argument file back. A stub enh prints its arguments
+# and exits 3, so the cases see the exact command line and the exit status.
+CL_LINT=$(yaml_run "$CL" cite-lint "Lint")
+cl_lint() { # cl_lint <paths> <exclude>
+  cl_inputs "$CL_SHA" "$1" "$2" >/dev/null
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@"\nexit 3\n' >"$FX/enh"
+  chmod +x "$FX/enh"
+  GITHUB_WORKSPACE=/ws RUNNER_TEMP="$FX" bash -e -o pipefail -c "$CL_LINT"
+}
+expect "cite-lint lint: the tool gets the root, the excludes, then -- and the paths; its exit status is the job's" 3 \
+  $'cite-lint\n--root\n/ws/repo\n--exclude=gen/\n--exclude=x.go\n--\npkg\ncmd' -- cl_lint $'pkg\ncmd' $'gen/\nx.go'
+expect "cite-lint lint: no input lints the root" 3 $'cite-lint\n--root\n/ws/repo\n--\n.' -- cl_lint "" ""

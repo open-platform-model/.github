@@ -180,8 +180,8 @@ one with `bootstrap: true`.
 [`.github/workflows/cite-lint.yml`](.github/workflows/cite-lint.yml) runs
 `enh cite-lint` on the Go and CUE comments of the repo that calls it. The
 rule: a comment names an enhancement id only beside a reason in words, as in
-`(enhancement NNNN)`. It never holds a decision number and never holds only an
-id. A finding fails the job and the log lists it as `path:line: rule: message`.
+`(enhancement NNNN)`. It never holds a decision number, also not in a string
+literal, and never holds only an id. A finding fails the job and the log lists it as `path:line: rule: message`.
 
 The workflow is `workflow_call` only. It has no secret, `permissions: {}` at
 the top and `contents: read` on its one job. It reads the calling repo and

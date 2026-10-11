@@ -66,8 +66,8 @@ context: |
     enhancement, write the id beside the reason in words, as in
     `// Retries stay bounded, so a stuck run ends (enhancement NNNN).` Never cite a decision
     number, a bare `D9`, or a section, phase or task number of a design doc, and never write a
-    comment that is only an id. `enh cite-lint` checks Go and CUE comments
-    (`.github/workflows/cite-lint.yml`).
+    comment that is only an id. `enh cite-lint` checks Go and CUE comments, and refuses a decision number in a
+    string literal too (`.github/workflows/cite-lint.yml`).
 
 rules:
   proposal:

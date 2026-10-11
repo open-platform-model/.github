@@ -44,9 +44,9 @@ The cascade workflows derive a repo name and check scripts out of `.github` at t
 
 `mention-guard` follows the second pattern because the org requires it. Making cite-lint org-required is an owner ruleset decision for later. A reusable workflow lets each repo choose its paths and excludes, and the owner can still require the caller job by name.
 
-### D7. Static cases in the wiring test suite
+### D7. A case file in the wiring test suite
 
-`static.sh` lists its reusable workflows by name. The cases for `cite-lint.yml` are a new block that checks: only `workflow_call`; no `secrets` input; no Environment; no `secrets.` text; `permissions` explicit on every job; every `uses:` a full SHA with a version comment; no expression inside `run:`; `timeout-minutes` set; and that the `enh-ref` default is 40-hex. It repeats none of the cascade-only rules.
+`static.sh` lists its reusable workflows by name and holds cascade-only rules. The cases for `cite-lint.yml` are a new file, `cases/citelint.sh`, named in the `files=` list of `run.sh`. It checks: only `workflow_call`; no `secrets` input; no Environment; no `secrets.` text; `permissions` explicit on every job; every `uses:` a full SHA with a version comment; no expression inside `run:`; `timeout-minutes` set; and that the `enh-ref` default is 40-hex. It also runs the `Check inputs` and `Lint` steps on their own, the second with a stub `enh` that prints its arguments. It repeats none of the cascade-only rules.
 
 ### Network requests
 
@@ -60,6 +60,7 @@ No retry is added: a red job is re-run by hand. The job sends no secret to any h
 
 ## Risks / Trade-offs
 
+- [`openspec validate --all --strict` fails today] Nine existing main specs have a requirement text over 500 characters, which CLI 1.14.1 flags in strict mode; they fail on `main` too and this change does not touch them. → The checks of this change are `validate add-cite-lint-workflow --strict` and `validate --all`; rewriting the nine specs is a separate change.
 - [`wiring-check.sh` rejects a caller] The canonical `wiring-check.sh` (copied into core, library, catalog_opm, cli, opm-operator) compares every `open-platform-model/.github` reference of a repo with a fixed list, and its README says a new kind of reference is a change to the script. A caller of `cite-lint.yml` therefore fails that check in those five repos. → A separate change to `wiring-check.sh`, its tests and the README adds the kind; it must merge before the callers. Raised in the task report, not done here.
 - [The default pin is a commit of an unmerged branch] If that branch is deleted or its history rewritten, the checkout fails. → The programme moves the pin to the merged `main` commit before any caller merges; the comment at the pin says so.
 - [`enhancements` becomes private] The default token has no access to another private repo, so the tool checkout fails. → Not planned; a token input would be a new decision.
