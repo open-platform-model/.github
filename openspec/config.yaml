@@ -1,5 +1,9 @@
 schema: spec-driven
 
+references:
+  - id: opm-enhancements
+    remote: https://github.com/open-platform-model/enhancements.git
+
 context: |
   # open-platform-model/.github: org meta repo
 
@@ -59,8 +63,11 @@ context: |
 
   ## Comments
   - Say what the code does and why in the comment's own words. When the rationale lives in an
-    enhancement, cite it as `0011:D9` (enhancement id, colon, decision id); a bare `D9` names
-    nothing. Never cite a section, phase or task number of a design doc in code.
+    enhancement, write the id beside the reason in words, as in
+    `// Retries stay bounded, so a stuck run ends (enhancement NNNN).` Never cite a decision
+    number, a bare `D9`, or a section, phase or task number of a design doc, and never write a
+    comment that is only an id. `enh cite-lint` checks Go and CUE comments
+    (`.github/workflows/cite-lint.yml`).
 
 rules:
   proposal:

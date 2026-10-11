@@ -7,9 +7,9 @@
 
 ## 2. The rule text and the references
 
-- [ ] 2.1 Replace the `Comments` bullet of `openspec/config.yaml` that cites `0011:D9` with the new comment rule, and add `references:` with `- id: opm-enhancements` and its `remote`; verify `grep -rnE '[0-9]{4}:(D|OQ)[0-9]+' openspec/config.yaml` prints nothing and `openspec instructions proposal --change add-cite-lint-workflow --json` still reads the config
-- [ ] 2.2 Replace `0011:D7` in `openspec/changes/archive/2026-10-04-add-release-cascade-workflows/contract.md` with `enhancement 0011 ("<decision title>")`; verify `git grep -nE '[0-9]{4}:(D|OQ)[0-9]+' -- . ':!openspec/changes/add-cite-lint-workflow'` prints nothing
-- [ ] 2.3 `openspec validate --all --strict` green, then commit `docs(openspec): state the comment rule without decision numbers`
+- [x] 2.1 Replace the `Comments` bullet of `openspec/config.yaml` that cites `0011:D9` with the new comment rule, and add `references:` with `- id: opm-enhancements` and its `remote`; verify `grep -rnE '[0-9]{4}:(D|OQ)[0-9]+' openspec/config.yaml` prints nothing and `openspec instructions proposal --change add-cite-lint-workflow --json` still reads the config
+- [x] 2.2 Replace `0011:D7` in `openspec/changes/archive/2026-10-04-add-release-cascade-workflows/contract.md` with `enhancement 0011 ("<decision title>")`; verify `git grep -nE '[0-9]{4}:(D|OQ)[0-9]+' -- . ':!openspec/changes/add-cite-lint-workflow'` prints nothing
+- [x] 2.3 `openspec validate --all --strict` green, then commit `docs(openspec): state the comment rule without decision numbers`
 
 ## 3. The README
 
