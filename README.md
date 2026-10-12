@@ -198,9 +198,9 @@ from `tools/enh` of `open-platform-model/enhancements` at one commit.
 holds the `enh` commit, so every repo checks comments with the same tool. A
 caller does not pass `enh-ref`. To move the pin, change the default in this
 file. A repo gets the new commit when it bumps its `.github` pin. The default
-is now the head of the branch `openspec-store-design` of `enhancements`. The
-last task of the enhancement-store migration moves it to the commit of `main`
-that carries the merged tool.
+is a commit of `main` of `enhancements` that carries the merged tool. Move it
+only to a later commit of `main`. The tool's `go.mod` sets the Go version and
+`actions/setup-go` installs it, so the job needs no toolchain download.
 
 **How a repo calls it.** Pin the workflow by full SHA with the comment
 `.github main`, as for the cascade workflows. Call it on `pull_request` or
@@ -225,10 +225,25 @@ jobs:
         testdata/
 ```
 
+**Declare the call for the wiring check.** A repo that runs `wiring-check.sh`
+lists the file that holds the call in `extra-references` of its
+`.tasks/cascade/wiring-check.yaml`. Core lists it too.
+
+```yaml
+extra-references:
+  - {file: ci.yml, kind: cite-lint}
+```
+
+The check then holds the call to the same rules as the other references: the
+one `.github` SHA and the pin comment of the repo. It also refuses a call
+that is not plain. The job has only the keys `name`, `permissions`, `uses` and
+`with`. Its `permissions` are exactly `contents: read`. It passes only `paths`
+and `exclude`, never `enh-ref`. No string of the job names `secrets`. The file
+does not trigger on `pull_request_target` or `workflow_run`. A call that is not
+declared fails the check like any other undeclared reference.
+
 **Limits.** Nothing requires the check yet; making it required is an owner
-ruleset step. The cascade wiring check (`wiring-check.sh`) accepts only the
-cascade references of this repo, so a repo that runs that check needs a change
-to it before it calls `cite-lint.yml`.
+ruleset step.
 
 ## `cascade` (release-cascade resolver)
 
@@ -643,9 +658,10 @@ the App token, and too many other names make bash, git, gh, node, curl or the lo
 send traffic elsewhere (`BASH_ENV`, `GIT_*`, `GH_*`, `NODE_*`, `LD_*`, `XDG_*`, `SSL_*`,
 `*_PROXY` and more) for a deny-list to be safe. `publish-workflows` must list `release.yml`.
 `extra-references` (optional) lists more pinned `.github` references, one item per reference,
-each a map of exactly `file` (a workflow file name) and `kind`; the only kind is `resolver`, a
-checkout of `.github` held to the rules above. Only a receiver may set it, a file appears at
-most once, and never one of `release.yml`, `deps-cascade.yml`, `cascade-gates.yml` or
+each a map of exactly `file` (a workflow file name) and `kind`. The kinds are `resolver`, a
+checkout of `.github` held to the rules above (receivers only), and `cite-lint`, a job that calls
+`cite-lint.yml` (any repo; see the `cite-lint` section). A file appears at
+most once per kind, and never one of `release.yml`, `deps-cascade.yml`, `cascade-gates.yml` or
 `cascade-task.yml`, which hold the fixed references. A new kind (another action or
 reusable-workflow call) is a change here, never a config entry. Each repo's values:
 

@@ -8,7 +8,7 @@
 
 ## 3. The README
 
-- [ ] 3.1 Document the declaration in `README.md` beside the cite-lint call example; verify the suite and `openspec validate pin-merged-cite-lint --strict`, then commit `docs: declare the cite-lint call for the wiring check`
+- [x] 3.1 Document the declaration in `README.md` beside the cite-lint call example; verify the suite and `openspec validate pin-merged-cite-lint --strict`, then commit `docs: declare the cite-lint call for the wiring check`
 
 ## Workflow follow-up
 
