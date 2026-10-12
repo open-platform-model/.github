@@ -15,8 +15,8 @@ name: Cite lint
 # object itself, so the tool is exactly the pinned tree, with no module proxy
 # between; the commit does not have to sit on a branch the proxy can resolve;
 # and the Go version comes from the tool's own go.mod (setup-go installs that
-# exact version, so GOTOOLCHAIN=local finds it and downloads nothing). The tool's dependencies are checked by its go.sum
-# and the Go checksum database.
+# exact version, so GOTOOLCHAIN=local finds it and downloads nothing). The
+# tool's dependencies are checked by its go.sum and the Go checksum database.
 #
 # Trust: the repo under test is only read. Nothing from it is run, so a pull
 # request from a fork is safe here. Call this on `pull_request` or `push`.
