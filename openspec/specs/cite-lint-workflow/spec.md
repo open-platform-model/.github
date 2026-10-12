@@ -24,7 +24,7 @@ The workflow SHALL take three optional string inputs: `paths` (default `.`), `ex
 
 ### Requirement: One pinned enh commit
 
-The workflow SHALL build `enh` from `tools/enh` of `open-platform-model/enhancements` at the commit in `enh-ref`, and SHALL refuse a value that is not 40 lowercase hex characters before any checkout. The default of `enh-ref` SHALL be the only place in this repo that holds the pin.
+The workflow SHALL build `enh` from `tools/enh` of `open-platform-model/enhancements` at the commit in `enh-ref`, and SHALL refuse a value that is not 40 lowercase hex characters before any checkout. The default of `enh-ref` SHALL be the only place in this repo that holds the pin, and SHALL be a commit of the `main` branch of `enhancements` that carries the merged tool. The tool's own `go.mod` SHALL decide the Go version, which `actions/setup-go` installs; the job SHALL NOT download a toolchain.
 
 #### Scenario: A branch name is passed
 - **WHEN** `enh-ref` is `main`
