@@ -262,7 +262,7 @@ check "static: the README publish if: reads the caller's own gates_only input" b
 check "static: the README publish if: reads no gates-only output of the reusable job" bash -c '! yq -r ".jobs.publish.if" "$1" | grep -q "needs.cascade.outputs.gates"' _ "$FX/readme-receiver.yml"
 check "static: the README names no cascade reference at main or a branch" bash -c '
   ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$ORG_ROOT/README.md"
-check "static: the README pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$ORG_ROOT/README.md"
+check "static: the README pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]*cascade-[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$ORG_ROOT/README.md"
 check "static: the README bump procedure greps every .github reference, the cascade-task.yml checkout included" grep -qF "grep -rn -A1 'open-platform-model/.github' .github/workflows" "$ORG_ROOT/README.md"
 check "static: the README names no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$ORG_ROOT/README.md"
 

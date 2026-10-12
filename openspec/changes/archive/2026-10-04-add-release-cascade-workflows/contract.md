@@ -680,7 +680,7 @@ on `published`. Notify must never depend on `verify-published`.
     4. "Login to GHCR".
     5. The unchanged verify step, which reads `src/cue.mod/module.cue` and runs
        `opm catalog registry check … --compat`.
-  - Keep the existing comment: it is an aid, not a gate (0011:D7).
+  - Keep the existing comment: it is an aid, not a gate, as in enhancement 0011 ("A published catalog can be verified out of band").
 - Keep `publish-docs` unchanged (`always() && published == 'true'`).
 
 **library**

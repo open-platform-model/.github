@@ -1,7 +1,8 @@
 # open-platform-model/.github
 
-Org-wide GitHub configuration. Currently hosts two things: the `mention-guard`
-required PR workflow and the `tag-ledger` drift check.
+Org-wide GitHub configuration. Currently hosts the `mention-guard` required PR
+workflow, the `tag-ledger` drift check, the `cite-lint` reusable workflow and
+the release-cascade code.
 
 ## `mention-guard` (required PR workflow)
 
@@ -173,6 +174,61 @@ follow later and show as pending), adds a branch ruleset on
 and one on this repo's default branch requiring a pull request, so an
 acknowledgement cannot land by direct push. The first run is then a manual
 one with `bootstrap: true`.
+
+## `cite-lint` (reusable comment-rule check)
+
+[`.github/workflows/cite-lint.yml`](.github/workflows/cite-lint.yml) runs
+`enh cite-lint` on the Go and CUE comments of the repo that calls it. The
+rule: a comment names an enhancement id only beside a reason in words, as in
+`(enhancement NNNN)`. It never holds a decision number, also not in a string
+literal, and never holds only an id. A finding fails the job and the log lists it as `path:line: rule: message`.
+
+The workflow is `workflow_call` only. It has no secret, `permissions: {}` at
+the top and `contents: read` on its one job. It reads the calling repo and
+runs no file of it, so a pull request from a fork is safe. It builds `enh`
+from `tools/enh` of `open-platform-model/enhancements` at one commit.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `paths` | `.` | Paths to lint, one per line, relative to the repo root. Go and CUE files only. |
+| `exclude` | (none) | Path patterns to skip, one per line. The tool already skips `.git`, `node_modules`, `vendor` and `.cue-cache`. |
+| `enh-ref` | the pin below | Full 40-hex commit of `enhancements`. A branch or tag name fails the job. |
+
+**The pin.** The default of `enh-ref` in `cite-lint.yml` is the only place that
+holds the `enh` commit, so every repo checks comments with the same tool. A
+caller does not pass `enh-ref`. To move the pin, change the default in this
+file. A repo gets the new commit when it bumps its `.github` pin. The default
+is now the head of the branch `openspec-store-design` of `enhancements`. The
+last task of the enhancement-store migration moves it to the commit of `main`
+that carries the merged tool.
+
+**How a repo calls it.** Pin the workflow by full SHA with the comment
+`.github main`, as for the cascade workflows. Call it on `pull_request` or
+`push`; the caller job grants `contents: read`.
+
+```yaml
+name: Cite lint
+on:
+  pull_request:
+permissions: {}
+jobs:
+  cite-lint:
+    name: Cite lint
+    permissions:
+      contents: read
+    uses: open-platform-model/.github/.github/workflows/cite-lint.yml@<sha> # .github main
+    with:
+      paths: |
+        cmd
+        internal
+      exclude: |
+        testdata/
+```
+
+**Limits.** Nothing requires the check yet; making it required is an owner
+ruleset step. The cascade wiring check (`wiring-check.sh`) accepts only the
+cascade references of this repo, so a repo that runs that check needs a change
+to it before it calls `cite-lint.yml`.
 
 ## `cascade` (release-cascade resolver)
 

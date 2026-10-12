@@ -1,5 +1,9 @@
 schema: spec-driven
 
+references:
+  - id: opm-enhancements
+    remote: https://github.com/open-platform-model/enhancements.git
+
 context: |
   # open-platform-model/.github: org meta repo
 
@@ -57,10 +61,24 @@ context: |
     the plain `Co-Authored-By: Claude <noreply@anthropic.com>` trailer; never a session ID or
     generated-with footer.
 
+  ## Enhancements
+  - Enhancements live in the OpenSpec store `opm-enhancements` (see `references:`). Read an entry
+    with `openspec show <id>-<slug> --store opm-enhancements`; its `tasks.md` says which repo
+    still has work.
+  - If OpenSpec warns that the store `opm-enhancements` is not registered, report the warning and
+    go on; the human runs `task enhancements:register`.
+  - A change here that delivers a line of an entry's `tasks.md` says so in its proposal
+    (`## Enhancement`, `Delivers NNNN, task X.Y.`); otherwise the section says `None.`.
+  - In any text (proposal, design, specs, comments), name an enhancement only by its id beside a
+    reason in words. Never write an enhancement id alone, and never a decision number.
+
   ## Comments
   - Say what the code does and why in the comment's own words. When the rationale lives in an
-    enhancement, cite it as `0011:D9` (enhancement id, colon, decision id); a bare `D9` names
-    nothing. Never cite a section, phase or task number of a design doc in code.
+    enhancement, write the id beside the reason in words, as in
+    `// Retries stay bounded, so a stuck run ends (enhancement NNNN).` Never cite a decision
+    number, a bare `D9`, or a section, phase or task number of a design doc, and never write a
+    comment that is only an id. `enh cite-lint` checks Go and CUE comments, and refuses a decision number in a
+    string literal too (`.github/workflows/cite-lint.yml`).
 
 rules:
   proposal:
@@ -68,6 +86,7 @@ rules:
     - Name the workflows and scripts affected, and every repo that calls them
     - State Depends on (changes that must merge first) and which later changes depend on this one
     - Scope MUST cut into at most about five tasks.md sections, each ending green (Principle IV)
+    - "If the change delivers a line of an enhancement's `tasks.md`, add `## Enhancement` with one line `Delivers NNNN, task X.Y.` per task; otherwise `None.`. Name an enhancement only by its id beside a reason in words, never alone, never a decision number."
 
   design:
     - "Focus: HOW we'll implement it technically"
@@ -79,6 +98,7 @@ rules:
       handling
     - Specify workflow triggers, job names (a required check is referenced by name), permissions
       and timeouts
+    - Name an enhancement only by its id beside a reason in words, never alone, never a decision number
 
   specs:
     - "Focus: WHAT behavior is changing (not HOW it's implemented)"
@@ -107,3 +127,4 @@ operations:
   archive:
     guidance:
       - "The archive commit rides the implementing PR; nothing is pushed to main afterwards."
+      - "If the change delivers a line of an enhancement's `tasks.md`, name it in the PR body; after the repo PR merges, a PR on `enhancements` ticks that line."
