@@ -1,6 +1,6 @@
 ## 1. The pin
 
-- [ ] 1.1 Set the default of `enh-ref` in `.github/workflows/cite-lint.yml` to the `main` commit `e0335b2ec44e659c0191bc3523d79d17f26f8e7d` and fix its comments; verify `actionlint` and the `citelint.sh` cases pass, then commit `fix(cite-lint): pin enh at the merged main commit`
+- [x] 1.1 Set the default of `enh-ref` in `.github/workflows/cite-lint.yml` to the `main` commit `e0335b2ec44e659c0191bc3523d79d17f26f8e7d` and fix its comments; verify `actionlint` and the `citelint.sh` cases pass, then commit `fix(cite-lint): pin enh at the merged main commit`
 
 ## 2. The wiring check
 

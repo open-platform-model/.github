@@ -13,9 +13,9 @@ name: Cite lint
 #
 # Why a checkout and not `go run <module>@<commit>`: git checks the commit
 # object itself, so the tool is exactly the pinned tree, with no module proxy
-# between; the commit does not have to sit on a branch the proxy can resolve
-# (the default pin is on an unmerged branch); and the Go version comes from
-# the tool's own go.mod. The tool's dependencies are checked by its go.sum
+# between; the commit does not have to sit on a branch the proxy can resolve;
+# and the Go version comes from the tool's own go.mod (setup-go installs that
+# exact version, so GOTOOLCHAIN=local finds it and downloads nothing). The tool's dependencies are checked by its go.sum
 # and the Go checksum database.
 #
 # Trust: the repo under test is only read. Nothing from it is run, so a pull
@@ -46,10 +46,9 @@ on:
           the tool. Branch and tag names are refused.
         type: string
         required: false
-        # The head of the branch openspec-store-design of enhancements. The
-        # last task of the enhancement-store migration (T5.9) moves this pin
-        # to the commit of main that carries the merged tool.
-        default: 6c0c338dcc59747c83adf876313ffcab1276d184
+        # A commit on main of enhancements that carries the merged tool.
+        # Move it only to a later commit of main.
+        default: e0335b2ec44e659c0191bc3523d79d17f26f8e7d
 
 permissions: {}
 
