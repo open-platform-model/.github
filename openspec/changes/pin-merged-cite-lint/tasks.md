@@ -4,7 +4,7 @@
 
 ## 2. The wiring check
 
-- [ ] 2.1 Add the kind `cite-lint` and the plain-call rule to `wiring-check.sh` with cases in `cases/wiringcheck.sh`; verify `bash .github/scripts/cascade/wiring/test/run.sh` ends with 0 failed and `shellcheck` is clean, then commit `feat(cascade): let the wiring check accept a cite-lint call`
+- [x] 2.1 Add the kind `cite-lint` and the plain-call rule to `wiring-check.sh` with cases in `cases/wiringcheck.sh`; verify `bash .github/scripts/cascade/wiring/test/run.sh` ends with 0 failed and `shellcheck` is clean, then commit `feat(cascade): let the wiring check accept a cite-lint call`
 
 ## 3. The README
 
