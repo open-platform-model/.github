@@ -1,7 +1,7 @@
 name: Cite lint
 
 # Reusable: each repo's CI calls this to run `enh cite-lint` on the Go and
-# CUE comments of the repo. The comment rule (README, "cite-lint"): an
+# CUE comments of the repo. The comment rule (references/cite-lint.md): an
 # enhancement id only beside a reason in words, never a decision number,
 # never a lone id.
 #

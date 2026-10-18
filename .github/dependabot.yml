@@ -14,5 +14,5 @@ updates:
       prefix: "ci"
     ignore:
       # This repo's own actions and workflows move by the pin procedure
-      # (README "Pinning and bumps"), never by a Dependabot bump.
+      # (references/cascade-pinning.md), never by a Dependabot bump.
       - dependency-name: "open-platform-model/.github*"
