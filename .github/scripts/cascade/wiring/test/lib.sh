@@ -18,6 +18,14 @@ GATES_POST="$WIRING/gates-post.sh"
 T_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/cascade-wiring.XXXXXX")
 trap 'chmod -R u+w "$T_ROOT" 2>/dev/null; rm -rf "$T_ROOT"' EXIT
 
+# The caller shapes, the pin procedure and the wiring check's CI step are
+# documented in the cascade-* files of references/. Cases read them as one text.
+CASCADE_DOCS="$T_ROOT/cascade-docs.md"
+cat "$ORG_ROOT"/references/cascade-*.md >"$CASCADE_DOCS"
+# Every doc of the repo, for the checks that no text names a reference at main.
+ALL_DOCS="$T_ROOT/all-docs.md"
+cat "$ORG_ROOT"/README.md "$ORG_ROOT"/references/*.md >"$ALL_DOCS"
+
 # Git ignores the caller's config, so a case gives the same result locally
 # and on a bare runner.
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1

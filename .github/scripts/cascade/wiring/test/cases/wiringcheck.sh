@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2016 # yq programs and ${{ }} expressions are literal
 # The canonical wiring check (.github/scripts/cascade/wiring-check.sh) against
-# a fixture repo built from the README's caller shapes: it passes for a
+# a fixture repo built from the cascade docs' caller shapes: it passes for a
 # receiver and for core, refuses one mutation per check, exits 2 on a bad
 # config, and with --pin-on-main asks the compare API about the SHA.
 
@@ -9,13 +9,13 @@ WCHECK="$ORG_ROOT/.github/scripts/cascade/wiring-check.sh"
 WC_SHA=0123456789abcdef0123456789abcdef01234567
 WC_SHA2=89abcdef0123456789abcdef0123456789abcdef
 
-# wc_readme <heading>: the yaml block after the README line starting with it.
+# wc_readme <heading>: the yaml block after the cascade docs line starting with it.
 wc_readme() {
-  H="$1" awk 'index($0, ENVIRON["H"]) == 1 { f = 1; next } f && /^```yaml$/ { p = 1; next } p && /^```$/ { exit } p' "$ORG_ROOT/README.md" |
+  H="$1" awk 'index($0, ENVIRON["H"]) == 1 { f = 1; next } f && /^```yaml$/ { p = 1; next } p && /^```$/ { exit } p' "$CASCADE_DOCS" |
     sed "s/@<sha> # /@$WC_SHA # /"
 }
 
-# wc_fresh [core]: a fixture repo at $WCD with the README shapes, a CI
+# wc_fresh [core]: a fixture repo at $WCD with the cascade docs shapes, a CI
 # workflow and the config; core has no receiver files.
 wc_fresh() {
   WCD="$T_ROOT/wc"
@@ -136,10 +136,10 @@ new_fx
 
 # --- the shapes pass ----------------------------------------------------------
 wc_fresh
-check "wiring check: the README receiver shape has the gates-only edits" bash -c '
+check "wiring check: the cascade docs receiver shape has the gates-only edits" bash -c '
   [[ $(yq -r ".jobs.publish.if" "$1") == *"inputs.gates_only != true"* ]] && [ "$(yq -r ".jobs.publish.steps[0].with[\"gates-only\"]" "$1")" = "\${{ inputs.gates_only == true }}" ]' \
   _ "$WCD/.github/workflows/deps-cascade.yml"
-wc_ok "the README receiver shapes pass"
+wc_ok "the cascade docs receiver shapes pass"
 wc_fresh core
 wc_ok "core (no receiver) passes with release.yml and the CI job only"
 wc_fresh
@@ -623,7 +623,7 @@ check "pin on main: two arguments after the flag are usage" test "$RC" = 2
 run env -C "$WCD" bash "$WCHECK" --online
 check "an unknown flag is usage" bash -c '[ "$1" = 2 ] && [[ $2 == *"usage: wiring-check.sh [--pin-on-main] [<config>]"* ]]' _ "$RC" "$ERR"
 
-# The README's CI step is the one the check requires.
+# The cascade docs' CI step is the one the check requires.
 wc_fresh
-check "wiring check: the README's CI step is the required one" test \
+check "wiring check: the cascade docs' CI step is the required one" test \
   "$(wc_readme "**The wiring check.**" | yq -o=json -I=0 '.[0] | del(.name)')" = "$(yq -o=json -I=0 '.jobs.ci.steps[1] | del(.name)' "$WCD/.github/workflows/ci.yml")"
