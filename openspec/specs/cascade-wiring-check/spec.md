@@ -3,7 +3,7 @@
 ## Purpose
 The release-cascade wiring check (workspace RELEASING.md, section "Two-job split"): the one
 script, kept in `.github` and copied byte for byte into the five product repos, that holds each
-repo's cascade caller workflows to the shapes the `.github` README documents; its per-repo
+repo's cascade caller workflows to the shapes the `.github` cascade reference files document; its per-repo
 config; how a repo keeps its copy in step with its pin; and the online check that the pin is on
 `.github` `main`.
 
@@ -15,7 +15,7 @@ config; how a repo keeps its copy in step with its pin; and the online check tha
 Run from a repo root as `wiring-check.sh [--pin-on-main] [<config>]` (default
 `.tasks/cascade/wiring-check.yaml`)
 with mikefarah `yq` v4, it SHALL compare the repo's cascade caller workflows with the caller
-shapes the README of the same `.github` commit documents, print every mismatch on stderr, and
+shapes the cascade reference files of the same `.github` commit document (`references/cascade-workflows.md` for the caller shapes), print every mismatch on stderr, and
 exit 1 when there was one; on success it SHALL print
 `cascade wiring: ok, .github <sha> (<pin comment>)` and exit 0. A missing tool, a missing
 config or a bad config SHALL exit 2. It SHALL check:
@@ -133,7 +133,7 @@ the flag.
 
 Each product repo SHALL keep the script at `.tasks/cascade/wiring-check.sh` byte-identical to
 `.github/scripts/cascade/wiring-check.sh` at the `.github` SHA its cascade references pin, and
-SHALL replace it in the same PR that moves the pin. The README SHALL give the command that
+SHALL replace it in the same PR that moves the pin. The wiring-check reference (`references/cascade-wiring-check.md`) SHALL give the command that
 fetches the copy at a SHA and the command that compares it. With `--pin-on-main`, after the pin
 was found on `.github` `main`, the check SHALL fetch that file at the pinned SHA
 (`gh api -H 'Accept: application/vnd.github.raw'
@@ -265,7 +265,7 @@ request when `BASH_ENV` or `ENV` is set.
 
 ### Requirement: Runbook for a failed API call
 
-The README SHALL tell an admin what to do when the required wiring step fails because a GitHub API
+The wiring-check reference (`references/cascade-wiring-check.md`) SHALL tell an admin what to do when the required wiring step fails because a GitHub API
 request failed (`cannot compare` or `cannot fetch`): first confirm with
 `gh api repos/open-platform-model/.github/commits/<sha>` that GitHub knows the pinned SHA, since
 `cannot compare` is also printed for an unknown SHA, which is a finding and never an outage;
