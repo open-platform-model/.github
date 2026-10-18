@@ -60,11 +60,8 @@ adds a row to the acknowledgement file in `tag-ledger/` (repo, tag, live object 
 SHA, note; tab-separated, `-` for both SHAs of a deleted tag). Until it merges, every run stays red.
 Once merged, that exact state is reported as a warning, and any further change fails again.
 
-Acknowledgements live on the default branch, never on the ledger branch. The ledger branch takes
-plain pushes (the job's own token can write it), so a row there could silence a finding with no
-review. The default branch already holds this workflow's code: whoever can change it can change the
-check itself, so the acknowledgement file adds no new way in. A PR there passes `mention-guard` and
-review.
+Acknowledgements live on the default branch only, never on the ledger branch. A PR there passes
+`mention-guard` and review.
 
 ## Token
 

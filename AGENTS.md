@@ -19,21 +19,6 @@ workspace `RELEASING.md`.
 
 ## Rules
 
-- Every workflow sets `permissions:` per workflow or job, starting from `{}` or `contents: read`,
-  and widens only with a comment that names why. Reason: a stolen token does least harm.
-- Third-party actions are pinned to a full commit SHA with the tag in a comment. Checkouts use
-  `persist-credentials: false` unless the job pushes. A script never sends a token to a host that
-  does not need it.
-- Scripts are bash with `set -euo pipefail`, a helper that writes the error to stderr and exits, and a clean
-  `shellcheck`. Tools beyond coreutils are named in the script header and checked at start. Exit
-  codes are part of the interface and are documented in the header.
-- Network access goes through one wrapper per script, so a test can replace it with a PATH shim that
-  answers from fixture files. No required test needs the network. A live check is a separate,
-  non-required workflow.
-- A check that a ruleset requires has no path filter. Reason: a filtered required check never
-  reports on other PRs and blocks them.
-- Nothing may break `mention-guard` or `tag-ledger`. A change to `mention-guard` applies to the whole
-  org at merge.
 - Callers pin the cascade by full SHA, and the pin moves by the rollout procedure, never by
   Dependabot. This repo's Dependabot config therefore ignores `open-platform-model/.github*`.
 - Callers keep a byte-identical copy of the wiring-check script. Change the check here and move the
@@ -41,8 +26,6 @@ workspace `RELEASING.md`.
 - Tests in `.github/scripts/cascade/wiring/test/` read the caller shapes and the wiring check's CI
   step from the cascade files in `references/`. Those files keep the bold lead-in line and the
   fenced block of each shape for that reason.
-- The `openspec/config.yaml` rules and principles also bind every change. A change is a set of
-  mergeable sections, one PR per change, one commit per section.
 
 ## Layout
 

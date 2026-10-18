@@ -36,8 +36,10 @@ resolver and the CLI's pin file. Two lists keep the old name only, because they 
 GitHub must find: the notify target lists (they set the App token's `repositories:`, and a name that
 does not exist fails the mint for every target) and the CLI's G3 upstream list (read by API). The
 drift workflow's receiver list (read from `main`, unpinned) and the tag-ledger `REPOS` keep the old
-name too. A later change here flips the target lists and the drift list once the rename PRs have
-merged. `REPOS` flips in its own change.
+name too. When the rename PRs have merged, one later change here finishes it: flip the notify
+target lists, the CLI's G3 upstream list and the drift workflow's receiver list to the new name,
+drop the old name from every map, and record the renamed repos' new mirror hashes. `REPOS` flips in
+its own change.
 
 ## Caller shapes
 

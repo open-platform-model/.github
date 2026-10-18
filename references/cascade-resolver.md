@@ -9,7 +9,8 @@ other topics.
 
 The resolver is the one implementation that every repo's `task deps:cascade` and the cascade receive
 workflow ask three things: which upstream version a pin moves to, whether a pin is held or frozen,
-and what the cascade PR is called. The design is the cascade part of the workspace `RELEASING.md`.
+and what the cascade PR is called. The design is the cascade part of the workspace `RELEASING.md`. The interface is fixed by the
+resolver contract, kept with the archived change `add-cascade-resolver` in `openspec/changes/archive/`.
 
 **How repos find it.** A repo task uses `CASCADE_RESOLVER` when it is set (an absolute path).
 Otherwise it uses the resolver in a `.github` checkout beside the repo (`../.github` from the main

@@ -52,8 +52,8 @@ push and writes the PR text itself.
   receiver's allow-list, in place: status `M`, no mode change, no symlink and no gitlink. The
   allow-list map is in `wiring/lib.sh`, and it is the live value. A merge commit must be git's own
   merge of its parents, with its second parent on `main`, except derived files that carry `main`'s
-  content. A deny-list always wins: `.github/**`, `.tasks/**`, any `Taskfile*`, `hack/**` (with two
-  named exceptions for the CLI), any `*.sh`, any `CODEOWNERS`, the release-please files,
+  content. A deny-list always wins: `.github/**`, `.tasks/**`, any `Taskfile*`, `hack/**` (except the
+  CLI's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), any `*.sh`, any `CODEOWNERS`, the release-please files,
   `.cascade-frozen` and `.cascade-hold`, and the operator's `modules/**` (its operator module moves
   only through its own deps workflow).
 - **Human commits.** A push that does not contain the old tip is refused when the old branch holds a

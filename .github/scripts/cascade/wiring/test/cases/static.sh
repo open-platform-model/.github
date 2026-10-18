@@ -260,11 +260,11 @@ expect "static: the cascade docs publish job passes its own gates_only input to 
   yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["gates-only"]' "$FX/readme-receiver.yml"
 check "static: the cascade docs publish if: reads the caller's own gates_only input" bash -c '[[ $(yq -r ".jobs.publish.if" "$1") == *"&& inputs.gates_only != true"* ]]' _ "$FX/readme-receiver.yml"
 check "static: the cascade docs publish if: reads no gates-only output of the reusable job" bash -c '! yq -r ".jobs.publish.if" "$1" | grep -q "needs.cascade.outputs.gates"' _ "$FX/readme-receiver.yml"
-check "static: the cascade docs names no cascade reference at main or a branch" bash -c '
-  ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$CASCADE_DOCS"
+check "static: the docs name no .github reference at main or a branch" bash -c '
+  ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$ALL_DOCS"
 check "static: the cascade docs pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]*cascade-[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$CASCADE_DOCS"
 check "static: the cascade docs bump procedure greps every .github reference, the cascade-task.yml checkout included" grep -qF "grep -rn -A1 'open-platform-model/.github' .github/workflows" "$CASCADE_DOCS"
-check "static: the cascade docs names no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$CASCADE_DOCS"
+check "static: the docs name no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$ALL_DOCS"
 
 for sbx in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox \
   "$ORG_ROOT"/openspec/changes/archive/*-add-release-cascade-workflows/sandbox; do
