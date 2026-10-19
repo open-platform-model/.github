@@ -8,11 +8,11 @@
 
 ## 2. Batch .github-B2: cascade-workflows, cascade-wiring-check, cascade-gates, cascade-pr-text, cascade-notify (27 requirements)
 
-- [ ] 2.1 For each long requirement of the five specs (cascade-workflows 9, cascade-wiring-check 8, cascade-gates 4, cascade-pr-text 4, cascade-notify 2), read the text, choose the form by design.md D1, and grep the repo outside `openspec/changes/archive` for the header text before any rename or split
-- [ ] 2.2 Write the deltas, with the same rules as 1.2
-- [ ] 2.3 Append the scenario ledger and clause tables of the 27 requirements to design.md
-- [ ] 2.4 Run the guide gate (D4) with N = 55 and LAST=1: after the archive in the scratch copy `validate --specs --strict` exits 0, `validate <change> --strict` exits 0, no new ERROR item, no "Archive would refuse"; report whether `validate --all --strict` exits 0; run the per-spec check and the scenario check as in 1.4
-- [ ] 2.5 `shellcheck`, `actionlint` and every `test/run.sh` green, then commit docs(openspec): split the long requirements of batch B2
+- [x] 2.1 For each long requirement of the five specs (cascade-workflows 9, cascade-wiring-check 8, cascade-gates 4, cascade-pr-text 4, cascade-notify 2), read the text, choose the form by design.md D1, and grep the repo outside `openspec/changes/archive` for the header text before any rename or split
+- [x] 2.2 Write the deltas, with the same rules as 1.2
+- [x] 2.3 Append the scenario ledger and clause tables of the 27 requirements to design.md
+- [x] 2.4 Run the guide gate (D4) with N = 55 and LAST=1: after the archive in the scratch copy `validate --specs --strict` exits 0, `validate <change> --strict` exits 0, no new ERROR item, no "Archive would refuse"; report whether `validate --all --strict` exits 0; run the per-spec check and the scenario check as in 1.4
+- [x] 2.5 `shellcheck`, `actionlint` and every `test/run.sh` green, then commit docs(openspec): split the long requirements of batch B2
 
 ## 3. Repo extra: OpenSpec gate in the Resolver tests job
 

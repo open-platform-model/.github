@@ -486,6 +486,418 @@ The sentence of "Publish refuses a plan from a stale mirror" is kept word for wo
 
 New scenarios (not in the old specs) use only words of the clause they test; each is listed by the unit in its report so the reviewer can read them.
 
+### Batch .github-B2: scenario ledger
+
+One table per rewritten requirement. "Changed text?" is "no" for every row: the scenario check of the guide prints `same:` for each of them. The group 2 delta holds 27 rewritten requirements (five specs). The scenarios new to the spec are listed in the clause tables part.
+
+
+#### cascade-workflows
+
+Requirement "Hardened workflow shape" (1009 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Inline expression rejected | Run blocks take context values through env, Inline expression rejected | no |
+| Caller passes no secrets | The App key is read only by the caller's own job, Caller passes no secrets | no |
+| Reusable job does not see the Environment secret | Reusable cascade workflows hold no secret, Reusable job does not see the Environment secret | no |
+
+Requirement "Scripts come from the pinned .github commit" (1054 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| A pinned action runs its own commit's code | The composite actions run their scripts from their own directory, A pinned action runs its own commit's code | no |
+| The receive workflow checks its scripts out at its own SHA | The receive workflow checks the scripts out at its own commit, The receive workflow checks its scripts out at its own SHA | no |
+| Unknown own commit | The receive workflow checks the scripts out at its own commit, Unknown own commit | no |
+
+Requirement "App token minting" (1022 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Empty repository list | The mint uses a fixed owner and a non-empty repository list, Empty repository list | no |
+| Branch run cannot reach the key | The App token is minted after every check that could stop the job, Branch run cannot reach the key | no |
+
+Requirement "Repo code never holds a token" (1345 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Task sees no token | Repo code runs with no token variable, Task sees no token | no |
+| Task cannot write the step's outputs or environment | Repo code runs with no runner command file path, Task cannot write the step's outputs or environment | no |
+| No token after repo code | Compute reads with the token before repo code runs, No token after repo code | no |
+| Breaking check without a token | Compute reads with the token before repo code runs, Breaking check without a token | no |
+
+Requirement "No Actions cache from repo code reaches a publish job" (533 characters, form a/b (MODIFIED, name kept)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| compute's Go install | No Actions cache from repo code reaches a publish job, compute's Go install | no |
+
+Requirement "Compute installs pinned, checksummed tools" (566 characters, form a/b (MODIFIED, name kept)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Unknown CUE version | Compute installs pinned, checksummed tools, Unknown CUE version | no |
+| Tampered archive | Compute installs pinned, checksummed tools, Tampered archive | no |
+
+Requirement "Daily mirror drift check" (656 characters, form a/b (MODIFIED, name kept)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| A receiver changed its classes | Daily mirror drift check, A receiver changed its classes | no |
+| Every mirror current | Daily mirror drift check, Every mirror current | no |
+| A file cannot be read | Daily mirror drift check, A file cannot be read | no |
+
+Requirement "Rollout order for a new pin" (2017 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| All receivers dry, publish changed | A publish-only change while every receiver is dry, All receivers dry, publish changed | no |
+| One receiver already live, publish changed | A publish-only change once a receiver is live, One receiver already live, publish changed | no |
+| Resolver library changed | The pinning reference defines when a change touches an action, Resolver library changed | no |
+| Notify changed | A notify-only change moves one upstream first, Notify changed | no |
+| Both actions changed, one receiver live | A change that touches both actions follows both rules, Both actions changed, one receiver live | no |
+| Change touches neither action | A change that touches neither action has no canary, Change touches neither action | no |
+
+Requirement "The renamed controller repo answers to both names" (669 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| The renamed repo as a receiver | The renamed controller repo gets the same answers, The renamed repo as a receiver | no |
+| A target list keeps the old name | A target list keeps the old repo name, A target list keeps the old name | no |
+| Two names, one repo | same_repo treats the two names as one repo, Two names, one repo | no |
+
+
+#### cascade-wiring-check
+
+Requirement "Canonical wiring check" (2730 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| A variant spelling of the key | The App key is read only by the key-holding jobs, A variant spelling of the key | no |
+| An aliased Environment and a computed secret name | The cascade Environment is declared only on the key-holding jobs, An aliased Environment and a computed secret name | no |
+| A mixed-case call into .github | No call into .github passes secrets, A mixed-case call into .github | no |
+| A publish workflow restores a cache | Publish workflows use no Actions cache, A publish workflow restores a cache | no |
+| A gates-only publish | Key-holding jobs match the config, A gates-only publish | no |
+| Current callers after the caller edit | The wiring check compares the callers with the documented shapes, Current callers after the caller edit | no |
+
+Requirement "Per-repo wiring config" (1314 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Allow-list widened to a code-running variable | The wiring check allows only named env variables, Allow-list widened to a code-running variable | no |
+| Allow-list widened to a proxy or a git hook directory | The wiring check allows only named env variables, Allow-list widened to a proxy or a git hook directory | no |
+| An extra reference of an unknown kind | The wiring check refuses a bad extra-references item, An extra reference of an unknown kind | no |
+| An extra reference beside a fixed one | The wiring check refuses a bad extra-references item, An extra reference beside a fixed one | no |
+
+Requirement "Byte-identical copies" (1068 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Pin bump | Each product repo keeps a byte-identical copy of the wiring check, Pin bump | no |
+| A copy that drifted | The check reports a copy that differs or cannot be fetched, A copy that drifted | no |
+| Offline run | Without the flag the check does not compare the copy, Offline run | no |
+
+Requirement "The release key needs the release Environment" (640 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Release job without the Environment | The wiring check finds the release-key readers and holds them to the release Environment, Release job without the Environment | no |
+| The key in lower case | The wiring check finds the release-key readers and holds them to the release Environment, The key in lower case | no |
+| The Environment on a job that does not read the key | The wiring check finds the release-key readers and holds them to the release Environment, The Environment on a job that does not read the key | no |
+| Inherited secrets | The wiring check finds the release-key readers and holds them to the release Environment, Inherited secrets | no |
+
+Requirement "Declared extra references" (613 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| opm-operator's module dependency bot | A declared extra reference adds one expected reference, opm-operator's module dependency bot | no |
+| The extra reference at another SHA | A declared reference follows the fixed rules, The extra reference at another SHA | no |
+| An undeclared second resolver | An undeclared or missing reference fails, An undeclared second resolver | no |
+
+Requirement "Resolver checkouts pass no credentials" (616 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| A token on the resolver checkout | A resolver checkout uses fixed inputs, A token on the resolver checkout | no |
+| A checkout through repository_owner | A step counts as a .github checkout by its repository input, A checkout through repository_owner | no |
+| A clone in a run step | A step counts as a .github checkout by its repository input, A clone in a run step | no |
+
+Requirement "Nothing reaches the CI wiring step" (523 characters, form a/b (MODIFIED, name kept)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| BASH_ENV in the CI job env | Nothing reaches the CI wiring step, BASH_ENV in the CI job env | no |
+| A run step before the wiring step | Nothing reaches the CI wiring step, A run step before the wiring step | no |
+| Pinned setup actions before the wiring step | Nothing reaches the CI wiring step, Pinned setup actions before the wiring step | no |
+
+Requirement "Runbook for a failed API call" (739 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Unknown SHA | The runbook confirms the pinned SHA first, Unknown SHA | no |
+| GitHub API outage | The runbook allows an admin bypass only for a PR outside .github and .tasks, GitHub API outage | no |
+
+
+#### cascade-gates
+
+Requirement "G2 freshness" (849 characters, form a/b (MODIFIED, name kept)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Shipped pin behind | G2 freshness, Shipped pin behind | no |
+| Held pin | G2 freshness, Held pin | no |
+
+Requirement "G3 settled" (1042 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Upstream cascade open | G3 is a problem when an upstream has an open cascade PR, Upstream cascade open | no |
+| Forged settled result | G3 is evaluated by the gates job from API reads, Forged settled result | no |
+| The renamed repo's upstreams | G3 is a problem when an upstream has an open cascade PR, The renamed repo's upstreams | no |
+
+Requirement "Status mapping" (1281 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Forged gate entry | The gates job posts only on listed heads, Forged gate entry | no |
+| Warn mode problem | Statuses are posted with GITHUB_TOKEN in two contexts, Warn mode problem | no |
+| Long description | Statuses are posted with GITHUB_TOKEN in two contexts, Long description | no |
+| Missing artifact | A listed head without a G2 result gets a warning or an error, Missing artifact | no |
+
+Requirement "Per-PR gates workflow" (822 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Ordinary PR | A PR that is not a release PR gets n/a, Ordinary PR | no |
+| Release PR head moves | A same-repo release PR starts a gates-only run, Release PR head moves | no |
+
+
+#### cascade-pr-text
+
+Requirement "Path classification" (817 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Unmatched path is shipped | classify prints the class of each path, Unmatched path is shipped | no |
+| Basename glob at depth | Patterns match in five forms, Basename glob at depth | no |
+| Directory segment at any depth | Patterns match in five forms, Directory segment at any depth | no |
+| Root-level name only | Patterns match in five forms, Root-level name only | no |
+| Pattern of no known form | classify exits 1 on a bad line, Pattern of no known form | no |
+
+Requirement "Diff and moved pins" (561 characters, form a/b (MODIFIED, name kept)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Untracked file counts | Diff and moved pins, Untracked file counts | no |
+| Pin missing at the base | Diff and moved pins, Pin missing at the base | no |
+
+Requirement "Cascade PR title" (612 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Shipped wins over test | The title type follows the changed paths, Shipped wins over test | no |
+| Release tool only | The title type follows the changed paths, Release tool only | no |
+| Four pins | The title subject names the moved pins, Four pins | no |
+| Empty diff | An empty diff gives no title, Empty diff | no |
+
+Requirement "Cascade PR body" (2307 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Labels from moved pins | The body labels are the union of the moved pins' labels, Labels from moved pins | no |
+| Same input, same bytes | The PR body is printed in a fixed layout, Same input, same bytes | no |
+| No moved pin | The body table has one row per moved pin and the counts, No moved pin | no |
+| Empty diff | The PR body is printed in a fixed layout, Empty diff | no |
+| Hostile tag dropped | Triggering releases list one line per valid tag, Hostile tag dropped | no |
+| Unknown source dropped | A source outside the allowlist is dropped, Unknown source dropped | no |
+| Sandbox source accepted when listed | CASCADE_EXTRA_SOURCES widens the allowlist, Sandbox source accepted when listed | no |
+| Sandbox source dropped when not listed | CASCADE_EXTRA_SOURCES widens the allowlist, Sandbox source dropped when not listed | no |
+| The renamed repo as a source | A source outside the allowlist is dropped, The renamed repo as a source | no |
+
+
+#### cascade-notify
+
+Requirement "Notify interface" (522 characters, form a/b (MODIFIED, name kept)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Caller switch off | Notify interface, Caller switch off | no |
+
+Requirement "Source and targets are fixed" (948 characters, form c2 (REMOVED plus ADDED)).
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| Unknown source | Targets come from a fixed map, Unknown source | no |
+| Catalog tag shape | The tag input matches a fixed shape, Catalog tag shape | no |
+| The renamed repo releases | Targets come from a fixed map, The renamed repo releases | no |
+
+### Batch .github-B2: clause tables
+
+Form per requirement of B2 (the old length is in the ledger heading; the new lengths are in the report):
+
+- Form b (MODIFIED parent kept, no scenario moves out of it, rest split into ADDED): No Actions cache from repo code reaches a publish job, Compute installs pinned, checksummed tools, Daily mirror drift check, G2 freshness, Notify interface, Nothing reaches the CI wiring step, Diff and moved pins.
+- Form c2 (REMOVED plus ADDED, each old scenario reappears under its ledger name): every other requirement of the five specs.
+
+Each row reads: old clause, new requirement, and how the new sentence relates to the old one. "Verbatim" means the whole old sentence is copied unchanged. "Lead" means the new body starts with words copied from the same old requirement (a subject or a condition). "Clause split" means an old sentence was cut at a `;` or at a comma between list items and each piece keeps the words of the old sentence; a trailing `;` or `:` became a full stop and a leading `and` was dropped. A rule table that sat in a body is in a scenario THEN and the body names the scenario ("Status table", "Target map", "The config keys", "Body layout").
+
+#### cascade-workflows
+
+| Old requirement and clause | New requirement | New sentence |
+| --- | --- | --- |
+| Hardened workflow shape: `cascade-receive.yml` and `cascade-gates.yml` callable only through `workflow_call`; the two composite actions | Cascade workflows and actions have a fixed shape | verbatim |
+| Hardened workflow shape: every job declares `permissions:`; third-party `uses:` pinned to a full SHA | Cascade workflows and actions have a fixed shape | verbatim (two sentences) |
+| Hardened workflow shape: no `${{ }}` in a `run:` block, context through `env:` | Run blocks take context values through env | verbatim |
+| Hardened workflow shape: no `secrets:` input, secret read or Environment in a reusable workflow, with the reason and (sandbox cycle E1) | Reusable cascade workflows hold no secret | verbatim |
+| Hardened workflow shape: the App key read only as the `cascade` Environment secret by the caller's own job; no caller passes `secrets:` or `secrets: inherit` | The App key is read only by the caller's own job | verbatim |
+| Scripts come from the pinned .github commit: callers reference by full 40-character SHA, never branch or tag, one SHA per repo (owner decision 24 and the supervisor extension) | Callers reference the cascade by a full SHA | verbatim |
+| Scripts: scripts run at the same commit; composite actions run them from `GITHUB_ACTION_PATH` and do not check out `.github` | The composite actions run their scripts from their own directory | clause split at the `:` and `;`; the first clause is the lead of the next row; trailing `;` is a full stop |
+| Scripts: each receive job checks out `.github` to `org-github` with `persist-credentials: false` after the `Own commit` checks | The receive workflow checks the scripts out at its own commit | lead "The scripts SHALL run at that same commit, with no input naming another `.github` ref;" then the old clause verbatim |
+| Scripts: the `Guard` derivation inline and before any script | The repo-name derivation runs inline before any script | verbatim |
+| App token minting: minted only inside the two actions, by a job with `environment: cascade`, directly before first use and after every check | The App token is minted after every check that could stop the job | clause split before ", from the `client-id`"; trailing comma is a full stop |
+| App token minting: from `client-id` and `private-key` with `owner` and a non-empty `repositories` list; the step before fails when the list is empty | The mint uses a fixed owner and a non-empty repository list | clause split; lead "The App token SHALL be minted"; the "fails when empty" sentence verbatim |
+| App token minting: token scopes of notify and publish | The App token has a fixed scope | verbatim |
+| App token minting: token not passed, written, put on a command line or kept; git receives it as the masked extraheader | The App token is neither passed nor persisted | verbatim |
+| Repo code never holds a token: commands with repo code run with token variables unset | Repo code runs with no token variable | verbatim |
+| Repo code: also run with the runner command-file variables and `ACTIONS_*` unset | Repo code runs with no runner command file path | "It" replaced by the subject "Every command that runs code from the calling repo" |
+| Repo code: credentialed git read gets the header for one call only | A credentialed git read gets the header for one call | verbatim |
+| Repo code: `compute` token reads before the first repo-code step; no token after | Compute reads with the token before repo code runs | verbatim |
+| Repo code: steps are no boundary; later outputs untrusted | Compute output written after repo code is untrusted | verbatim, plus one sentence that points "that point" to the first step named in the previous row |
+| No Actions cache: no step saves or restores a cache; `cache: false` | No Actions cache from repo code reaches a publish job (kept) | verbatim |
+| No Actions cache: product repos' publish workflows restore no cache; the wiring check enforces it | Product repos restore no cache in their publish workflows | verbatim |
+| Compute installs: Task and CUE with `install-tools.sh`, checksums, failures | Compute installs pinned, checksummed tools (kept) | verbatim |
+| Compute installs: no version range installed | Compute installs no version range | verbatim |
+| Compute installs: `setup-go` stays SHA-pinned with `cache: false` | Compute keeps setup-go SHA-pinned without a cache | keyword added: "stays" became "SHALL stay" (strength table) |
+| This repo's own workflows are least privilege | not rewritten (not over 500) | none |
+| Daily mirror drift: runs daily with `contents: read`, no secret, no persisted credentials | Mirror drift runs daily with a read-only token | verbatim |
+| Daily mirror drift: reads each recorded file, fails with annotations, checks every file; never required | Daily mirror drift check (kept) | lead: "It" replaced by "`cascade-mirror-drift.yml` (job `Mirror drift`)"; the rest verbatim |
+| Rollout order: reference states the order (owner decision 37); one receiver takes a dry run | The pinning reference states the rollout order | verbatim (two sentences) |
+| Rollout order: definition of "touches an action" | The pinning reference defines when a change touches an action | "That reference" replaced by "The pinning reference (`references/cascade-pinning.md`)" |
+| Rollout order: neither action touched, no canary | A change that touches neither action has no canary | keyword added: "has" became "SHALL have" (strength table) |
+| Rollout order: publish only, every receiver dry | A publish-only change while every receiver is dry | clause split at the `;`; trailing `;` is a full stop |
+| Rollout order: publish only, once any receiver is live | A publish-only change once a receiver is live | clause split; lead "For a change that touches `cascade-publish` and not `cascade-notify`:"; one sentence "That run is the canary's first live publish run on the new pin." made of old words, because "that run" sat after the sibling clause |
+| Rollout order: notify only | A notify-only change moves one upstream first | verbatim |
+| Rollout order: reference does not offer `CASCADE_NOTIFY` off | A notify-only change moves one upstream first | "That reference" replaced by "The pinning reference (`references/cascade-pinning.md`)" |
+| Rollout order: both actions | A change that touches both actions follows both rules | verbatim, plus one sentence that names the three requirements that hold the notify rule and the publish rule |
+| The renamed controller repo: fixed maps give both names the same answer | The renamed controller repo gets the same answers | verbatim |
+| The renamed controller repo: values GitHub must find keep `opm-operator` | A target list keeps the old repo name | lead "While the repo `opm-operator` is renamed `opm-controller`," then the sentence with "A" as "a" |
+| The renamed controller repo: `same_repo` | same_repo treats the two names as one repo | same lead, then the sentence verbatim |
+
+#### cascade-wiring-check
+
+| Old requirement and clause | New requirement | New sentence |
+| --- | --- | --- |
+| Canonical wiring check: the one check of the five repos; missing tool, config or bad config exits 2 | The canonical wiring check is one script | verbatim (two sentences) |
+| Canonical: usage, compare with the documented shapes, mismatches on stderr, exit 1, ok line, exit 0 | The wiring check compares the callers with the documented shapes | verbatim |
+| Canonical, bullet: no YAML anchor or alias | The wiring check refuses YAML anchors and aliases | "It SHALL check:" replaced by the subject `.github/scripts/cascade/wiring-check.sh` SHALL check:; bullet verbatim, `;` became a full stop |
+| Canonical, bullet: key-holding jobs, exact shape | Key-holding jobs have a fixed shape | same lead; bullet cut at the `;` after "key expressions" |
+| Canonical, bullet: key-holding jobs, notify and publish against the config | Key-holding jobs match the config | same lead; the job names of the bullet copied before the `:`; second half verbatim |
+| Canonical, bullet: `release.yml` workflow `env` | The wiring check limits the workflow env of release.yml | same lead, verbatim |
+| Canonical, bullet: receiver workflows | The wiring check holds a receiver's workflows to a fixed shape | same lead, verbatim |
+| Canonical, bullet: App key read only by the key-holding jobs, with the reader definition | The App key is read only by the key-holding jobs | same lead; bullet cut at the first `;`; one sentence points "the key-holding jobs" to the requirement that names them |
+| Canonical, bullet: cascade Environment only on those jobs | The cascade Environment is declared only on the key-holding jobs | same lead; one sentence names "those jobs" with the words of the previous bullet |
+| Canonical, bullet: no call into `.github` passing `secrets:` | No call into .github passes secrets | same lead, verbatim |
+| Canonical, bullet: publish workflows use no cache | Publish workflows use no Actions cache | same lead, verbatim |
+| Canonical, bullet: every `.github` reference at one full SHA | Every .github reference is at one full SHA with the pin comment | same lead, verbatim |
+| Canonical, bullet: the CI job runs exactly the wiring step | The CI job runs exactly the wiring step | same lead, verbatim |
+| Per-repo wiring config: values live in `.tasks/cascade/wiring-check.yaml`, exactly these keys | The wiring config holds exactly the documented keys | the key list is in the THEN of scenario "The config keys", byte for byte; the body names the scenario |
+| Per-repo config: refuse an unknown key, a wrong type, a `publish-workflows` list without `release.yml` | The wiring check refuses an unknown key, a wrong type or a publish-workflows list without release.yml | clause split of the list; lead "The check SHALL refuse, as a config error," |
+| Per-repo config: refuse an `extra-references` item with another key, file name or kind; a `resolver` item on a non-receiver; the same file and kind twice; the four fixed files | The wiring check refuses a bad extra-references item | clause split of the list, same lead |
+| Per-repo config: refuse an `env-allow` entry outside the four names, with the reason | The wiring check allows only named env variables | clause split of the list (leading "and" dropped), same lead; reason verbatim |
+| Byte-identical copies: copy kept byte-identical; replaced in the PR that moves the pin | Each product repo keeps a byte-identical copy of the wiring check | verbatim |
+| Byte-identical: reference gives the fetch and compare commands | The wiring-check reference gives the fetch and compare commands | verbatim |
+| Byte-identical: with the flag, fetch the file and compare | The check compares the copy with the file at the pinned SHA | clause split at the `;` after "running" |
+| Byte-identical: difference prints `differs from`, failed request prints `cannot fetch` | The check reports a copy that differs or cannot be fetched | clause split; lead "With `--pin-on-main`, after the pin was found on `.github` `main`," |
+| Byte-identical: without the flag, print the not-compared line, no request | Without the flag the check does not compare the copy | verbatim |
+| The release key: reader definition, `environment: release` for each reader and only readers | The wiring check finds the release-key readers and holds them to the release Environment | verbatim (two sentences) |
+| The release key: mismatch messages, exit 1; needs no config key | A release key mismatch prints a message and exits 1 | verbatim (two sentences), plus one sentence that names the requirement above |
+| Declared extra references: each item adds one expected reference; `resolver` and `cite-lint` definitions | A declared extra reference adds one expected reference | keyword added: "is" became "SHALL be" in the two definitions (strength table) |
+| Declared extra references: held to the rules of the fixed references | A declared reference follows the fixed rules | verbatim |
+| Declared extra references: neither fixed nor declared, or missing, fails | An undeclared or missing reference fails | verbatim |
+| Resolver checkouts: fixed inputs; anything else fails with exit 1 | A resolver checkout uses fixed inputs | verbatim (two sentences) |
+| Resolver checkouts: what counts as a `.github` checkout; expression and `run:` steps fail | A step counts as a .github checkout by its repository input | verbatim (two sentences) |
+| Nothing reaches the CI wiring step: refusals in the CI workflow and job | Nothing reaches the CI wiring step (kept) | verbatim |
+| Nothing reaches the CI wiring step: exit 1 before any request when `BASH_ENV` or `ENV` is set | The wiring check exits before any request when BASH_ENV or ENV is set | verbatim |
+| Runbook: confirm the SHA first, `cannot compare` also for an unknown SHA | The runbook confirms the pinned SHA first | lead copied from the old first clause; clause split at the first `;` |
+| Runbook: re-run; admin bypass only for a PR outside `.github/**` and `.tasks/**` | The runbook allows an admin bypass only for a PR outside .github and .tasks | same lead; clause split |
+| Runbook: `--pin-on-main` never removed; failure never bypassed | The runbook keeps the flag and never bypasses a pin failure | same lead; two sentences verbatim |
+
+#### cascade-gates
+
+| Old requirement and clause | New requirement | New sentence |
+| --- | --- | --- |
+| G2 freshness: add worktree, run the head's task with the env unset | G2 runs the head's task in a detached worktree | clause split before "and rate the result"; trailing comma is a full stop |
+| G2 freshness: rate the result by exit code | G2 freshness (kept) | clause "rate the result:" with its lead; the rest verbatim |
+| G2 freshness: worktree removed on error | G2 runs the head's task in a detached worktree | verbatim |
+| G2 freshness: runs before pin work, results uploaded | G2 runs before pin work and uploads its results | verbatim, plus one sentence that names the requirement that defines the evaluation |
+| G3 settled: problem when the upstream's own cascade PR has a `fix(deps)` or `feat(deps)` title | G3 is a problem when an upstream has an open cascade PR | clause split; lead is the whole upstream map and "G3 SHALL be a problem when" |
+| G3 settled: problem when an upstream release PR is pending with deps | G3 is a problem when an upstream release PR is pending with deps | clause split; same lead |
+| G3 settled: otherwise `ok: upstreams settled`, API error, release-tool edges never count | G3 is otherwise settled | verbatim, plus one sentence that names the two requirements that define "otherwise" |
+| G3 settled: evaluated by `gates` from API reads, once per run, posted on every head | G3 is evaluated by the gates job from API reads | verbatim |
+| G3 settled: never read from `compute` | G3 is evaluated by the gates job from API reads | "It" replaced by "G3" |
+| Status mapping: statuses posted with `GITHUB_TOKEN`, contexts, URL, 140 characters, then the table | Statuses are posted with GITHUB_TOKEN in two contexts | the table is in the THEN of scenario "Status table", byte for byte; the body names it |
+| Status mapping: `gates` runs after `compute` | The gates job runs after compute | verbatim |
+| Status mapping: list the heads, post only on them, fail when unreadable; take only G2 from `gates.json` | The gates job posts only on listed heads | the "It" of the list sentence replaced by "The `gates` job"; the other sentence verbatim |
+| Status mapping: head without a G2 result | A listed head without a G2 result gets a warning or an error | verbatim |
+| Per-PR gates workflow: inputs, one job, permissions, checks out nothing | The per-PR gates workflow has fixed inputs, job and permissions | clause split before ", and:"; subject copied |
+| Per-PR gates workflow: not a release PR posts `success` | A PR that is not a release PR gets n/a | clause split of the `;`-list; subject copied |
+| Per-PR gates workflow: same-repo release PR posts `pending`, starts `deps-cascade.yml` | A same-repo release PR starts a gates-only run | clause split; subject copied |
+| Per-PR gates workflow: a failed start posts `error` or a warning, then fails | A failed start posts error or a warning | verbatim, plus one sentence that names the requirement that holds the start |
+| Per-PR gates workflow: a gates-only run only posts | A gates-only receiver run only posts the gates | verbatim |
+
+#### cascade-pr-text
+
+| Old requirement and clause | New requirement | New sentence |
+| --- | --- | --- |
+| Path classification: `classify` reads paths and prints classes; the classes file format and first-match rule | classify prints the class of each path | verbatim (two sentences) |
+| Path classification: the five pattern forms | Patterns match in five forms | verbatim |
+| Path classification: exit 1 on an unknown class, a line without a pattern or a bad pattern | classify exits 1 on a bad line | verbatim, plus one sentence that names the requirement that holds "these five forms" |
+| Diff and moved pins: `--classes`, `--pins`, base ref | title and body take the classes, the pins script and a base ref | verbatim |
+| Diff and moved pins: merge-base, changed paths, moved pins, renamed file | Diff and moved pins (kept) | "They" replaced by "`title` and `body`"; the rest verbatim |
+| Diff and moved pins: pins script that exits non-zero | A failing pins script fails title and body | verbatim |
+| Cascade PR title: one line; the type rule; no `!`, no other type | The title type follows the changed paths | verbatim (three sentences, the first and the last from the ends of the old body) |
+| Cascade PR title: subject rules; `<to>` v-prefixed | The title subject names the moved pins | verbatim (two sentences) |
+| Cascade PR title: no changed path prints nothing, exit 3 | An empty diff gives no title | "it" replaced by "`title`" |
+| Cascade PR body: exactly these lines, the fenced layout | The PR body is printed in a fixed layout | the fenced block is in the THEN of scenario "Body layout", byte for byte; the body names it |
+| Cascade PR body: `<labels>` union; never `deps-cascade:breaking` | The body labels are the union of the moved pins' labels | the bullet dash dropped; the rest verbatim |
+| Cascade PR body: table rows; counts | The body table has one row per moved pin and the counts | verbatim (two sentences) |
+| Cascade PR body: triggering releases per valid tag; tag pattern; nothing valid | Triggering releases list one line per valid tag | verbatim (three sentences) |
+| Cascade PR body: dropped value named with `?` | A dropped value is named only with safe characters | verbatim |
+| Cascade PR body: source allowlist | A source outside the allowlist is dropped | verbatim |
+| Cascade PR body: `CASCADE_EXTRA_SOURCES` | CASCADE_EXTRA_SOURCES widens the allowlist | verbatim |
+| Cascade PR body: warnings lines, `-` key, none | Warnings are the lines of the warnings file | verbatim (three sentences) |
+| Cascade PR body: notes byte for byte; never edited or linted | The body ends with the Notes | verbatim (two sentences) |
+
+#### cascade-notify
+
+| Old requirement and clause | New requirement | New sentence |
+| --- | --- | --- |
+| Notify interface: composite action, inputs; no dry-run mode | Notify interface (kept) | verbatim (two sentences) |
+| Notify interface: the upstream runs it as the only step of `Notify downstream` | The upstream runs the notify action as its only step | keyword added: "runs" became "SHALL run" (strength table); one sentence names the requirement that defines "it" |
+| Source and targets: source is the calling repo's name | The source is the calling repo's name | verbatim |
+| Source and targets: targets from a fixed map; unknown source fails; the table | Targets come from a fixed map | the table is in the THEN of scenario "Target map", byte for byte; the body names it |
+| Source and targets: `opm-controller` and the old name in target lists | A target list names only the old repo name | verbatim |
+| Source and targets: `tag` shape | The tag input matches a fixed shape | verbatim |
+
+#### Strength table (RFC 2119 words added in B2)
+
+| New requirement | Old sentence | New sentence |
+| --- | --- | --- |
+| A change that touches neither action has no canary | "A change that touches neither `cascade-publish` nor `cascade-notify` has no canary: all five repos MAY move together, ..." | "... SHALL have no canary: ..." (the validator wants SHALL or MUST in every ADDED body; MAY alone fails) |
+| Compute keeps setup-go SHA-pinned without a cache | "`setup-go` stays SHA-pinned with `cache: false`." | "`setup-go` SHALL stay SHA-pinned with `cache: false`." |
+| A declared extra reference adds one expected reference | "A `resolver` reference is a step whose ..." and "A `cite-lint` reference is a job whose ..." | "SHALL be" in place of "is" in both |
+| The upstream runs the notify action as its only step | "The upstream runs it as the only step of its own job ..." | "The upstream SHALL run it as the only step of its own job ..." |
+
+#### New scenarios of B2
+
+These scenarios are not in the old specs. Each restates the rule of its body in one WHEN and one THEN, using words of that body; a table or a fenced block that sat in a body is in the THEN of "Status table", "Target map", "The config keys" and "Body layout". Every kept or moved scenario is byte for byte as on `origin/main` (the scenario check prints `same:` for it).
+
+- cascade-workflows (15): A workflow with no explicit permissions; Caller passes secrets: inherit; Reference by a branch; Guard before the scripts; Notify token scope; Publish token scope; Token handed to another job; Git receives the token as a header; Header written to a file; Output written after repo code; Mirror drift permissions; Publish workflow restores a cache; Version range; setup-go reference; Dry run first.
+- cascade-wiring-check (16): A missing config; A merge key; A key-holding job with another timeout; Env key outside the allow-list; A receiver trigger that differs; References at two SHAs; A path filter on the CI job; The config keys; An unknown config key; Commands in the reference; A matching copy; A failed fetch; Mismatch message; A declared reference that is missing; ENV set with the flag; A pin failure is never bypassed.
+- cascade-gates (11): Worktree after an error; Upload after a failed step; Release PR pending with deps; Nothing pending; Status table; Gates job in a dry run; The list cannot be read; Gates workflow checkout; Dispatch fails in enforce mode; Dispatch fails in warn mode; Gates-only run.
+- cascade-pr-text (11): Base ref fallback; Pins script exits non-zero; Unknown class; Paths changed, no pin moved; Body layout; Counts per class; Dropped value with a hostile character; Extra name that is not a repo name; Explicit warnings file missing; No warnings; Notes from the file.
+- cascade-notify (5): Notify downstream job; A caller names another source; Target map; Target list with the new name; Tag shape of another source.
+
+Total 58. Two of them hold a case that is the plain negation of an old case: "Tag shape of another source" (a source other than `catalog_opm` with an `opm-` tag) and "Unknown class" (`docs` is not one of the three classes). The supervisor or reviewer decides whether they stay.
+
 
 ## Risks
 
