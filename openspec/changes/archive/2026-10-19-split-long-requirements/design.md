@@ -10,7 +10,7 @@ Measured on `origin/main` 48e9ead (OpenSpec 1.14.1): `validate --all --strict` p
 
 Options: (a) shorten in place with MODIFIED and move detail into new scenarios; (b) MODIFIED parent plus ADDED splits; (c2) REMOVED plus ADDED under new names; (d) RENAMED plus MODIFIED. Status quo (leave the warnings and drop `--strict`) is rejected: the human ordered the gate.
 
-Decision: read each requirement, then pick by the guide table.
+Decision: read each requirement, then pick by the table of rewrite forms.
 
 | The excess is | Form |
 | --- | --- |
@@ -19,7 +19,7 @@ Decision: read each requirement, then pick by the guide table.
 | Several behaviors; the old scenarios belong to different behaviors | c2 |
 | A name that must change with no change of rule | d, alone |
 
-Most requirements of this repo hold several behaviors (T1.3 marks 52 of 55 as "several behaviors"), so b and c2 are the common forms and a is the second. The T1.3 kind label is a heuristic: the author reads the text. Reversibility: high (hours). A wrong split is fixed by a new rewrite before archive.
+Most requirements of this repo hold several behaviors (the inventory marks 52 of 55 as "several behaviors"), so b and c2 are the common forms and a is the second. The inventory kind label is a heuristic: the author reads the text. Reversibility: high (hours). A wrong split is fixed by a new rewrite before archive.
 
 Trade-off: c2 gives the cleanest one-behavior blocks but it is the only form that may lose a scenario without an error, so it carries the ledger (D2). Form a and b keep every scenario by name, which the repo rule requires for MODIFIED.
 
@@ -36,25 +36,25 @@ New ADDED requirements follow the repo rule "scenarios that demonstrate requirem
 
 ### D3. Batches and order
 
-Decision: two units in sequence on one branch: B1 (28), then B2 (27), then the CI step, then `AGENTS.md`, then the final gate. T1.3 sets the batches (first-fit decreasing, cap 28, whole specs, no spec in two batches). Why B1 first: it is the larger one and holds `cascade-resolver-checks`, the spec that names the CI job, so the new CI requirement (D5) lands in a spec already open in this change. No collision exists: `openspec/changes/` holds no other open change, so no MODIFIED block of another author can go stale.
+Decision: two units in sequence on one branch: B1 (28), then B2 (27), then the CI step, then `AGENTS.md`, then the final gate. The inventory sets the batches (first-fit decreasing, cap 28, whole specs, no spec in two batches). Why B1 first: it is the larger one and holds `cascade-resolver-checks`, the spec that names the CI job, so the new CI requirement (D5) lands in a spec already open in this change. No collision exists: `openspec/changes/` holds no other open change, so no MODIFIED block of another author can go stale.
 
-One caveat: the CI step must come after B2. With 27 warnings left, the step would fail its own PR. Inside one PR the group order is the commit order, and every group ends green under the repo gates, but `openspec validate --all --strict` is green only after the archive (task 5.3). Group 1 therefore ends green under gates 1 to 3 and under the guide gate of D4 (warnings fell by 28, no new ERROR).
+One caveat: the CI step must come after B2. With 27 warnings left, the step would fail its own PR. Inside one PR the group order is the commit order, and every group ends green under the repo gates, but `openspec validate --all --strict` is green only after the archive (task 5.3). Group 1 therefore ends green under gates 1 to 3 and under the gate of D4 (warnings fell by 28, no new ERROR).
 
 ### D4. The gate per unit
 
-Run in a scratch copy of `openspec/`, never in the worktree, with the pinned 1.14.1 CLI. Paths for this repo: `WT` is the worktree `agent-swarm/openspec-requirement-split/worktrees/.github-split-long-requirements`, `CH` is `split-long-requirements`, `S` is a scratch folder. The block of guide section 6 runs unchanged:
+Run in a scratch copy of `openspec/`, never in the worktree, with the pinned 1.14.1 CLI. Paths for this repo: `WT` is the worktree of the branch, `CH` is `split-long-requirements`, `S` is a scratch folder. The gate block of the rewrite method runs unchanged:
 
 - Baseline from `git -C $WT archive main openspec` (not from the worktree), copy of `$WT/openspec` for the change.
 - It runs `validate $CH --strict`, `archive $CH --yes` in the copy, `validate --all --strict`, and fails on any line "Archive would refuse" and on any ERROR item (type, id, path) that main does not have.
 - Unit B1: `N` = 28, so warnings must fall from 55 to 27. Unit B2: `N` = 55 and `LAST=1` (no unit follows in the rewrite, the CI step and `AGENTS.md` touch no spec text other than D5): after the archive `validate --specs --strict` must exit 0. Because this repo has no other open change, `validate --all --strict` is also expected to exit 0 and is reported.
-- After each unit also run `openspec validate <spec> --type spec --strict --json` for the batch specs, and the scenario check of guide checklist item 3 (script `same:`, `new:`, `DIFF:`, `LOST:` lines) per rewritten requirement. A `DIFF` or `LOST` line stops the unit.
+- After each unit also run `openspec validate <spec> --type spec --strict --json` for the batch specs, and the scenario check of the review checklist (script `same:`, `new:`, `DIFF:`, `LOST:` lines) per rewritten requirement. A `DIFF` or `LOST` line stops the unit.
 - `validate <change> --strict` alone is not enough: it skips long MODIFIED text.
 
 ### D5. The CI gate
 
 Options: (1) a step in the existing `Resolver tests` job; (2) a new job in `cascade-resolver.yml`; (3) a new workflow; (4) a Taskfile with `openspec:check` (what cli does). The status quo is no gate.
 
-Decision: option 1. Reasons: the human ruled "CI workflow step only, no Taskfile" because the repo has none. The spec of that workflow says it adds no new job and no new check context, and `Resolver tests` is the required check that already reports on every PR with no path filter (Principle III). A new job or workflow would add a check context that no ruleset requires, so it would not gate merges, or it would need an owner ruleset edit that this change must not do.
+Decision: option 1. Reasons: the owner ruled "CI workflow step only, no Taskfile" because the repo has none. The spec of that workflow says it adds no new job and no new check context, and `Resolver tests` is the required check that already reports on every PR with no path filter (Principle III). A new job or workflow would add a check context that no ruleset requires, so it would not gate merges, or it would need an owner ruleset edit that this change must not do.
 
 Details of the step, for task group 3:
 
@@ -79,7 +79,7 @@ Each unit appends its blocks here (form D2) in the commit of its delta.
 
 ### Batch .github-B1: scenario ledger
 
-One table per rewritten requirement. "Changed text?" is "no" for every row: the scenario check of the guide prints `same:` for each of them. The group 1 delta holds 28 rewritten requirements.
+One table per rewritten requirement. "Changed text?" is "no" for every row: the scenario check prints `same:` for each of them. The group 1 delta holds 28 rewritten requirements.
 
 ### cascade-receive
 
@@ -421,7 +421,7 @@ The sentence of "Publish refuses a plan from a stale mirror" is kept word for wo
 | One entry point: work from any directory by absolute path | ADDED "The resolver runs from any directory" |
 | SemVer 2.0.0 precedence: order rules, no `sort -V` trick | "The resolver orders versions by SemVer 2.0.0 precedence" |
 | SemVer 2.0.0 precedence: `semver-cmp` and `semver-sort` output | "semver-cmp and semver-sort have fixed output" |
-| Candidate rules for newest | three requirements as in guide section 5.2 (valid candidates; ten newest; exit 3) |
+| Candidate rules for newest | three requirements as in the rewrite method (valid candidates; ten newest; exit 3) |
 | Query kinds: lead sentence "support these kinds, with published defined per kind" | each kind states its own published rule, in the five kind requirements |
 | Query kinds: `cue`, `go`, `release` plus `opm-cli`, `oci` (for `oci`, the manifest `HEAD` decides published) | "Cue queries read the GHCR tag list", "Go queries read the module proxy", "Release queries read git tags and release assets", "OCI queries accept the manifest and index types" |
 | Query kinds: no credentials, no `api.github.com` | "The resolver sends no credentials" |
@@ -488,7 +488,7 @@ New scenarios (not in the old specs) use only words of the clause they test; eac
 
 ### Batch .github-B2: scenario ledger
 
-One table per rewritten requirement. "Changed text?" is "no" for every row: the scenario check of the guide prints `same:` for each of them. The group 2 delta holds 27 rewritten requirements (five specs). The scenarios new to the spec are listed in the clause tables part.
+One table per rewritten requirement. "Changed text?" is "no" for every row: the scenario check prints `same:` for each of them. The group 2 delta holds 27 rewritten requirements (five specs). The scenarios new to the spec are listed in the clause tables part.
 
 
 #### cascade-workflows
@@ -923,6 +923,6 @@ Install check (task 3.1): the 1.14.1 package installed on the host and every pac
 
 ## Risks
 
-- A rewrite changes a rule by accident. Mitigation: the guide checklist per unit and the `DIFF`/`LOST` script.
+- A rewrite changes a rule by accident. Mitigation: the review checklist per unit and the `DIFF`/`LOST` script.
 - Another repo copies spec text from this one (the `references/` files and five product repos' wiring copies cite requirement names). Mitigation: the grep of D2 before each rename; product repos hold no spec text.
-- The CI step fails every PR if the pin is wrong. Mitigation: the implement unit runs the same commands locally before the commit; actionlint runs on the edited workflow.
+- The CI step fails every PR if the pin is wrong. Mitigation: the implementing author runs the same commands locally before the commit; actionlint runs on the edited workflow.

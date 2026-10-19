@@ -33,7 +33,7 @@ None.
 - Callers: no repo calls the changed spec text. The workflow change affects the required check `Resolver tests` of this repo only: every pull request now also runs the OpenSpec gate, so a PR that adds a long requirement fails that check. The owner must know this before merge.
 - Depends on: nothing open. The 1.14.1 skill bump landed in this repo as PR 26. Later changes depend on this one: any new spec text here must pass the gate.
 - Delivery: one PR, one commit per task group (Principle IV of `openspec/config.yaml`).
-- Proposal gate: the human reads this change before any delta is written.
+- Proposal gate: the owner reads this change before any delta is written.
 
 ## Enhancement
 
