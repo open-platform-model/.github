@@ -405,7 +405,7 @@ Every warning SHALL be printed to stderr as `cascade-resolve: warning: <message>
 
 ### Requirement: Newest answers only candidates whose tag is on main
 
-For a pin whose versions are tags of an `open-platform-model` repo, `newest` SHALL answer a published candidate only when its tag's commit is reachable from that repo's `main`. A candidate whose tag is not on `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on `<repo>` main; skipped", and the walk SHALL continue with the next candidate.
+For a pin whose versions are tags of an `open-platform-model` repo (the pins of "Go, release and core pins check their own tag" and "Catalog and module pins check a prefixed tag"), `newest` SHALL answer a published candidate only when its tag's commit is reachable from that repo's `main`. A candidate whose tag is not on `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on `<repo>` main; skipped", and the walk SHALL continue with the next candidate.
 
 #### Scenario: A forged tag
 
@@ -451,7 +451,7 @@ The resolver SHALL learn whether a tag is on `main` with git only (a tree-less b
 
 ### Requirement: Other pins and published do not check tags
 
-Pins that are not tags of an `open-platform-model` repo (fixtures, templates, `oci`) SHALL NOT be checked for a tag on `main`, and `published` SHALL NOT check.
+Other pins, those not named in "Go, release and core pins check their own tag" and "Catalog and module pins check a prefixed tag" (fixtures, templates, `oci`), SHALL NOT be checked, and `published` SHALL NOT check.
 
 #### Scenario: Published does not check a tag
 

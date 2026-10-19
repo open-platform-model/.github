@@ -511,7 +511,7 @@ For a gates-only run, `cascade-receive.yml` SHALL output `action` `gates-only` a
 
 ### Requirement: Publish bounds the increment's commits
 
-`publish` SHALL take as the bot's increment the new tip's commits that `origin/main` does not have and, for a `push` whose old tip is an ancestor of the new one, that the old tip does not have either. It SHALL refuse the plan, before any token exists, when the increment has more than two commits, a root commit or a commit with more than two parents, or when a commit's author or committer email is not the bot's.
+For `push` and `recreate`, `publish` SHALL take as the bot's increment the new tip's commits that `origin/main` does not have and, for a `push` whose old tip is an ancestor of the new one, that the old tip does not have either. It SHALL refuse the plan, before any token exists, when the increment has more than two commits, a root commit or a commit with more than two parents, or when a commit's author or committer email is not the bot's.
 
 #### Scenario: A commit the bot did not make
 
@@ -525,7 +525,7 @@ For a gates-only run, `cascade-receive.yml` SHALL output `action` `gates-only` a
 
 ### Requirement: Publish limits what a single-parent commit changes
 
-`publish` SHALL refuse the plan, before any token exists, when a single-parent commit of the increment changes a path with a status other than `M`, changes a mode, has a mode other than `100644` or `100755` (a symlink `120000` or gitlink `160000`), or changes a path outside the receiver's allow-list or inside the deny-list.
+For `push` and `recreate`, `publish` SHALL refuse the plan, before any token exists, when a single-parent commit of the increment changes a path with a status other than `M`, changes a mode, has a mode other than `100644` or `100755` (a symlink `120000` or gitlink `160000`), or changes a path outside the receiver's allow-list or inside the deny-list.
 
 #### Scenario: A symlink
 
@@ -534,7 +534,7 @@ For a gates-only run, `cascade-receive.yml` SHALL output `action` `gates-only` a
 
 ### Requirement: Publish checks merge commits
 
-`publish` SHALL refuse the plan, before any token exists, when a merge commit's second parent is not on `origin/main` or its tree differs from `git merge-tree --write-tree` of its parents in a path that is not a derived path carrying the second parent's content.
+For `push` and `recreate`, `publish` SHALL refuse the plan, before any token exists, when a merge commit's second parent is not on `origin/main` or its tree differs from `git merge-tree --write-tree` of its parents in a path that is not a derived path carrying the second parent's content.
 
 #### Scenario: Second parent off main
 
@@ -591,7 +591,7 @@ When a `push` does not contain the old tip and `origin/main..old` holds a commit
 
 ### Requirement: Publish checks the tag of each moved pin
 
-For every pin whose version differs between the merge base and the new tip (read with the `.github` pin mirror), `publish` SHALL run the resolver's `tag-on-main` itself and SHALL refuse when the tag is not on its repo's `main` or the check fails, so a forged tag is refused even when `compute` skipped the resolver.
+For `push` and `recreate`, and for every pin whose version differs between the merge base and the new tip (read with the `.github` pin mirror), `publish` SHALL run the resolver's `tag-on-main` itself and SHALL refuse when the tag is not on its repo's `main` or the check fails, so a forged tag is refused even when `compute` skipped the resolver.
 
 #### Scenario: A pin moved to a forged tag
 

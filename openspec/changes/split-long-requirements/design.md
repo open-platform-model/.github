@@ -395,13 +395,13 @@ Form per requirement of B1 (the old length is in the ledger heading; the new len
 | Gates-only runs never publish: never mint or write, caller `if:` and input | "A gates-only run never writes" |
 | Gates-only runs never publish: `cascade-publish` input check in `verify` and `act` | "cascade-publish checks the gates-only input first" |
 | Gates-only runs never publish: outputs for a gates-only run | "Receive outputs for a gates-only run" |
-| Publish bounds the bot's increment: increment definition, count, root, parents, emails | "Publish bounds the increment's commits" |
-| Publish bounds the bot's increment: status, mode, allow-list and deny-list on a single-parent commit | "Publish limits what a single-parent commit changes" |
-| Publish bounds the bot's increment: merge commits | "Publish checks merge commits" |
+| Publish bounds the bot's increment: increment definition, count, root, parents, emails (scope "For `push` and `recreate`" copied from the old lead) | "Publish bounds the increment's commits" |
+| Publish bounds the bot's increment: status, mode, allow-list and deny-list on a single-parent commit (scope "For `push` and `recreate`" copied) | "Publish limits what a single-parent commit changes" |
+| Publish bounds the bot's increment: merge commits (scope "For `push` and `recreate`" copied) | "Publish checks merge commits" |
 | Publish bounds the bot's increment: allow-lists in `.github` | "Allow-lists live in .github" |
 | Publish bounds the bot's increment: deny-list contents, wins | "The deny-list wins over the allow-list" |
 | Publish bounds the bot's increment: human commits on push, recreate, close | "Publish refuses to drop a human commit" |
-| Publish bounds the bot's increment: `tag-on-main` per moved pin | "Publish checks the tag of each moved pin" |
+| Publish bounds the bot's increment: `tag-on-main` per moved pin (scope "For `push` and `recreate`" copied) | "Publish checks the tag of each moved pin" |
 | Publish renders the PR text: line filter | ADDED "Publish filters compute's warnings" |
 | Publish renders the PR text: final title from its own title, notice | ADDED "Publish computes the final title itself" |
 | Publish renders the PR text: 65000 bytes, empty diff | ADDED "Publish refuses an oversize body or an empty push diff" |
@@ -446,11 +446,11 @@ The sentence of "Publish refuses a plan from a stale mirror" is kept word for wo
 | Consistent-set helpers: `next-patch` | "next-patch prints the next patch" |
 | Warnings and JSON output: warning format and file | "Warnings go to stderr and the warnings file" |
 | Warnings and JSON output: `--json` object | "newest --json prints one object" |
-| Proposed tags: tag reachable from `main`, skip warning, walk continues | "Newest answers only candidates whose tag is on main" |
+| Proposed tags: tag reachable from `main`, skip warning, walk continues; the lead "For a pin whose versions are tags of an `open-platform-model` repo" is kept word for word and closed by a reference to the two list requirements | "Newest answers only candidates whose tag is on main" |
 | Proposed tags: `go`, `release`, `opm-cli`, core mapping | "Go, release and core pins check their own tag" |
 | Proposed tags: catalog, operator and controller mapping with prefixes | "Catalog and module pins check a prefixed tag" |
 | Proposed tags: git only, four attempts, exit 1 | "The tag check uses git only" |
-| Proposed tags: other pins and `published` do not check | "Other pins and published do not check tags" |
+| Proposed tags: "Other pins (fixtures, templates, `oci`) SHALL NOT be checked, and `published` SHALL NOT check." kept word for word; "Other" is anchored by naming the two requirements that hold the closed list | "Other pins and published do not check tags" |
 | Proposed tags: `tag-on-main` | "tag-on-main answers the check for one version" |
 
 #### cascade-resolver-checks
