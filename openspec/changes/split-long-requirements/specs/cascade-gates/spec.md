@@ -2,7 +2,7 @@
 
 ### Requirement: G2 freshness
 
-For each release PR in scope, the receiver's `compute` job SHALL rate the result: exit 3 is `ok: shipped pins current`; exit 0 with any changed path the head's `classes` file classifies as `shipped` is a problem whose message lists the moved shipped pins (`behind: <display> <from>→<to>`); exit 0 with no shipped path is `ok: only test/release-tool pins behind`; any other exit is an evaluator error.
+For each release PR in scope, the receiver's `compute` job SHALL rate the result: exit 3 is `ok: shipped pins current`; exit 0 with any changed path the head's `classes` file classifies as `shipped` is a problem whose message lists the moved shipped pins (`behind: <display> <from>→<to>`); exit 0 with no shipped path is `ok: only test/release-tool pins behind`; any other exit is an evaluator error. The result is that of "G2 runs the head's task in a detached worktree".
 
 #### Scenario: Shipped pin behind
 

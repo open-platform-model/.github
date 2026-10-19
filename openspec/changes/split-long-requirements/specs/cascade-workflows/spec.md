@@ -50,7 +50,7 @@ No step of `cascade-receive.yml`, `cascade-gates.yml`, `cascade-notify` or `casc
 
 ### Requirement: Scripts come from the pinned .github commit
 **Reason**: Split into requirements that each state one behavior.
-**Migration**: See "Callers reference the cascade by a full SHA", "The composite actions run their scripts from their own directory", "The receive workflow checks the scripts out at its own commit" and "The repo-name derivation runs inline before any script".
+**Migration**: See "Callers pin the cascade by full SHA", "The composite actions run their scripts from their own directory", "The receive workflow checks the scripts out at its own commit" and "The repo-name derivation runs inline before any script".
 
 ### Requirement: App token minting
 **Reason**: Split into requirements that each state one behavior.
@@ -113,7 +113,7 @@ The App key SHALL be read only as the `cascade` Environment secret `CASCADE_APP_
 - **WHEN** a caller passes `secrets: inherit` to a reusable cascade workflow
 - **THEN** that caller breaks the rule that no caller SHALL pass `secrets:` or `secrets: inherit` to a reusable cascade workflow
 
-### Requirement: Callers reference the cascade by a full SHA
+### Requirement: Callers pin the cascade by full SHA
 
 Callers SHALL reference `cascade-notify`, `cascade-publish`, `cascade-receive.yml` and `cascade-gates.yml` by the full 40-character SHA of a commit on `open-platform-model/.github` `main` (owner decision 24 for the actions, extended by the supervisor to the reusable workflows), never by a branch or tag, and one repo SHALL use one SHA in all its cascade references.
 
@@ -124,7 +124,7 @@ Callers SHALL reference `cascade-notify`, `cascade-publish`, `cascade-receive.ym
 
 ### Requirement: The composite actions run their scripts from their own directory
 
-The scripts SHALL run at that same commit, with no input naming another `.github` ref: the composite actions SHALL run them from their own directory (`GITHUB_ACTION_PATH`) and SHALL NOT check out `open-platform-model/.github`.
+The scripts SHALL run at that same commit, with no input naming another `.github` ref: the composite actions SHALL run them from their own directory (`GITHUB_ACTION_PATH`) and SHALL NOT check out `open-platform-model/.github`. The commit is that of "Callers pin the cascade by full SHA".
 
 #### Scenario: A pinned action runs its own commit's code
 
@@ -133,7 +133,7 @@ The scripts SHALL run at that same commit, with no input naming another `.github
 
 ### Requirement: The receive workflow checks the scripts out at its own commit
 
-The scripts SHALL run at that same commit, with no input naming another `.github` ref; each `cascade-receive.yml` job that needs them SHALL check out `open-platform-model/.github` to `org-github` with `persist-credentials: false`, at the ref its `Own commit` step wrote, after that step has checked that `job.workflow_repository` is `open-platform-model/.github` and `job.workflow_sha` is a full 40-character SHA, and failed otherwise.
+The scripts SHALL run at that same commit, with no input naming another `.github` ref; each `cascade-receive.yml` job that needs them SHALL check out `open-platform-model/.github` to `org-github` with `persist-credentials: false`, at the ref its `Own commit` step wrote, after that step has checked that `job.workflow_repository` is `open-platform-model/.github` and `job.workflow_sha` is a full 40-character SHA, and failed otherwise. The commit is that of "Callers pin the cascade by full SHA".
 
 #### Scenario: The receive workflow checks its scripts out at its own SHA
 
@@ -211,7 +211,7 @@ Every command that runs code from the calling repo (its cascade tasks, its `pins
 
 ### Requirement: Repo code runs with no runner command file path
 
-Every command that runs code from the calling repo SHALL also run with `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, `GITHUB_STATE` and every exported `ACTIONS_*` variable unset, so repo code inherits no path to a runner command file.
+Every command that runs code from the calling repo (its cascade tasks, its `pins.sh`, and the G2 task in a release-head worktree) SHALL also run with `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`, `GITHUB_STATE` and every exported `ACTIONS_*` variable unset, so repo code inherits no path to a runner command file.
 
 #### Scenario: Task cannot write the step's outputs or environment
 
@@ -222,7 +222,7 @@ Every command that runs code from the calling repo SHALL also run with `GITHUB_E
 
 A git read of the calling repo that needs credentials SHALL receive the `GITHUB_TOKEN` header through `GIT_CONFIG_*` only for that one git call, never written to `.git/config`, a file, `GITHUB_ENV` or a step output.
 
-#### Scenario: Header written to a file
+#### Scenario: Header for one git call only
 
 - **WHEN** a git read of the calling repo that needs credentials runs
 - **THEN** the `GITHUB_TOKEN` header comes through `GIT_CONFIG_*` for that one git call only and is never written to `.git/config`, a file, `GITHUB_ENV` or a step output
@@ -257,7 +257,7 @@ Steps are no boundary inside a job (repo code can reach the runner's files, the 
 #### Scenario: Mirror drift permissions
 
 - **WHEN** `cascade-mirror-drift.yml` is read
-- **THEN** the workflow runs daily and on dispatch, has `contents: read` at the top level and on the job, holds no secret other than the run's own `GITHUB_TOKEN`, and checks out without persisted credentials
+- **THEN** the workflow runs daily and on dispatch, has `contents: read` at the top level and on the job, holds no secret and only the run's own `GITHUB_TOKEN`, and checks out without persisted credentials
 
 ### Requirement: Product repos restore no cache in their publish workflows
 
@@ -270,7 +270,7 @@ Repo code that runs on `main` can write the cache of `main`'s scope (through a c
 
 ### Requirement: Compute installs no version range
 
-No version range (such as `3.x`) SHALL be installed.
+No version range (such as `3.x`) SHALL be installed. The install is that of the requirement "Compute installs pinned, checksummed tools".
 
 #### Scenario: Version range
 
@@ -324,7 +324,7 @@ For a change that touches `cascade-publish` and not `cascade-notify`: while ever
 
 ### Requirement: A publish-only change once a receiver is live
 
-For a change that touches `cascade-publish` and not `cascade-notify`: once any receiver is live, the canary SHALL be one live receiver, and every other receiver, live or dry, SHALL stay on the old pin until that run has succeeded. That run is the canary's first live publish run on the new pin.
+For a change that touches `cascade-publish` and not `cascade-notify`: once any receiver is live, the canary SHALL be one live receiver, and every other receiver, live or dry, SHALL stay on the old pin until that run has succeeded. That run is the one of "A publish-only change while every receiver is dry".
 
 #### Scenario: One receiver already live, publish changed
 

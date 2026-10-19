@@ -125,7 +125,7 @@ Run from a repo root as `wiring-check.sh [--pin-on-main] [<config>]` (default `.
 
 ### Requirement: The cascade Environment is declared only on the key-holding jobs
 
-`.github/scripts/cascade/wiring-check.sh` SHALL check: in every workflow file: the cascade Environment, named in any case or as an expression, only on those jobs. Those jobs are the key-holding jobs `release.yml:notify-downstream` and (receivers) `deps-cascade.yml:publish`.
+`.github/scripts/cascade/wiring-check.sh` SHALL check: in every workflow file: the cascade Environment, named in any case or as an expression, only on those jobs. Those jobs are the key-holding jobs of "Key-holding jobs have a fixed shape".
 
 #### Scenario: An aliased Environment and a computed secret name
 
@@ -257,7 +257,7 @@ With `--pin-on-main`, after the pin was found on `.github` `main`, a difference 
 
 ### Requirement: Without the flag the check does not compare the copy
 
-Without the flag, the check SHALL print after its ok line `cascade wiring: the copy was not compared with .github <sha> (offline; --pin-on-main compares it)` and make no request.
+Without `--pin-on-main`, the check SHALL print after its ok line `cascade wiring: the copy was not compared with .github <sha> (offline; --pin-on-main compares it)` and make no request.
 
 #### Scenario: Offline run
 
@@ -372,7 +372,7 @@ The wiring-check reference (`references/cascade-wiring-check.md`) SHALL tell an 
 
 ### Requirement: The runbook allows an admin bypass only for a PR outside .github and .tasks
 
-The wiring-check reference (`references/cascade-wiring-check.md`) SHALL tell an admin what to do when the required wiring step fails because a GitHub API request failed (`cannot compare` or `cannot fetch`): re-run the job; if the outage or rate limit lasts, an admin MAY merge with admin bypass only a PR that changes nothing under `.github/**` or `.tasks/**`, after every other required check passed.
+The wiring-check reference (`references/cascade-wiring-check.md`) SHALL tell an admin what to do when the required wiring step fails because a GitHub API request failed (`cannot compare` or `cannot fetch`): re-run the job; if the outage or rate limit lasts, an admin MAY merge with admin bypass only a PR that changes nothing under `.github/**` or `.tasks/**`, after every other required check passed. For an unknown SHA see "The runbook confirms the pinned SHA first".
 
 #### Scenario: GitHub API outage
 

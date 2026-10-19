@@ -26,7 +26,7 @@
 
 ### Requirement: Cascade PR body
 **Reason**: Split into requirements that each state one behavior.
-**Migration**: See "The PR body is printed in a fixed layout", "The body labels are the union of the moved pins' labels", "The body table has one row per moved pin and the counts", "Triggering releases list one line per valid tag", "A dropped value is named only with safe characters", "A source outside the allowlist is dropped", "CASCADE_EXTRA_SOURCES widens the allowlist", "Warnings are the lines of the warnings file" and "The body ends with the Notes".
+**Migration**: See "The PR body is printed in a fixed layout", "The body labels", "The body table and the counts", "Triggering releases list one line per valid tag", "A dropped value is named only with safe characters", "A source outside the allowlist is dropped", "CASCADE_EXTRA_SOURCES widens the allowlist", "The body warnings" and "The body ends with the Notes".
 
 ## ADDED Requirements
 
@@ -129,7 +129,7 @@ With no changed path `title` SHALL print nothing and exit 3.
 
 ### Requirement: The PR body is printed in a fixed layout
 
-`body` SHALL exit 0 and print, deterministically and with no timestamps, exactly these lines, where `<title>` is the `title` output (empty when the diff is empty) and each bracketed part is filled as described below. The lines are those of the scenario "Body layout".
+`body` SHALL exit 0 and print, deterministically and with no timestamps, exactly these lines, where `<title>` is the `title` output (empty when the diff is empty) and each bracketed part is filled as described below. The lines are those of the scenario "Body layout"; the parts are described in "The body labels", "The body table and the counts", "Triggering releases list one line per valid tag", "The body warnings" and "The body ends with the Notes".
 
 #### Scenario: Same input, same bytes
 
@@ -171,7 +171,7 @@ Changed files: <s> shipped, <t> test, <r> release-tool.
 <notes>
 ```
 
-### Requirement: The body labels are the union of the moved pins' labels
+### Requirement: The body labels
 
 `<labels>` SHALL be the union of the moved pins' `labels` columns, each label once, in first-seen order (pins in `SCRIPT WORKTREE` order, labels in column order), joined with `,`; empty when none. `body` SHALL NOT compute `deps-cascade:breaking`.
 
@@ -180,7 +180,7 @@ Changed files: <s> shipped, <t> test, <r> release-tool.
 - **WHEN** library's core pin, whose pins row carries `need-human-review`, moved
 - **THEN** the labels marker reads `<!-- cascade-labels: need-human-review -->`
 
-### Requirement: The body table has one row per moved pin and the counts
+### Requirement: The body table and the counts
 
 The table SHALL have one row per moved pin, or the single row `| none | - | - | - |`. `<s>`, `<t>` and `<r>` SHALL count the changed paths per class.
 
@@ -228,7 +228,7 @@ A source outside `core`, `catalog_opm`, `library`, `opm-operator`, `opm-controll
 
 ### Requirement: CASCADE_EXTRA_SOURCES widens the allowlist
 
-`CASCADE_EXTRA_SOURCES` is a space-separated list that only the sandbox receiver sets (to `cascade-sandbox-up`); a name in it that does not match the resolver's repo-name pattern SHALL be ignored with a warning, and when it is unset or empty the allowlist is exactly those six names.
+`CASCADE_EXTRA_SOURCES` is a space-separated list that only the sandbox receiver sets (to `cascade-sandbox-up`); a name in it that does not match the resolver's repo-name pattern SHALL be ignored with a warning, and when it is unset or empty the allowlist is exactly those six names. The six names are those of "A source outside the allowlist is dropped".
 
 #### Scenario: Sandbox source accepted when listed
 
@@ -245,7 +245,7 @@ A source outside `core`, `catalog_opm`, `library`, `opm-operator`, `opm-controll
 - **WHEN** `CASCADE_EXTRA_SOURCES` holds a name that does not match the resolver's repo-name pattern
 - **THEN** the name is ignored with a warning
 
-### Requirement: Warnings are the lines of the warnings file
+### Requirement: The body warnings
 
 Warnings SHALL be the lines of `--warnings` (default `<git-dir>/cascade/warnings`, which may be missing; an explicit file that is missing SHALL be exit 1) followed by `body`'s own warnings, each `<pin-key>\t<message>`, de-duplicated keeping the first. A key of `-` SHALL render as `- <message>`. With none the section SHALL be `- None.`.
 
