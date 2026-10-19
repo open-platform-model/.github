@@ -29,7 +29,7 @@
 
 ## 5. Final gate
 
-- [ ] 5.1 Run the guide gate with LAST=1 in a scratch copy and the review checklist of the guide (scope against the T1.3 inventory, rule meaning, scenario bytes, loopholes, lengths, forms, references, gate rerun): `validate split-long-requirements --strict` exits 0, `validate --specs --strict` exits 0 after archive, no "Archive would refuse", no new ERROR item
-- [ ] 5.2 Fill the Deviations part of the report; confirm every scenario of every rewritten requirement is in the ledger
-- [ ] 5.3 Archive the change on this branch (`openspec archive split-long-requirements --yes`), then run `openspec validate --all --strict --no-interactive` on the archived tree; it exits 0
-- [ ] 5.4 Commit chore(openspec): archive split-long-requirements
+- [x] 5.1 Run the guide gate with LAST=1 in a scratch copy and the review checklist of the guide (scope against the T1.3 inventory, rule meaning, scenario bytes, loopholes, lengths, forms, references, gate rerun): `validate split-long-requirements --strict` exits 0, `validate --specs --strict` exits 0 after archive, no "Archive would refuse", no new ERROR item
+- [x] 5.2 Fill the Deviations part of the report; confirm every scenario of every rewritten requirement is in the ledger
+- [x] 5.3 Archive the change on this branch (`openspec archive split-long-requirements --yes`), then run `openspec validate --all --strict --no-interactive` on the archived tree; it exits 0
+- [x] 5.4 Commit chore(openspec): archive split-long-requirements
