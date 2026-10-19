@@ -520,9 +520,9 @@ mirror_sources() {
         '.tasks/cascade/cascade.sh f741dec56ae8d5f2dce214b057e7ce4cdb35fc83c359e3c2802419d62c8b94c6'
       ;;
     cli)
-      printf '%s\n' '.tasks/cascade/pins.sh 3c3f50ed302da918627a89459de330b1e18c7d449d0b748db90fc36f029ae3e1' \
+      printf '%s\n' '.tasks/cascade/pins.sh 37dcf51de1d95705e759e8d8e1c22abf784f418d646e43b5981367207a3716df' \
         '.tasks/cascade/classes 4a0a74ffea8d3415b2edcb634ab143a7d84011bc7da0eecf39f3d66536d0e528' \
-        '.tasks/cascade/cascade.sh 55223391fbc6a8df74360b9e3305fe410aa2319aebb1d1246cfb305f544e0387'
+        '.tasks/cascade/cascade.sh 59def41222811d8946e175660e7fc69211e689a5f628dd315c7d49b92d2c639c'
       ;;
     cascade-sandbox-down)
       printf '%s\n' '.tasks/cascade/pins.sh 70791e2e9c6124a01bdddfd5647c9e5fde6283109c2ff61bd082efd619b51147' \
