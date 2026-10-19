@@ -14,8 +14,8 @@ scanned repo SHALL get the same treatment, with no per-repo exceptions:
 - the org rulesets `tags-create-app-only` and `release-branches` are asserted when they apply to
   the repo, and a missing one is reported only as a pending warning, not a finding.
 
-The job summary's `Repos:` line SHALL name all six repos. The README's tag-ledger scope SHALL
-list the same six repos as the workflow.
+The job summary's `Repos:` line SHALL name all six repos. The tag-ledger reference (`references/tag-ledger.md`) SHALL
+name the workflow's repo list as the scope and SHALL NOT list a second copy of it.
 
 #### Scenario: An opm tag is recorded
 

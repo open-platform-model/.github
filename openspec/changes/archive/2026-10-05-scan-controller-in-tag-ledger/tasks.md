@@ -7,5 +7,5 @@ as `docs(openspec): plan scan-controller-in-tag-ledger`.
 ## 1. The ledger scans opm-controller
 
 - [x] 1.1 `tag-ledger.yml` `REPOS`: `core library catalog_opm cli opm-controller opm`
-- [x] 1.2 README tag-ledger scope names `opm-controller`
+- [x] 1.2 No README edit: main's README split removed the scope list; the scope is the `REPOS` list
 - [x] 1.3 Gates green, then commit `ci(tag-ledger): scan opm-controller in place of opm-operator`

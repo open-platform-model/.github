@@ -15,7 +15,7 @@ and their releases.
 ## What Changes
 
 - `tag-ledger.yml` `REPOS` scans `opm-controller` in place of `opm-operator`.
-- The README's tag-ledger scope names `opm-controller`.
+- The tag-ledger scope is the `REPOS` list. Main's README split removed the repo list from the README, so the README holds no copy to rename.
 - The `tag-ledger` spec's scanned-repo list and summary line follow.
 
 The ledger keeps its `opm-operator` rows (append-only) and records the renamed repo's tags again
@@ -36,7 +36,7 @@ None.
 
 ## Impact
 
-- Workflow `tag-ledger.yml` (`REPOS`), README, `openspec/specs/tag-ledger`.
+- Workflow `tag-ledger.yml` (`REPOS`), `openspec/specs/tag-ledger`.
 - Unpinned: `tag-ledger.yml` runs from this repo's default branch, so the change takes effect at
   merge. No receiver pins it and no pin round follows.
 
