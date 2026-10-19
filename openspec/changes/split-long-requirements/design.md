@@ -450,7 +450,7 @@ The sentence of "Publish refuses a plan from a stale mirror" is kept word for wo
 | Proposed tags: `go`, `release`, `opm-cli`, core mapping | "Go, release and core pins check their own tag" |
 | Proposed tags: catalog, operator and controller mapping with prefixes | "Catalog and module pins check a prefixed tag" |
 | Proposed tags: git only, four attempts, exit 1 | "The tag check uses git only" |
-| Proposed tags: "Other pins (fixtures, templates, `oci`) SHALL NOT be checked, and `published` SHALL NOT check." kept word for word; "Other" is anchored by naming the two requirements that hold the closed list | "Other pins and published do not check tags" |
+| Proposed tags: "Other pins (fixtures, templates, `oci`) SHALL NOT be checked, and `published` SHALL NOT check." kept, with the words ", those not named in" and the two requirement names added after "Other pins"; "Other" is anchored by naming the two requirements that hold the closed list | "Other pins and published do not check tags" |
 | Proposed tags: `tag-on-main` | "tag-on-main answers the check for one version" |
 
 #### cascade-resolver-checks
