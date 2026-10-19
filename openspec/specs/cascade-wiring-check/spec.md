@@ -3,7 +3,7 @@
 ## Purpose
 The release-cascade wiring check (workspace RELEASING.md, section "Two-job split"): the one
 script, kept in `.github` and copied byte for byte into the five product repos, that holds each
-repo's cascade caller workflows to the shapes the `.github` README documents; its per-repo
+repo's cascade caller workflows to the shapes the `.github` cascade reference files document; its per-repo
 config; how a repo keeps its copy in step with its pin; and the online check that the pin is on
 `.github` `main`.
 
@@ -15,7 +15,7 @@ config; how a repo keeps its copy in step with its pin; and the online check tha
 Run from a repo root as `wiring-check.sh [--pin-on-main] [<config>]` (default
 `.tasks/cascade/wiring-check.yaml`)
 with mikefarah `yq` v4, it SHALL compare the repo's cascade caller workflows with the caller
-shapes the README of the same `.github` commit documents, print every mismatch on stderr, and
+shapes the cascade reference files of the same `.github` commit document (`references/cascade-workflows.md` for the caller shapes), print every mismatch on stderr, and
 exit 1 when there was one; on success it SHALL print
 `cascade wiring: ok, .github <sha> (<pin comment>)` and exit 0. A missing tool, a missing
 config or a bad config SHALL exit 2. It SHALL check:
@@ -84,10 +84,10 @@ never sourced, with exactly the keys `pin-comment` (words), `receiver` (boolean)
 (list of upper-case variable names), `publish-workflows` (list of workflow file names, including
 `release.yml`), `ci` (`workflow`, `job`), `notify` (`needs`, `if`, `tag`), for a receiver
 only, `publish` (`labels-managed`, boolean), and optionally `extra-references` (a list of maps
-with exactly the keys `file`, a workflow file name, and `kind`, whose only value is `resolver`).
+with exactly the keys `file`, a workflow file name, and `kind`, whose value is `resolver` or `cite-lint`).
 The check SHALL refuse, as a config error, an unknown key, a wrong type, a `publish-workflows`
-list without `release.yml`, an `extra-references` item with another key, file name or kind, an
-`extra-references` item on a non-receiver, naming a file twice, or naming `release.yml`,
+list without `release.yml`, an `extra-references` item with another key, file name or kind, a
+`resolver` item on a non-receiver, naming the same file and kind twice, or naming `release.yml`,
 `deps-cascade.yml`, `cascade-gates.yml` or `cascade-task.yml` (files that hold a fixed
 reference), and an
 `env-allow` entry that is not `CUE_*`, `OPM_*`, `REGISTRY` or `IMAGE_NAME`: the names are allowed
@@ -112,7 +112,7 @@ loader run code, read other config or redirect traffic (`BASH_ENV`, `GIT_*`, `GH
 
 #### Scenario: An extra reference beside a fixed one
 
-- **WHEN** a receiver lists `{file: cascade-task.yml, kind: resolver}` or `{file: release.yml, kind: resolver}`, lists `module-deps.yml` twice, or core lists any item
+- **WHEN** a receiver lists `{file: cascade-task.yml, kind: resolver}` or `{file: release.yml, kind: resolver}`, lists `module-deps.yml` twice, or core lists a `resolver` item
 - **THEN** the check exits 2 naming the item
 
 ### Requirement: The pin is on .github main
@@ -133,7 +133,7 @@ the flag.
 
 Each product repo SHALL keep the script at `.tasks/cascade/wiring-check.sh` byte-identical to
 `.github/scripts/cascade/wiring-check.sh` at the `.github` SHA its cascade references pin, and
-SHALL replace it in the same PR that moves the pin. The README SHALL give the command that
+SHALL replace it in the same PR that moves the pin. The wiring-check reference (`references/cascade-wiring-check.md`) SHALL give the command that
 fetches the copy at a SHA and the command that compares it. With `--pin-on-main`, after the pin
 was found on `.github` `main`, the check SHALL fetch that file at the pinned SHA
 (`gh api -H 'Accept: application/vnd.github.raw'
@@ -194,7 +194,8 @@ config key.
 
 Each `extra-references` item SHALL add one expected `.github` reference of its kind in its file.
 A `resolver` reference is a step whose `with.repository` ends in `/.github` in any case, or is an
-expression. A declared reference SHALL be held to the rules of the fixed references: the one full SHA
+expression. A `cite-lint` reference is a job whose `uses` is
+`open-platform-model/.github/.github/workflows/cite-lint.yml` at the pinned SHA. A declared reference SHALL be held to the rules of the fixed references: the one full SHA
 shared by every `.github` reference and the config's pin comment. A reference neither fixed nor
 declared, and a declared one that is missing, SHALL fail `.github references` with exit 1.
 
@@ -264,7 +265,7 @@ request when `BASH_ENV` or `ENV` is set.
 
 ### Requirement: Runbook for a failed API call
 
-The README SHALL tell an admin what to do when the required wiring step fails because a GitHub API
+The wiring-check reference (`references/cascade-wiring-check.md`) SHALL tell an admin what to do when the required wiring step fails because a GitHub API
 request failed (`cannot compare` or `cannot fetch`): first confirm with
 `gh api repos/open-platform-model/.github/commits/<sha>` that GitHub knows the pinned SHA, since
 `cannot compare` is also printed for an unknown SHA, which is a finding and never an outage;
@@ -282,3 +283,31 @@ the step. A `not on .github main` or `differs from` failure SHALL never be bypas
 
 - **WHEN** the wiring step fails with `cannot compare` on a PR that changes only Go code, and re-runs keep failing
 - **THEN** the runbook allows an admin bypass merge once every other required check is green, and forbids it for a PR touching `.tasks/cascade/wiring-check.sh`
+
+### Requirement: A cite-lint call is a plain call
+
+Every job whose `uses` is `cite-lint.yml` of `open-platform-model/.github` (any case), in any workflow file and declared or not, SHALL hold only the keys `name`, `permissions`, `uses` and `with`. Its `permissions` SHALL be the map `contents: read` exactly, and its `with` SHALL hold only `paths` and `exclude`. No string of the job SHALL name the `secrets` context, `secrets: inherit` included. Anything else SHALL fail with exit 1 naming the file and job.
+
+#### Scenario: A declared call at the pin
+- **WHEN** a repo declares `{file: ci.yml, kind: cite-lint}` and `ci.yml` holds a job with `permissions: {contents: read}` and `uses: .../cite-lint.yml@<the pinned SHA> # <pin comment>`
+- **THEN** the check passes, on core too
+
+#### Scenario: A call that holds a write scope or a secret
+- **WHEN** the calling job sets `contents: write`, adds another permission, omits `permissions`, sets `secrets: inherit` or passes `${{ secrets.X }}` in an input
+- **THEN** the check exits 1 with `cite-lint.yml calls that break the plain-call rule`
+
+#### Scenario: A call that sets the enh pin
+- **WHEN** the call passes `enh-ref`
+- **THEN** the check exits 1 with `cite-lint.yml calls that break the plain-call rule`
+
+#### Scenario: A call at another SHA or without the comment
+- **WHEN** the call names a SHA that differs from the other references, or lacks the pin comment
+- **THEN** the check exits 1 with `one .github SHA` or `pin comment on`
+
+### Requirement: A cite-lint call runs on a safe trigger
+
+A workflow file that holds a job calling `cite-lint.yml` SHALL NOT trigger on `pull_request_target` or `workflow_run`, in a map, list or string form of `on`, because those events run in the base repository context. The check SHALL fail with exit 1 naming the file and trigger.
+
+#### Scenario: A base-context trigger
+- **WHEN** the file with the call also triggers on `pull_request_target`
+- **THEN** the check exits 1 with `cite-lint.yml calls that break the plain-call rule`

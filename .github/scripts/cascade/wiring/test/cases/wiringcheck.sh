@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2016 # yq programs and ${{ }} expressions are literal
 # The canonical wiring check (.github/scripts/cascade/wiring-check.sh) against
-# a fixture repo built from the README's caller shapes: it passes for a
+# a fixture repo built from the cascade docs' caller shapes: it passes for a
 # receiver and for core, refuses one mutation per check, exits 2 on a bad
 # config, and with --pin-on-main asks the compare API about the SHA.
 
@@ -9,13 +9,13 @@ WCHECK="$ORG_ROOT/.github/scripts/cascade/wiring-check.sh"
 WC_SHA=0123456789abcdef0123456789abcdef01234567
 WC_SHA2=89abcdef0123456789abcdef0123456789abcdef
 
-# wc_readme <heading>: the yaml block after the README line starting with it.
+# wc_readme <heading>: the yaml block after the cascade docs line starting with it.
 wc_readme() {
-  H="$1" awk 'index($0, ENVIRON["H"]) == 1 { f = 1; next } f && /^```yaml$/ { p = 1; next } p && /^```$/ { exit } p' "$ORG_ROOT/README.md" |
+  H="$1" awk 'index($0, ENVIRON["H"]) == 1 { f = 1; next } f && /^```yaml$/ { p = 1; next } p && /^```$/ { exit } p' "$CASCADE_DOCS" |
     sed "s/@<sha> # /@$WC_SHA # /"
 }
 
-# wc_fresh [core]: a fixture repo at $WCD with the README shapes, a CI
+# wc_fresh [core]: a fixture repo at $WCD with the cascade docs shapes, a CI
 # workflow and the config; core has no receiver files.
 wc_fresh() {
   WCD="$T_ROOT/wc"
@@ -136,10 +136,10 @@ new_fx
 
 # --- the shapes pass ----------------------------------------------------------
 wc_fresh
-check "wiring check: the README receiver shape has the gates-only edits" bash -c '
+check "wiring check: the cascade docs receiver shape has the gates-only edits" bash -c '
   [[ $(yq -r ".jobs.publish.if" "$1") == *"inputs.gates_only != true"* ]] && [ "$(yq -r ".jobs.publish.steps[0].with[\"gates-only\"]" "$1")" = "\${{ inputs.gates_only == true }}" ]' \
   _ "$WCD/.github/workflows/deps-cascade.yml"
-wc_ok "the README receiver shapes pass"
+wc_ok "the cascade docs receiver shapes pass"
 wc_fresh core
 wc_ok "core (no receiver) passes with release.yml and the CI job only"
 wc_fresh
@@ -447,7 +447,67 @@ wc_cfg "an extra reference declared twice" '.["extra-references"] = [{"file": "m
 for fx in release.yml deps-cascade.yml cascade-gates.yml cascade-task.yml; do
   wc_cfg "an extra reference in $fx" ".[\"extra-references\"] = [{\"file\": \"$fx\", \"kind\": \"resolver\"}]" "$fx already holds a fixed .github reference"
 done
-wc_cfg "an extra reference on core" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}]' "extra-references is only for a receiver" core
+wc_cfg "an extra reference on core" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver"}]' "a resolver is only for a receiver" core
+
+# --- declared cite-lint call (any repo, core included) ---------------------------------
+# wc_cl [core]: the fixture plus a cite-lint job in ci.yml, declared in the config.
+CL_USES="open-platform-model/.github/.github/workflows/cite-lint.yml"
+wc_cl() {
+  wc_fresh "$@"
+  yq -i ".jobs.cite-lint = {\"name\": \"Cite lint\", \"permissions\": {\"contents\": \"read\"}, \"uses\": \"$CL_USES@$WC_SHA\"}" "$WCD/.github/workflows/ci.yml"
+  yq -i ".jobs.cite-lint.uses line_comment=\".github main\"" "$WCD/.github/workflows/ci.yml"
+  yq -i '.["extra-references"] = [{"file": "ci.yml", "kind": "cite-lint"}]' "$WCD/.tasks/cascade/wiring-check.yaml"
+}
+CLCI="$T_ROOT/wc/.github/workflows/ci.yml"
+# wc_clmut <name> <yq filter on ci.yml> <message part>: the call changed, refused.
+wc_clmut() {
+  wc_cl
+  yq -i "$2" "$CLCI"
+  wc_run
+  check "wiring check refuses a cite-lint call: $1" bash -c '[ "$1" = 1 ] && [[ $2 == *"$3"* ]]' _ "$RC" "$ERR" "$3"
+}
+wc_cl
+wc_ok "a declared cite-lint call at the pin passes"
+wc_cl core
+wc_ok "a declared cite-lint call passes on core, which is no receiver"
+wc_cl
+yq -i '.jobs.cite-lint.with = {"paths": "pkg", "exclude": "gen/"}' "$CLCI"
+wc_ok "a cite-lint call with paths and exclude passes"
+wc_cl
+yq -i '.jobs.cite-lint.name = "Cite lint (second)" | .jobs.cite-lint2 = .jobs.cite-lint' "$CLCI"
+wc_run
+check "wiring check refuses: two cite-lint calls for one declared entry" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]]' _ "$RC" "$ERR"
+wc_cl
+yq -i 'del(.["extra-references"])' "$WCD/.tasks/cascade/wiring-check.yaml"
+wc_run
+check "wiring check refuses: an undeclared cite-lint call" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]] && [[ $2 == *"cite-lint.yml"* ]]' _ "$RC" "$ERR"
+wc_cl
+yq -i 'del(.jobs.cite-lint)' "$CLCI"
+wc_run
+check "wiring check refuses: a declared cite-lint call that is missing" bash -c '[ "$1" = 1 ] && [[ $2 == *".github references"* ]]' _ "$RC" "$ERR"
+wc_cl
+sed -i "s/$WC_SHA/$WC_SHA2/" "$CLCI"
+wc_run
+check "wiring check refuses: a cite-lint call at another SHA" bash -c '[ "$1" = 1 ] && [[ $2 == *"one .github SHA"* ]]' _ "$RC" "$ERR"
+wc_cl
+yq -i '.jobs.cite-lint.uses line_comment=""' "$CLCI"
+wc_run
+check "wiring check refuses: a cite-lint call without the pin comment" bash -c '[ "$1" = 1 ] && [[ $2 == *"pin comment on [ci.yml open-platform-model/.github/.github/workflows/cite-lint.yml@"* ]]' _ "$RC" "$ERR"
+wc_clmut "write permission" '.jobs.cite-lint.permissions.contents = "write"' "ci.yml:cite-lint permissions"
+wc_clmut "an extra write scope" '.jobs.cite-lint.permissions["pull-requests"] = "write"' "ci.yml:cite-lint permissions"
+wc_clmut "no job permissions" 'del(.jobs.cite-lint.permissions)' "ci.yml:cite-lint permissions"
+wc_clmut "permissions: read-all" '.jobs.cite-lint.permissions = "read-all"' "ci.yml:cite-lint permissions"
+wc_clmut "secrets: inherit" '.jobs.cite-lint.secrets = "inherit"' "ci.yml:cite-lint key secrets"
+wc_clmut "a secrets expression in an input" '.jobs.cite-lint.with.paths = "${{ secrets.TOKEN }}"' "ci.yml:cite-lint secrets at"
+wc_clmut "an enh-ref input" '.jobs.cite-lint.with.enh-ref = "0123456789abcdef0123456789abcdef01234567"' "ci.yml:cite-lint input enh-ref"
+wc_clmut "an environment" '.jobs.cite-lint.environment = "cascade"' "ci.yml:cite-lint key environment"
+wc_clmut "an if" '.jobs.cite-lint.if = "false"' "ci.yml:cite-lint key if"
+wc_clmut "a pull_request_target trigger" '.on.pull_request_target = {}' "ci.yml:trigger pull_request_target"
+wc_clmut "a pull_request_target trigger in a list" '.on = ["pull_request", "pull_request_target"]' "ci.yml:trigger pull_request_target"
+wc_clmut "a pull_request_target trigger as a string" '.on = "pull_request_target"' "ci.yml:trigger pull_request_target"
+wc_clmut "a workflow_run trigger" '.on.workflow_run = {"workflows": ["x"]}' "ci.yml:trigger workflow_run"
+wc_cfg "a cite-lint entry in release.yml" '.["extra-references"] = [{"file": "release.yml", "kind": "cite-lint"}]' "release.yml already holds a fixed .github reference"
+wc_cfg "a cite-lint entry declared twice" '.["extra-references"] = [{"file": "ci.yml", "kind": "cite-lint"}, {"file": "ci.yml", "kind": "cite-lint"}]' "ci.yml is declared twice"
 
 # Every resolver checkout passes no credentials (the fixed one and declared ones).
 for m in '.jobs.compute.steps[0].with.token = "${{ secrets.GITHUB_TOKEN }}"' \
@@ -486,7 +546,7 @@ wc_cfg "extra-references null" '.["extra-references"] = null' "extra-references 
 wc_cfg "an extra reference as a string" '.["extra-references"] = ["module-deps.yml"]' "extra-references item 1 is not a map"
 wc_cfg "an extra reference with a third key" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "resolver", "sha": "x"}]' "must have exactly the keys file and kind"
 wc_cfg "an extra reference without a kind" '.["extra-references"] = [{"file": "module-deps.yml"}]' "must have exactly the keys file and kind"
-wc_cfg "an extra reference of another kind" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "action"}]' "kind [action] is not resolver"
+wc_cfg "an extra reference of another kind" '.["extra-references"] = [{"file": "module-deps.yml", "kind": "action"}]' "kind [action] is not resolver or cite-lint"
 wc_cfg "an extra reference in another directory" '.["extra-references"] = [{"file": "../module-deps.yml", "kind": "resolver"}]' "file [../module-deps.yml] is not a workflow file name"
 wc_cfg "an extra reference file as a list" '.["extra-references"] = [{"file": ["a.yml"], "kind": "resolver"}]' "file and kind must be strings"
 
@@ -563,7 +623,7 @@ check "pin on main: two arguments after the flag are usage" test "$RC" = 2
 run env -C "$WCD" bash "$WCHECK" --online
 check "an unknown flag is usage" bash -c '[ "$1" = 2 ] && [[ $2 == *"usage: wiring-check.sh [--pin-on-main] [<config>]"* ]]' _ "$RC" "$ERR"
 
-# The README's CI step is the one the check requires.
+# The cascade docs' CI step is the one the check requires.
 wc_fresh
-check "wiring check: the README's CI step is the required one" test \
+check "wiring check: the cascade docs' CI step is the required one" test \
   "$(wc_readme "**The wiring check.**" | yq -o=json -I=0 '.[0] | del(.name)')" = "$(yq -o=json -I=0 '.jobs.ci.steps[1] | del(.name)' "$WCD/.github/workflows/ci.yml")"
