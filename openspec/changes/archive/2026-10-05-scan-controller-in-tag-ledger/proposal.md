@@ -42,3 +42,7 @@ None.
 
 Depends on: the GitHub rename. Merge it right after the rename, before the next scheduled run
 (04:17 UTC); it must not merge before the rename.
+
+## Enhancement
+
+None.
