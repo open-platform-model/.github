@@ -106,7 +106,7 @@ An unknown class, a line without a pattern, or a pattern that is none of these f
 
 ### Requirement: The title subject names the moved pins
 
-The subject SHALL be `bump <display> to <to>` for one moved pin, `bump <A> to <a> and <B> to <b>` for two, `bump <A> to <a>, <B> to <b> and <C> to <c>` for three, `bump <N> upstream pins` for four or more, and `refresh cascade-managed files` when paths changed but no pin moved. `<to>` SHALL be v-prefixed.
+`title` SHALL print one line `<type>: <subject>`. The subject SHALL be `bump <display> to <to>` for one moved pin, `bump <A> to <a> and <B> to <b>` for two, `bump <A> to <a>, <B> to <b> and <C> to <c>` for three, `bump <N> upstream pins` for four or more, and `refresh cascade-managed files` when paths changed but no pin moved. `<to>` SHALL be v-prefixed.
 
 #### Scenario: Four pins
 

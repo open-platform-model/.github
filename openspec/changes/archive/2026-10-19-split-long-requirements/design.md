@@ -1,8 +1,8 @@
 ## Context
 
-The guide for this work is the approved rewrite guide of swarm openspec-requirement-split (section numbers below refer to it). The rule: the body of a requirement is the text between its header and the first line that starts with `#`, without blank, fenced and `**Key**:` lines; more than 500 UTF-16 units is a WARNING. The check runs on main specs and on ADDED blocks, not on MODIFIED blocks. A MODIFIED block that stays over 500 passes `validate <change> --strict` and then fails `validate --all --strict` after archive.
+The rule: the body of a requirement is the text between its header and the first line that starts with `#`, without blank, fenced and `**Key**:` lines; more than 500 UTF-16 units is a WARNING. The check runs on main specs and on ADDED blocks, not on MODIFIED blocks. A MODIFIED block that stays over 500 passes `validate <change> --strict` and then fails `validate --all --strict` after archive.
 
-Measured on `origin/main` 48e9ead (OpenSpec 1.14.1): `validate --all --strict` prints 55 WARNING lines. Per spec (`validate <spec> --type spec --strict`): cascade-gates 4, cascade-notify 2, cascade-pr-text 4, cascade-receive 13, cascade-resolver 9, cascade-resolver-checks 5, cascade-wiring-check 8, cascade-workflows 9, tag-ledger 1, cite-lint-workflow 0. This equals the inventory of explore/T1.3 (55 in 9 specs). Excess kinds in that inventory: almost all "several behaviors" plus format or list.
+Measured on `origin/main` 48e9ead (OpenSpec 1.14.1): `validate --all --strict` prints 55 WARNING lines. Per spec (`validate <spec> --type spec --strict`): cascade-gates 4, cascade-notify 2, cascade-pr-text 4, cascade-receive 13, cascade-resolver 9, cascade-resolver-checks 5, cascade-wiring-check 8, cascade-workflows 9, tag-ledger 1, cite-lint-workflow 0. The inventory is 55 long requirements in 9 specs. Excess kinds in that inventory: almost all "several behaviors" plus format or list.
 
 ## Research & Decisions
 
@@ -879,10 +879,19 @@ Each row reads: old clause, new requirement, and how the new sentence relates to
 
 #### Strength table (RFC 2119 words added by the whole change)
 
-Batch B1 adds no keyword. The CI step requirement is new text, written with SHALL. Batch B2 adds four, listed here:
+Batch B1 adds nine keywords, the first nine rows below (eight in cascade-receive, one in cascade-resolver-checks). The CI step requirement is new text, written with SHALL. Batch B2 adds four, listed after them:
 
 | New requirement | Old sentence | New sentence |
 | --- | --- | --- |
+| Receive jobs have fixed environment, permissions and timeouts | "The jobs ... the table" (the job table stood in the body; the plain text had no keyword) | "The jobs `compute`, `gates` and `publish` SHALL have the environment, permissions and timeout of the table in the scenario "Job limits"." |
+| Receive jobs have fixed environment, permissions and timeouts | "`compute` runs the repo's task and holds no secret." | "`compute` SHALL run the repo's task and hold no secret." |
+| Receive jobs have fixed environment, permissions and timeouts | "`publish` runs only `git`, `gh`, `jq` and the `.github` scripts of the pinned action, never a repo task or repo code, and fails on any ref other than `refs/heads/main`." | "`publish` SHALL run only ... and SHALL fail on any ref other than `refs/heads/main`." |
+| The publish job is the caller's own | "it needs the reusable job, declares `environment: cascade`, and runs the composite action ..." | "it SHALL need the reusable job, declare `environment: cascade`, and run the composite action ..." |
+| The stop switch variable is case-insensitive | "`CASCADE_DRY_RUN` set to `false` in any letter case ... makes the receiver live, and every other value, unset included, keeps it dry." | "... SHALL make the receiver live, and every other value, unset included, SHALL keep it dry." |
+| The payload source allowlists | "Allowlists: `catalog_opm` accepts `core`, `cli`; ..." | "The allowlists SHALL be: `catalog_opm` accepts `core`, `cli`; ..." |
+| The workflows guard limits what the bot pushes | the push rule was the table of the old body ("Push allowed" columns) | "the push rule SHALL be that of the scenario "Guard table" for each mode and each rule value" |
+| The workflows guard rule ships as tree | "the rule constant `WF_GUARD_RULE`, which ships as `tree` ...; `strict` stays implemented for the case GitHub tightens the rule" | "The rule constant `WF_GUARD_RULE` SHALL ship as `tree` (...); `strict` SHALL stay implemented for the case GitHub tightens the rule." |
+| The wiring suite uses the real resolver for offline subcommands only (cascade-resolver-checks) | "(`title`, `body`, `classify`, `semver-cmp`; no case calls `newest`, `published` or `pin-of`)" | "(`title`, `body`, `classify`, `semver-cmp`); no case SHALL call `newest`, `published` or `pin-of`." |
 | A change that touches neither action has no canary | "A change that touches neither `cascade-publish` nor `cascade-notify` has no canary: all five repos MAY move together, ..." | "... SHALL have no canary: ..." (the validator wants SHALL or MUST in every ADDED body; MAY alone fails) |
 | Compute keeps setup-go SHA-pinned without a cache | "`setup-go` stays SHA-pinned with `cache: false`." | "`setup-go` SHALL stay SHA-pinned with `cache: false`." |
 | A declared extra reference adds one expected reference | "A `resolver` reference is a step whose ..." and "A `cite-lint` reference is a job whose ..." | "SHALL be" in place of "is" in both |

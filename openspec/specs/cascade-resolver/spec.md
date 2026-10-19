@@ -173,7 +173,7 @@ The resolver SHALL order versions by SemVer 2.0.0 precedence: numeric major, min
 
 ### Requirement: Cue queries read the GHCR tag list
 
-A `cue <module>@vN` query SHALL take candidates from the anonymous GHCR tag list of `open-platform-model/<module>`, following `Link: <...>; rel="next"` pagination (a relative link resolved against `https://ghcr.io`) and failing beyond 20 pages. A version SHALL be published when the manifest `HEAD` with `Accept: application/vnd.oci.image.manifest.v1+json` answers 200.
+A `cue <module>@vN` query SHALL take candidates from the anonymous GHCR tag list of `open-platform-model/<module>`, following `Link: <...>; rel="next"` pagination (a relative link resolved against `https://ghcr.io`) and failing beyond 20 pages. A `cue <module>@vN` version SHALL be published when the manifest `HEAD` with `Accept: application/vnd.oci.image.manifest.v1+json` answers 200.
 
 #### Scenario: Cue version is published
 
@@ -182,7 +182,7 @@ A `cue <module>@vN` query SHALL take candidates from the anonymous GHCR tag list
 
 ### Requirement: Go queries read the module proxy
 
-A `go <module path>` query SHALL take candidates from `<proxy>/<path>/@v/list`, never `@latest`. A version SHALL be published when `@v/<v>.info` answers 200. The proxy base SHALL be `CASCADE_GOPROXY`, default `https://proxy.golang.org`.
+A `go <module path>` query SHALL take candidates from `<proxy>/<path>/@v/list`, never `@latest`. A `go <module path>` version SHALL be published when `@v/<v>.info` answers 200. The proxy base SHALL be `CASCADE_GOPROXY`, default `https://proxy.golang.org`.
 
 #### Scenario: Go prerelease from the list
 
@@ -191,7 +191,7 @@ A `go <module path>` query SHALL take candidates from `<proxy>/<path>/@v/list`, 
 
 ### Requirement: Release queries read git tags and release assets
 
-A `release <repo> --asset NAME...` query SHALL take candidates from `git ls-remote --tags --refs` of `https://github.com/open-platform-model/<repo>`. A version SHALL be published when every asset answers 200 to an anonymous `HEAD -L` of its release download URL. `opm-cli` SHALL be `release cli --asset opm-linux-amd64.tar.gz --asset checksums.txt`.
+A `release <repo> --asset NAME...` query SHALL take candidates from `git ls-remote --tags --refs` of `https://github.com/open-platform-model/<repo>`. A `release <repo> --asset NAME...` version SHALL be published when every asset answers 200 to an anonymous `HEAD -L` of its release download URL. `opm-cli` SHALL be `release cli --asset opm-linux-amd64.tar.gz --asset checksums.txt`.
 
 #### Scenario: Draft release skipped
 
@@ -282,7 +282,7 @@ A 404 (or 410 on the proxy) SHALL mean not published and SHALL NOT be retried. A
 
 ### Requirement: The expect wait counts requested sleep
 
-Elapsed time SHALL be the sum of the sleep intervals the resolver requested, never the wall clock, so a faked `CASCADE_SLEEP` makes the wait instant.
+In the wait of the requirement "Expect applies only to a plausible version", elapsed time SHALL be the sum of the sleep intervals the resolver requested, never the wall clock, so a faked `CASCADE_SLEEP` makes the wait instant.
 
 #### Scenario: Faked sleep makes the wait instant
 
@@ -300,7 +300,7 @@ An `--expect` version confirmed published (before or during the wait) SHALL join
 
 ### Requirement: Running out of expect wait time is not a failure
 
-Running out of time SHALL warn and answer what is published, not fail.
+In the wait of the requirement "Expect applies only to a plausible version", running out of time SHALL warn and answer what is published, not fail.
 
 #### Scenario: Expected version never appears
 
@@ -336,7 +336,7 @@ The resolver SHALL read `.cascade-frozen` and `.cascade-hold` from `--repo-root`
 
 ### Requirement: A steering file violation is exit 1
 
-A violation SHALL be exit 1 for every subcommand that reads the file. `check-files` SHALL validate both files.
+A violation of the requirement "Frozen entries have fixed keys" or "Hold entries have fixed keys" SHALL be exit 1 for every subcommand that reads the file. `check-files` SHALL validate both files.
 
 #### Scenario: Entry without a reason
 
@@ -391,7 +391,7 @@ A violation SHALL be exit 1 for every subcommand that reads the file. `check-fil
 
 ### Requirement: language-of prints the module language version
 
-`language-of <module>@vN <v>` SHALL print that module file's `language.version`, exiting 3 when there is none.
+For the module file of the requirement "pin-of prints the pin a module version holds", `language-of <module>@vN <v>` SHALL print that module file's `language.version`, exiting 3 when there is none.
 
 #### Scenario: Language version
 

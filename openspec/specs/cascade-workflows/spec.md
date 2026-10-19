@@ -190,7 +190,7 @@ Notify's token SHALL be scoped to its targets with `permission-contents: write` 
 
 ### Requirement: The App token is neither passed nor persisted
 
-The token SHALL NOT be passed between jobs, written to a file, placed on a command line or kept past its job; git SHALL receive it as a masked `http.https://github.com/.extraheader` value through `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0` and `GIT_CONFIG_VALUE_0`.
+The App token SHALL NOT be passed between jobs, written to a file, placed on a command line or kept past its job; git SHALL receive it as a masked `http.https://github.com/.extraheader` value through `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0` and `GIT_CONFIG_VALUE_0`.
 
 #### Scenario: Token handed to another job
 
