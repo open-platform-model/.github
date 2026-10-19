@@ -6,7 +6,7 @@
 # every third-party action pinned to a commit SHA, one identical Guard step
 # first in every job and every action, scripts only from the pinned .github
 # commit (no org-github-ref), the publish dry-run input, and SHA-pinned
-# cascade references in the README shapes and the sandbox callers.
+# cascade references in the cascade docs shapes and the sandbox callers.
 
 new_fx
 
@@ -228,9 +228,9 @@ if [ -n "$GUARD_TEXT" ]; then
 fi
 
 # The receiver caller's concurrency group (Phase 3 wiring contract, section
-# 5), byte for byte, in the README's caller shape.
+# 5), byte for byte, in the cascade docs' caller shape.
 CONTRACT_GROUP="\${{ github.ref != 'refs/heads/main' && format('deps-cascade-{0}', github.ref) || (inputs.gates_only && 'deps-cascade-gates' || 'deps-cascade') }}"
-check "static: the README's receiver caller uses the contract's concurrency group" grep -qxF "  group: $CONTRACT_GROUP" "$ORG_ROOT/README.md"
+check "static: the cascade docs' receiver caller uses the contract's concurrency group" grep -qxF "  group: $CONTRACT_GROUP" "$CASCADE_DOCS"
 # The sandbox caller committed with the change (before or after its archive).
 for seed in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox/down/.github/workflows/deps-cascade.yml \
   "$ORG_ROOT"/openspec/changes/archive/*-add-release-cascade-workflows/sandbox/down/.github/workflows/deps-cascade.yml; do
@@ -239,32 +239,32 @@ for seed in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox/d
     yq -r '.concurrency.group' "$seed"
 done
 
-# --- caller shapes: the README and the sandbox callers ------------------------
+# --- caller shapes: the cascade docs and the sandbox callers ------------------------
 
-# readme_block <heading text>: the yaml block after the README line that
+# readme_block <heading text>: the yaml block after the cascade docs line that
 # starts with that bold heading.
 readme_block() {
-  H="$1" awk 'index($0, ENVIRON["H"]) == 1 { f = 1; next } f && /^```yaml$/ { p = 1; next } p && /^```$/ { exit } p' "$ORG_ROOT/README.md"
+  H="$1" awk 'index($0, ENVIRON["H"]) == 1 { f = 1; next } f && /^```yaml$/ { p = 1; next } p && /^```$/ { exit } p' "$CASCADE_DOCS"
 }
 readme_block "**Receiver caller**" >"$FX/readme-receiver.yml"
 readme_block "**Notify caller**" >"$FX/readme-notify.yml"
 readme_block "**Per-PR gates caller**" >"$FX/readme-gates.yml"
 DRY_EXPR="\${{ inputs.dry_run == true || vars.CASCADE_DRY_RUN != 'false' }}"
-check "static: the README has the three caller shapes" bash -c '[ -s "$1" ] && [ -s "$2" ] && [ -s "$3" ]' _ \
+check "static: the cascade docs has the three caller shapes" bash -c '[ -s "$1" ] && [ -s "$2" ] && [ -s "$3" ]' _ \
   "$FX/readme-receiver.yml" "$FX/readme-notify.yml" "$FX/readme-gates.yml"
-expect "static: the README receiver passes the stop switch to the reusable job" 0 "$DRY_EXPR" -- \
+expect "static: the cascade docs receiver passes the stop switch to the reusable job" 0 "$DRY_EXPR" -- \
   yq -r '.jobs.cascade.with["dry-run"]' "$FX/readme-receiver.yml"
-expect "static: the README publish job passes the stop switch to cascade-publish" 0 "$DRY_EXPR" -- \
+expect "static: the cascade docs publish job passes the stop switch to cascade-publish" 0 "$DRY_EXPR" -- \
   yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["dry-run"]' "$FX/readme-receiver.yml"
-expect "static: the README publish job passes its own gates_only input to cascade-publish" 0 "\${{ inputs.gates_only == true }}" -- \
+expect "static: the cascade docs publish job passes its own gates_only input to cascade-publish" 0 "\${{ inputs.gates_only == true }}" -- \
   yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["gates-only"]' "$FX/readme-receiver.yml"
-check "static: the README publish if: reads the caller's own gates_only input" bash -c '[[ $(yq -r ".jobs.publish.if" "$1") == *"&& inputs.gates_only != true"* ]]' _ "$FX/readme-receiver.yml"
-check "static: the README publish if: reads no gates-only output of the reusable job" bash -c '! yq -r ".jobs.publish.if" "$1" | grep -q "needs.cascade.outputs.gates"' _ "$FX/readme-receiver.yml"
-check "static: the README names no cascade reference at main or a branch" bash -c '
-  ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$ORG_ROOT/README.md"
-check "static: the README pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$ORG_ROOT/README.md"
-check "static: the README bump procedure greps every .github reference, the cascade-task.yml checkout included" grep -qF "grep -rn -A1 'open-platform-model/.github' .github/workflows" "$ORG_ROOT/README.md"
-check "static: the README names no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$ORG_ROOT/README.md"
+check "static: the cascade docs publish if: reads the caller's own gates_only input" bash -c '[[ $(yq -r ".jobs.publish.if" "$1") == *"&& inputs.gates_only != true"* ]]' _ "$FX/readme-receiver.yml"
+check "static: the cascade docs publish if: reads no gates-only output of the reusable job" bash -c '! yq -r ".jobs.publish.if" "$1" | grep -q "needs.cascade.outputs.gates"' _ "$FX/readme-receiver.yml"
+check "static: the docs name no .github reference at main or a branch" bash -c '
+  ! grep -nE "open-platform-model/\.github/\.github/[^@ ]+@" "$1" | grep -vE "@<sha> # \.github main$"' _ "$ALL_DOCS"
+check "static: the cascade docs pins all four cascade references as <sha>" bash -c '[ "$(grep -cE "open-platform-model/\.github/\.github/[^@ ]*cascade-[^@ ]+@<sha> # \.github main$" "$1")" = 4 ]' _ "$CASCADE_DOCS"
+check "static: the cascade docs bump procedure greps every .github reference, the cascade-task.yml checkout included" grep -qF "grep -rn -A1 'open-platform-model/.github' .github/workflows" "$CASCADE_DOCS"
+check "static: the docs name no org-github-ref" bash -c '! grep -n "org-github-ref" "$1"' _ "$ALL_DOCS"
 
 for sbx in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox \
   "$ORG_ROOT"/openspec/changes/archive/*-add-release-cascade-workflows/sandbox; do
@@ -276,8 +276,8 @@ for sbx in "$ORG_ROOT"/openspec/changes/add-release-cascade-workflows/sandbox \
     yq -r '.jobs.publish.steps[] | select(.uses | test("cascade-publish@")) | .with["dry-run"]' "$seed"
   # The archived sandbox seeds are frozen at the cycle's shape, which predates
   # the gates-only clause (owner decision 26 retired the sandboxes), so only
-  # the switches they share with the README are compared.
-  check "static: the sandbox publish if: reads the README's dry-run switches" bash -c '
+  # the switches they share with the cascade docs are compared.
+  check "static: the sandbox publish if: reads the cascade docs' dry-run switches" bash -c '
     for c in "inputs.dry_run != true" "vars.CASCADE_DRY_RUN == '"'"'false'"'"'" "needs.cascade.outputs.dry-run == '"'"'false'"'"'"; do
       [[ $(yq -r ".jobs.publish.if" "$1") == *"$c"* ]] && [[ $(yq -r ".jobs.publish.if" "$2") == *"$c"* ]] || exit 1
     done' _ "$seed" "$FX/readme-receiver.yml"

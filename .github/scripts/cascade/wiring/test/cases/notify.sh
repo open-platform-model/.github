@@ -7,6 +7,7 @@ N() { env CASCADE_REPO="$1" bash "$NOTIFY" "${@:2}"; }
 
 expect "notify: library targets" 0 "opm-operator,cli" -- N library validate --tag v1.0.0-beta.4
 expect "notify: catalog_opm targets" 0 "library,opm-operator,cli" -- N catalog_opm validate --tag opm-v4.5.1
+expect "notify: opm-controller, the renamed opm-operator, targets cli" 0 "cli" -- N opm-controller validate --tag v1.0.0-beta.9
 expect "notify: the sandbox target" 0 "cascade-sandbox-down" -- N cascade-sandbox-up validate --tag v0.2.0
 expect "notify: a catalog tag without opm- fails" 1 "" "is not a release tag of catalog_opm" -- N catalog_opm validate --tag v4.5.1
 expect "notify: an opm- tag outside catalog_opm fails" 1 "" "is not a release tag of core" -- N core validate --tag opm-v2.0.0

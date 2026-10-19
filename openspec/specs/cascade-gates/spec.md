@@ -43,8 +43,9 @@ and its results SHALL be uploaded as the artifact `cascade-gates` even when a la
 ### Requirement: G3 settled
 
 For each G3 upstream of the receiver (`catalog_opm`: `core`; `library`: `core`, `catalog_opm`;
-`opm-operator`: `catalog_opm`, `library`; `cli`: `catalog_opm`, `library`, `opm-operator`;
-`cascade-sandbox-down`: `cascade-sandbox-up`), G3 SHALL be a problem when the upstream's own
+`opm-operator` and `opm-controller`: `catalog_opm`, `library`; `cli`: `catalog_opm`, `library`,
+`opm-operator`; `cascade-sandbox-down`: `cascade-sandbox-up`), G3 SHALL be a problem when the
+upstream's own
 cascade PR (same filter as the receiver's) has a title starting `fix(deps)` or `feat(deps)`
 (`<upstream> has open cascade #<n>`), or when an open PR labelled `autorelease: pending` in the
 upstream has a `**deps:**` bullet in its body (`<upstream> release #<n> pending with deps`).
@@ -63,6 +64,11 @@ be read from a file or output of `compute`, which ran release-head code before w
 
 - **WHEN** release-head code makes `gates.json` report G3 `ok` while an upstream cascade PR titled `fix(deps)` is open
 - **THEN** the `gates` job ignores that entry's G3 field and posts the problem it evaluated itself
+
+#### Scenario: The renamed repo's upstreams
+
+- **WHEN** `opm-controller` has a release PR
+- **THEN** its G3 reads the cascade state of `catalog_opm` and `library`
 
 ### Requirement: Status mapping
 

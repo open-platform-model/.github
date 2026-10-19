@@ -216,6 +216,9 @@ check "body: hostile tag dropped, the valid one kept" bash -c '
 run env CASCADE_SOURCE=evil CASCADE_TAGS=v1.0.0 bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 check "body: unknown source dropped with its tags" bash -c '
   [ "$2" = 0 ] && [[ $1 == *"- None recorded (daily sweep or manual run)."* ]] && [[ $1 == *"dropped triggering source \`evil\`"* ]]' _ "$OUT" "$RC"
+run env CASCADE_SOURCE=opm-controller CASCADE_TAGS=v1.0.0-beta.9 bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
+check "body: opm-controller, the renamed opm-operator, is a source" bash -c '
+  [ "$2" = 0 ] && [[ $1 == *$'"'"'## Triggering releases\n\n- `opm-controller` `v1.0.0-beta.9`\n\n'"'"'* ]] && [[ $1 != *"dropped triggering source"* ]]' _ "$OUT" "$RC"
 run env CASCADE_EXTRA_SOURCES=cascade-sandbox-up CASCADE_SOURCE=cascade-sandbox-up CASCADE_TAGS=v0.2.0 bash -c 'cd "$1" && "$2" body --classes "$3" --pins "$4"' _ "$REPO" "$R" "$C" "$PINS_SH"
 check "body: sandbox source accepted when listed" bash -c '
   [ "$2" = 0 ] && [[ $1 == *$'"'"'## Triggering releases\n\n- `cascade-sandbox-up` `v0.2.0`\n\n'"'"'* ]] && [[ $1 != *"cascade-sandbox-up\`: not"* ]] && [[ $1 == *$'"'"'## Warnings\n\n- None.\n'"'"'* ]]' _ "$OUT" "$RC"

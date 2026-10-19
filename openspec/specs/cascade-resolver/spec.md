@@ -374,7 +374,9 @@ published candidate only when its tag's commit is reachable from that repo's `ma
 github.com/open-platform-model/<repo>` (with or without `/vN`, tag `v<x>`), `release <repo>` and
 `opm-cli` (tag `v<x>`), `cue opmodel.dev/core@vN` (repo `core`, tag `v<x>`), `cue
 opmodel.dev/catalogs/opm@vN` (repo `catalog_opm`, tag `opm-v<x>`) and `cue
-opmodel.dev/modules/opm_operator@vN` (repo `opm-operator`, tag `opm_operator-v<x>`). A candidate whose tag is not on
+opmodel.dev/modules/opm_operator@vN` (repo `opm-operator`, tag `opm_operator-v<x>`) and `cue
+opmodel.dev/modules/opm_controller@vN` (repo `opm-controller`, tag `opm_controller-v<x>`, the
+module's train after `opm-operator` is renamed `opm-controller`). A candidate whose tag is not on
 `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on
 `<repo>` main; skipped", and the walk SHALL continue with the next candidate. The resolver SHALL
 learn this with git only (a tree-less bare clone of the repo and a fetch of the one tag, isolated
@@ -409,3 +411,8 @@ failure after four attempts.
 
 - **WHEN** the clone of the source repo fails four times
 - **THEN** `newest` exits 1
+
+#### Scenario: Controller module tags carry their prefix
+
+- **WHEN** `tag-on-main opmodel.dev/modules/opm_controller@v0 v0.2.0` runs and the tag `opm_controller-v0.2.0` of `opm-controller` points to a commit not on its `main`
+- **THEN** it exits 3, and for `v0.1.0`, whose tag `opm_controller-v0.1.0` is on `main`, it exits 0

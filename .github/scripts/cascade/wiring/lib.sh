@@ -72,6 +72,22 @@ safe_text() {
 }
 
 # --- fixed maps ---------------------------------------------------------------
+# The opm-operator repo is being renamed opm-controller. GitHub renames it in
+# place, and every job derives the repo name from GITHUB_REPOSITORY, so the
+# name a run sees flips at that instant, whatever .github commit the caller
+# pinned. Until the rename is done every arm keyed by a receiver or source
+# accepts both names. A target list (notify_targets) and the upstreams G3 reads
+# by API (g3_upstreams) cannot hold both: the App token mint and the API reads
+# fail on the name that does not exist yet, so they keep opm-operator until a
+# later .github change flips them, once the rename has happened.
+
+# same_repo <a> <b>: exit 0 when both name one repo, either name of the
+# renamed one included.
+same_repo() {
+  [ "$1" = "$2" ] && return 0
+  case "$1:$2" in opm-operator:opm-controller | opm-controller:opm-operator) return 0 ;; esac
+  return 1
+}
 
 # notify_targets <source>: the repos a release of <source> dispatches to.
 notify_targets() {
@@ -79,7 +95,7 @@ notify_targets() {
     core) echo "catalog_opm library" ;;
     catalog_opm) echo "library opm-operator cli" ;;
     library) echo "opm-operator cli" ;;
-    opm-operator) echo "cli" ;;
+    opm-operator | opm-controller) echo "cli" ;;
     cli) echo "catalog_opm opm-operator" ;;
     cascade-sandbox-up) echo "cascade-sandbox-down" ;;
     *) return 1 ;;
@@ -91,20 +107,21 @@ receiver_sources() {
   case "$1" in
     catalog_opm) echo "core cli" ;;
     library) echo "core catalog_opm" ;;
-    opm-operator) echo "catalog_opm library cli" ;;
-    cli) echo "catalog_opm library opm-operator" ;;
+    opm-operator | opm-controller) echo "catalog_opm library cli" ;;
+    cli) echo "catalog_opm library opm-operator opm-controller" ;;
     cascade-sandbox-down) echo "cascade-sandbox-up" ;;
     *) return 1 ;;
   esac
 }
 
 # g3_upstreams <receiver>: the repos whose cascade state G3 checks. The
-# release-tool edges from cli never count.
+# release-tool edges from cli never count. cli reads opm-operator by its
+# old name until the rename has happened (see the fixed maps above).
 g3_upstreams() {
   case "$1" in
     catalog_opm) echo "core" ;;
     library) echo "core catalog_opm" ;;
-    opm-operator) echo "catalog_opm library" ;;
+    opm-operator | opm-controller) echo "catalog_opm library" ;;
     cli) echo "catalog_opm library opm-operator" ;;
     cascade-sandbox-down) echo "cascade-sandbox-up" ;;
     *) return 1 ;;
@@ -164,7 +181,7 @@ expect_pair() {
   case "$1" in
     core) printf 'opmodel.dev/core@v2=%s' "$2" ;;
     catalog_opm) printf 'opmodel.dev/catalogs/opm@v4=%s' "${2#opm-}" ;;
-    library | opm-operator | cli | cascade-sandbox-up) printf 'github.com/open-platform-model/%s=%s' "$1" "$2" ;;
+    library | opm-operator | opm-controller | cli | cascade-sandbox-up) printf 'github.com/open-platform-model/%s=%s' "$1" "$2" ;;
     *) return 1 ;;
   esac
 }
@@ -177,8 +194,11 @@ changelog_source() {
     opmodel.dev/catalogs/opm@v4) echo "catalog_opm opm-" ;;
     github.com/open-platform-model/library) echo "library " ;;
     github.com/open-platform-model/opm-operator) echo "opm-operator " ;;
-    # The operator module, released from opm-operator on its own train.
+    github.com/open-platform-model/opm-controller) echo "opm-controller " ;;
+    # The controller module, released from the controller repo on its own
+    # train: opm_operator-v* before the rename, opm_controller-v* after it.
     opmodel.dev/modules/opm_operator@v0) echo "opm-operator opm_operator-" ;;
+    opmodel.dev/modules/opm_controller@v0) echo "opm-controller opm_controller-" ;;
     github.com/open-platform-model/cli) echo "cli " ;;
     github.com/open-platform-model/cascade-sandbox-up) echo "cascade-sandbox-up " ;;
     *) return 1 ;;
@@ -187,14 +207,15 @@ changelog_source() {
 
 # changelog_repos <receiver>: the repos whose releases the breaking check
 # may read for this receiver's moved pins, fetched before any repo code runs:
-# every product repo with a changelog_source entry but the receiver itself.
+# every product repo with a changelog_source entry but the receiver itself,
+# under either name of the renamed repo.
 changelog_repos() {
   local r
   case "$1" in
     cascade-sandbox-down) echo cascade-sandbox-up ;;
-    catalog_opm | library | opm-operator | cli)
-      for r in core catalog_opm library opm-operator cli; do
-        [ "$r" = "$1" ] || printf '%s ' "$r"
+    catalog_opm | library | opm-operator | opm-controller | cli)
+      for r in core catalog_opm library opm-operator opm-controller cli; do
+        same_repo "$r" "$1" || printf '%s ' "$r"
       done
       echo
       ;;
@@ -233,11 +254,12 @@ label_description() {
 is_bot_label() { [[ " $BOT_LABELS " == *" $1 "* ]]; }
 
 # is_derived_path <path>: a merge conflict here takes main's side and the
-# task regenerates the file. internal/operator/pin.go is the cli's operator
-# module pin, which its task rewrites with hack/operator-pin.
+# task regenerates the file. internal/controller/pin.go is the cli's
+# controller module pin, which its task rewrites with hack/controller-pin;
+# internal/operator/pin.go is the same file before the cli's rename.
 is_derived_path() {
   case "${1##*/}" in go.mod | go.sum) return 0 ;; esac
-  case "$1" in cue.mod/module.cue | */cue.mod/module.cue | internal/operator/pin.go) return 0 ;; esac
+  case "$1" in cue.mod/module.cue | */cue.mod/module.cue | internal/operator/pin.go | internal/controller/pin.go) return 0 ;; esac
   return 1
 }
 
@@ -250,6 +272,8 @@ is_derived_path() {
 # another file needs this list changed, and its pin moved, first; the sha256
 # of each cascade.sh read is in mirror_sources, so publish refuses a receiver
 # whose cascade.sh changed since, instead of judging paths by a stale list.
+# opm-controller is the same repo as opm-operator under its new name and
+# shares its lists until the rename lands.
 
 # publish_paths <receiver>: the anchored EREs of the paths its task writes.
 # cue.mod/module.cue at any depth: only module versions live there, which is
@@ -260,14 +284,14 @@ publish_paths() {
     library)
       printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^opm/schema/loader\.go$' '^docs/getting-started\.md$' '^AGENTS\.md$'
       ;;
-    opm-operator)
+    opm-operator | opm-controller)
       printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^\.opm-cli-version$' \
         '^config/samples/opmodel\.dev_v1alpha1_(platform|moduleinstance)\.yaml$' '^test/fixtures/catalog\.go$' \
         '^test/fixtures/(modules/[^/]+|catalogs/provider)/identity/identity\.cue$' \
         '^test/fixtures/modules/[^/]+/moduleinstance\.yaml$'
       ;;
     cli)
-      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/operator/pin\.go$' \
+      printf '%s\n' '(^|/)cue\.mod/module\.cue$' '^go\.(mod|sum)$' '^internal/(operator|controller)/pin\.go$' \
         '^hack/kind-platform\.yaml$' '^(templates/[^/]+|tests/fixtures/modules/podinfo)/identity/identity\.cue$'
       ;;
     cascade-sandbox-down) printf '%s\n' '^UPSTREAM_VERSION$' '^fixtures/' ;;
@@ -279,12 +303,12 @@ publish_paths() {
 # change, whatever publish_paths says: workflow and action code, the task
 # code, scripts, code owners, the release configs and the steering files.
 # cli's two hack/ data files (the kind Platform and its catalog pins) are the
-# only exception; hack/ holds Go programs and scripts otherwise. opm-operator's
-# operator module (modules/) moves through its own module/deps publisher,
-# never through deps:cascade, whose repo scope leaves it alone.
+# only exception; hack/ holds Go programs and scripts otherwise. The
+# controller repo's module (modules/) moves through its own module/deps
+# publisher, never through deps:cascade, whose repo scope leaves it alone.
 publish_denied() {
   case "$1:$2" in cli:hack/kind-platform.yaml | cli:hack/platform/cue.mod/module.cue) return 1 ;; esac
-  case "$1:$2" in opm-operator:modules/*) return 0 ;; esac
+  case "$1:$2" in opm-operator:modules/* | opm-controller:modules/*) return 0 ;; esac
   case "$2" in .github/* | .tasks/* | hack/* | *.sh | release-please-config.json | .release-please-manifest.json) return 0 ;; esac
   case "${2##*/}" in Taskfile* | CODEOWNERS | .cascade-frozen | .cascade-hold) return 0 ;; esac
   return 1
@@ -306,7 +330,7 @@ receiver_classes() {
   case "$1" in
     catalog_opm) printf '%s\n' 'release-tool .opm-cli-version' 'shipped src/' ;;
     library) printf '%s\n' 'test testdata/' 'test modules/' 'test *_test.go' ;;
-    opm-operator)
+    opm-operator | opm-controller)
       printf '%s\n' 'release-tool .opm-cli-version' 'test config/samples/' 'test test/' 'test **/testdata/' 'test *_test.go'
       ;;
     cli)
@@ -368,9 +392,9 @@ pins_library() {
   fi
 }
 
-pins_opm_operator() {
+pins_opm_controller() {
   local ref="$1" f v
-  # op_row KEY DISPLAY CLASS FILE VERSION: as the operator's row(), an
+  # op_row KEY DISPLAY CLASS FILE VERSION: as the controller's row(), an
   # invalid or empty version is an error.
   op_row() {
     [[ $5 =~ $PIN_SEMVER_RE ]] || die "$4: no valid version for $1 (read '$5')"
@@ -421,9 +445,16 @@ pins_cli() {
     cli_row github.com/open-platform-model/library library \
       "$(awk -v m=github.com/open-platform-model/library '$1 == m {print $2; exit}' <<<"$f")"
   fi
-  # The operator module pin and the operator release it deploys, both from
-  # internal/operator/pin.go; the module version is bare there.
-  if f=$(pin_blob "$ref" internal/operator/pin.go); then
+  # The controller module pin and the controller release it deploys, both
+  # from internal/controller/pin.go; the module version is bare there. Before
+  # the cli's rename the same pins live in internal/operator/pin.go under the
+  # old names.
+  if f=$(pin_blob "$ref" internal/controller/pin.go); then
+    cli_row github.com/open-platform-model/opm-controller opm-controller \
+      "$(sed -n 's/^const PinnedControllerVersion = "\(.*\)"$/\1/p' <<<"$f")"
+    mv=$(sed -n 's/^const PinnedModuleVersion = "\(.*\)"$/\1/p' <<<"$f")
+    cli_row opmodel.dev/modules/opm_controller@v0 "opm-controller module" "${mv:+v$mv}"
+  elif f=$(pin_blob "$ref" internal/operator/pin.go); then
     cli_row github.com/open-platform-model/opm-operator opm-operator \
       "$(sed -n 's/^const PinnedOperatorVersion = "\(.*\)"$/\1/p' <<<"$f")"
     mv=$(sed -n 's/^const PinnedModuleVersion = "\(.*\)"$/\1/p' <<<"$f")
@@ -447,7 +478,7 @@ receiver_pins() {
   case "$1" in
     catalog_opm) pins_catalog_opm "$2" ;;
     library) pins_library "$2" ;;
-    opm-operator) pins_opm_operator "$2" ;;
+    opm-operator | opm-controller) pins_opm_controller "$2" ;;
     cli) pins_cli "$2" ;;
     cascade-sandbox-down) pins_sandbox "$2" ;;
     *) return 1 ;;
@@ -463,7 +494,7 @@ receiver_pins() {
 # version of any of them (receive-publish.sh, check_mirror), and
 # cascade-mirror-drift.yml reports the drift daily. A receiver that changes one
 # of these files needs this table, the mirror or allow-list and the .github pin
-# moved together. Code cascade.sh only runs (cli's hack/operator-pin, a
+# moved together. Code cascade.sh only runs (cli's controller pin program, a
 # Taskfile task) is not hashed: a change there that writes a new path still
 # ends in a path refusal. The sandbox records no cascade.sh: the suite's toy
 # receiver carries its own test task in its place.
@@ -482,7 +513,7 @@ mirror_sources() {
         '.tasks/cascade/classes e9c3926e0f2b7324e4d9770b553ecac24df39273813eb33cf60716ef43f54c10' \
         '.tasks/cascade/cascade.sh 4f0f4e44b62c9906f6780f645760729c22403bb14c6d8bf922dc02eb231e1717'
       ;;
-    opm-operator)
+    opm-operator | opm-controller)
       printf '%s\n' '.tasks/cascade/pins.sh 3ec912b5736303f1a74dc6d457e4edae7bc3868129a839ddd3fc7c82068e3825' \
         '.tasks/cascade/lib.sh d72bca993a94d836cb91959b869fdeba5a0d9043a1263af0ecef7135d0f3b7aa' \
         '.tasks/cascade/classes d761876b3bafc8078207f8aae04b5beb2da1c8a821cd529e4ebba2af16f1ba40' \

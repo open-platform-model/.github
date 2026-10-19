@@ -1,0 +1,144 @@
+name: Cite lint
+
+# Reusable: each repo's CI calls this to run `enh cite-lint` on the Go and
+# CUE comments of the repo. The comment rule (references/cite-lint.md): an
+# enhancement id only beside a reason in words, never a decision number,
+# never a lone id.
+#
+# The `enh` tool is built from tools/enh of open-platform-model/enhancements
+# at ONE pinned commit, the default of the enh-ref input below. This file is
+# the one place that holds the pin; a caller does not pass enh-ref. A caller
+# pins this workflow by SHA, so a new pin reaches a repo with its next .github
+# pin bump.
+#
+# Why a checkout and not `go run <module>@<commit>`: git checks the commit
+# object itself, so the tool is exactly the pinned tree, with no module proxy
+# between; the commit does not have to sit on a branch the proxy can resolve;
+# and the Go version comes from the tool's own go.mod (setup-go installs that
+# exact version, so GOTOOLCHAIN=local finds it and downloads nothing). The
+# tool's dependencies are checked by its go.sum and the Go checksum database.
+#
+# Trust: the repo under test is only read. Nothing from it is run, so a pull
+# request from a fork is safe here. Call this on `pull_request` or `push`.
+# The job has no secret and a read-only token.
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: >-
+          Paths to lint, one per line, relative to the repo root. Go and CUE
+          files only; other files are skipped.
+        type: string
+        required: false
+        default: .
+      exclude:
+        description: >-
+          Path patterns to skip, one per line. A pattern matches a whole path,
+          a base name or, with a trailing slash, a directory at any depth.
+          The tool already skips .git, node_modules, vendor and .cue-cache.
+        type: string
+        required: false
+        default: ''
+      enh-ref:
+        description: >-
+          Full 40-hex commit of open-platform-model/enhancements that holds
+          the tool. Branch and tag names are refused.
+        type: string
+        required: false
+        # A commit on main of enhancements that carries the merged tool.
+        # Move it only to a later commit of main.
+        default: e0335b2ec44e659c0191bc3523d79d17f26f8e7d
+
+permissions: {}
+
+jobs:
+  cite-lint:
+    name: Cite lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # The tool's go.mod and go.sum decide every dependency; no toolchain
+      # download, no module file change.
+      GOFLAGS: -mod=readonly
+      GOTOOLCHAIN: local
+      CGO_ENABLED: '0'
+    steps:
+      # Checks the inputs before any checkout, so a branch name never reaches
+      # actions/checkout, and writes the tool arguments (NUL separated: the
+      # exclude flags, then --, then the paths) for the Lint step.
+      - name: Check inputs
+        env:
+          PATHS: ${{ inputs.paths }}
+          EXCLUDE: ${{ inputs.exclude }}
+          ENH_REF: ${{ inputs.enh-ref }}
+        run: |
+          set -euo pipefail
+          if ! [[ $ENH_REF =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::enh-ref must be a full 40-hex commit SHA of open-platform-model/enhancements"
+            exit 1
+          fi
+          trim() { # trim <var>: strips leading and trailing white space
+            local v=${!1}
+            v="${v#"${v%%[![:space:]]*}"}"
+            printf -v "$1" '%s' "${v%"${v##*[![:space:]]}"}"
+          }
+          args="$RUNNER_TEMP/cite-lint.args"
+          : >"$args"
+          while IFS= read -r line || [ -n "$line" ]; do
+            trim line
+            [ -n "$line" ] || continue
+            printf '%s\0' "--exclude=$line" >>"$args"
+          done <<<"$EXCLUDE"
+          printf '%s\0' -- >>"$args"
+          n=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            trim line
+            [ -n "$line" ] || continue
+            if [[ $line == /* || $line == -* || $line =~ (^|/)\.\.(/|$) ]]; then
+              echo "::error::path [$line] must be relative to the repo root, must not start with - and must not hold .."
+              exit 1
+            fi
+            printf '%s\0' "$line" >>"$args"
+            n=$((n + 1))
+          done <<<"$PATHS"
+          if [ "$n" -eq 0 ]; then
+            printf '%s\0' . >>"$args"
+          fi
+          echo "::notice::enh at open-platform-model/enhancements $ENH_REF"
+
+      - name: Check out the repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: repo
+          persist-credentials: false
+
+      # A separate path beside the repo, so the lint never reads the tool's
+      # own files (its test data holds bad examples on purpose).
+      - name: Check out the tool
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: open-platform-model/enhancements
+          ref: ${{ inputs.enh-ref }}
+          path: enh
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: enh/tools/enh/go.mod
+          # No cache: the build is short, and a restored cache would be a way
+          # into the tool binary.
+          cache: false
+
+      - name: Build enh
+        working-directory: enh/tools/enh
+        run: go build -o "$RUNNER_TEMP/enh" .
+
+      - name: Lint
+        run: |
+          set -euo pipefail
+          mapfile -d '' -t args <"$RUNNER_TEMP/cite-lint.args"
+          "$RUNNER_TEMP/enh" cite-lint --root "$GITHUB_WORKSPACE/repo" "${args[@]}"
