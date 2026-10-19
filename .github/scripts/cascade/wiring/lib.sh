@@ -267,7 +267,7 @@ is_derived_path() {
 # The bot's own commits may change only the files the receiver's task writes.
 # The lists are read from each receiver's .tasks/cascade/cascade.sh on main
 # (catalog_opm 0560990, library ca7c56b, opm-operator 53ccaab, cli bd4d1a7c,
-# 2026-10-05) and live here, never in the receiver's tree, because publish
+# 2026-10-05; cli sha256 re-read at 88268e46, cli#364 changed comments only) and live here, never in the receiver's tree, because publish
 # trusts only this SHA-pinned code. A receiver whose task starts writing
 # another file needs this list changed, and its pin moved, first; the sha256
 # of each cascade.sh read is in mirror_sources, so publish refuses a receiver
@@ -487,7 +487,7 @@ receiver_pins() {
 
 # --- the mirrors' sources -----------------------------------------------------
 # The receiver files the mirrors above copy, with the sha256 of the version on
-# main they were written from (same commits as above; the archived sandbox's
+# main they were written from (same commits as above, but cli at 88268e46; the archived sandbox's
 # from its last main): pins.sh, the lib.sh it sources, classes, and, for the
 # four product receivers, the cascade.sh that publish_paths was read from.
 # publish refuses a push or recreate when the receiver's main holds another
