@@ -64,7 +64,7 @@ new checksum in every copy.
 
 `curl` and `git` are PATH shims that answer from `test/fixtures/`, captured from the real services.
 Sleep and the date are faked, and nothing touches the network. The resolver-tests workflow runs
-pinned `shellcheck`, `actionlint` and go-task releases and both suites on every PR and push to
+pinned `shellcheck`, `actionlint`, go-task and OpenSpec releases, the OpenSpec validation of the specs and both suites on every PR and push to
 `main`, with no path filter, as the job `Resolver tests`. The owner adds that job to the ruleset on
 `main` of this repo. A live workflow checks read-only invariants against GHCR and GitHub weekly and
 on dispatch, and a drift workflow checks the publish mirrors daily. Neither is ever required.

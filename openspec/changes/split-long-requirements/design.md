@@ -38,7 +38,7 @@ New ADDED requirements follow the repo rule "scenarios that demonstrate requirem
 
 Decision: two units in sequence on one branch: B1 (28), then B2 (27), then the CI step, then `AGENTS.md`, then the final gate. T1.3 sets the batches (first-fit decreasing, cap 28, whole specs, no spec in two batches). Why B1 first: it is the larger one and holds `cascade-resolver-checks`, the spec that names the CI job, so the new CI requirement (D5) lands in a spec already open in this change. No collision exists: `openspec/changes/` holds no other open change, so no MODIFIED block of another author can go stale.
 
-One caveat: the CI step must come after B2. With 27 warnings left, the step would fail its own PR. Inside one PR the group order is the commit order, and every group ends green under the repo gates, but `openspec validate --all --strict` is green only after group 2. Group 1 therefore ends green under gates 1 to 3 and under the guide gate of D4 (warnings fell by 28, no new ERROR).
+One caveat: the CI step must come after B2. With 27 warnings left, the step would fail its own PR. Inside one PR the group order is the commit order, and every group ends green under the repo gates, but `openspec validate --all --strict` is green only after the archive (task 5.3). Group 1 therefore ends green under gates 1 to 3 and under the guide gate of D4 (warnings fell by 28, no new ERROR).
 
 ### D4. The gate per unit
 
@@ -59,7 +59,7 @@ Decision: option 1. Reasons: the human ruled "CI workflow step only, no Taskfile
 Details of the step, for task group 3:
 
 - Name: `OpenSpec`. Position: after `actionlint`, before the offline suites, so a spec error fails fast.
-- Install: `npm install --prefix "$RUNNER_TEMP/openspec" --ignore-scripts @fission-ai/openspec@1.14.1`, then add `$RUNNER_TEMP/openspec/node_modules/.bin` to `GITHUB_PATH`. Node and npm come with the runner image, so no new third-party action and no `setup-node` pin. The exact version is the pin; `--ignore-scripts` follows the supply-chain rule on install scripts. The implement unit confirms that 1.14.1 needs no install script by running the install in a scratch folder before the edit.
+- Install: `npm install --prefix "$RUNNER_TEMP/openspec" --ignore-scripts @fission-ai/openspec@1.14.1`, then add `$RUNNER_TEMP/openspec/node_modules/.bin` to `GITHUB_PATH`. Node and npm come with the runner image, so no new third-party action and no `setup-node` pin. The exact version is the pin; `--ignore-scripts` follows the supply-chain rule on install scripts. The implement unit checked the installed 1.14.1 package and its dependency tree for install scripts and found none; the install itself runs for the first time in the CI run of the pull request.
 - Run: `OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive`. Telemetry off keeps the job free of calls to hosts it does not need (Principle I).
 - No new permission: the job keeps `contents: read`. The 10-minute timeout stays.
 - `openspec --version` is printed and compared to `1.14.1`; a different version fails the step, so the pin cannot drift silently.
@@ -71,7 +71,7 @@ Reversibility: high (hours); the step is removed by one commit.
 
 ### D6. Security
 
-Assets: none new. Trust boundary: the job downloads one npm package at a pinned version on a runner with `contents: read` and no secrets. Baseline: the repo's workflow principles (`openspec/config.yaml`, Principle I) and the supply-chain rules (pin, no install scripts). Residual risk: the npm registry serves a tampered 1.14.1 (no checksum available through npm as the other steps have); owner: the repo owner; accepted because the job holds no secret and a read-only token. Alternative to lower it later: a lockfile with integrity hashes.
+Assets: none new. Trust boundary: the job installs one npm package at a pinned version, and npm resolves its whole transitive tree (about 70 packages, most by caret range) on a runner with `contents: read` and no secrets. Baseline: the repo's workflow principles (`openspec/config.yaml`, Principle I) and the supply-chain rules (pin, no install scripts). Residual risk: the npm registry serves a tampered 1.14.1, or a hijacked new release of any package in the floating transitive tree, and the job reports green (`--ignore-scripts` stops install scripts only; no integrity hash is checked as in the other steps); owner: the repo owner; accepted by the owner, who decided on no lockfile knowing there is no integrity hash, because the job holds no secret and a read-only token. Alternative to lower it later: a committed lockfile with integrity hashes and `npm ci --ignore-scripts`.
 
 ## Scenario ledger
 
@@ -910,7 +910,7 @@ One requirement is new and rewrites no old text, so it has no old scenario and n
 | (none, new requirement) | Resolver tests validate the OpenSpec specs, A different CLI version fails the job | new |
 | (none, new requirement) | Resolver tests validate the OpenSpec specs, The validation reports on every pull request | new |
 
-Install check (task 3.1): the installed 1.14.1 package and every dependency in its tree declare no `preinstall`, `install` or `postinstall` script, so `--ignore-scripts` costs nothing.
+Install check (task 3.1): the 1.14.1 package installed on the host and every package in that tree declare no `preinstall`, `install` or `postinstall` script. This is not proof for the tree that CI resolves at run time; the CI run of the pull request is the first real install.
 
 ## Risks
 
