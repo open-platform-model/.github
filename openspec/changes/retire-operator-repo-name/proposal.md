@@ -50,6 +50,10 @@ run until `REPOS` names the new repo (an assumption, see design D2).
 
 Not in this change: any receiver repo, the pin bumps, rulesets or repo settings (owner steps).
 
+## Enhancement
+
+None.
+
 ## Capabilities
 
 ### New Capabilities
