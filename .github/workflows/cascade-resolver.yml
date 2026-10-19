@@ -2,8 +2,9 @@ name: cascade-resolver
 
 # Tests the release-cascade resolver (.github/scripts/cascade/) and the
 # cascade workflows' scripts (.github/scripts/cascade/wiring/) offline:
-# shellcheck on every script, actionlint on every workflow, then the two
-# table tests, which answer every HTTP, git and gh request from fixture files.
+# shellcheck on every script, actionlint on every workflow, openspec validate
+# on every spec, then the two table tests, which answer every HTTP, git and gh
+# request from fixture files.
 #
 # This is the check the main ruleset of this repo requires (workspace
 # RELEASING.md, section "Rulesets on main"), so it has no path filter: a
@@ -29,6 +30,10 @@ jobs:
     permissions:
       contents: read
     env:
+      # The OpenSpec CLI that gate 4 of openspec/config.yaml runs; the version
+      # here is the pin (it is also the generatedBy version of the repo's
+      # OpenSpec skills).
+      OPENSPEC_VERSION: 1.14.1
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
       # The runner image's own shellcheck (0.9.0 on ubuntu-24.04) lags the
@@ -80,6 +85,28 @@ jobs:
           echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$tgz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -color .github/workflows/*.yml
+
+      # Node and npm come with the runner image. --ignore-scripts keeps any
+      # install script of the package or its dependencies from running.
+      - name: Install OpenSpec
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/openspec" --ignore-scripts \
+            "@fission-ai/openspec@${OPENSPEC_VERSION}"
+          echo "$RUNNER_TEMP/openspec/node_modules/.bin" >>"$GITHUB_PATH"
+
+      - name: OpenSpec
+        env:
+          OPENSPEC_TELEMETRY: "0"
+        run: |
+          set -euo pipefail
+          v=$(openspec --version)
+          echo "$v"
+          if [ "$v" != "$OPENSPEC_VERSION" ]; then
+            echo "::error::OpenSpec $OPENSPEC_VERSION is pinned, found: $v"
+            exit 1
+          fi
+          openspec validate --all --strict --no-interactive
 
       # The runner image has no go-task; the wiring tests run task. The
       # version and checksum are the ones compute installs (install-tools.sh),
