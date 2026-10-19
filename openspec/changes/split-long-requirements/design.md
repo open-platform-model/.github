@@ -54,12 +54,12 @@ Run in a scratch copy of `openspec/`, never in the worktree, with the pinned 1.1
 
 Options: (1) a step in the existing `Resolver tests` job; (2) a new job in `cascade-resolver.yml`; (3) a new workflow; (4) a Taskfile with `openspec:check` (what cli does). The status quo is no gate.
 
-Decision: option 1. Reasons: the human ruled "CI workflow step only, no Taskfile" because the repo has none (DECISIONS 2026-10-19 12:08). The spec of that workflow says it adds no new job and no new check context, and `Resolver tests` is the required check that already reports on every PR with no path filter (Principle III). A new job or workflow would add a check context that no ruleset requires, so it would not gate merges, or it would need an owner ruleset edit that this change must not do.
+Decision: option 1. Reasons: the human ruled "CI workflow step only, no Taskfile" because the repo has none. The spec of that workflow says it adds no new job and no new check context, and `Resolver tests` is the required check that already reports on every PR with no path filter (Principle III). A new job or workflow would add a check context that no ruleset requires, so it would not gate merges, or it would need an owner ruleset edit that this change must not do.
 
 Details of the step, for task group 3:
 
 - Name: `OpenSpec`. Position: after `actionlint`, before the offline suites, so a spec error fails fast.
-- Install: `npm install --prefix "$RUNNER_TEMP/openspec" --ignore-scripts @fission-ai/openspec@1.14.1`, then add `$RUNNER_TEMP/openspec/node_modules/.bin` to `GITHUB_PATH`. Node and npm come with the runner image, so no new third-party action and no `setup-node` pin. The exact version is the pin; `--ignore-scripts` follows the supply-chain rule on install scripts. Open question for the implement unit: confirm that 1.14.1 needs no install script (it is verified by running the install in a scratch folder before the edit). If the package needs one, the unit stops and asks.
+- Install: `npm install --prefix "$RUNNER_TEMP/openspec" --ignore-scripts @fission-ai/openspec@1.14.1`, then add `$RUNNER_TEMP/openspec/node_modules/.bin` to `GITHUB_PATH`. Node and npm come with the runner image, so no new third-party action and no `setup-node` pin. The exact version is the pin; `--ignore-scripts` follows the supply-chain rule on install scripts. The implement unit confirms that 1.14.1 needs no install script by running the install in a scratch folder before the edit.
 - Run: `OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive`. Telemetry off keeps the job free of calls to hosts it does not need (Principle I).
 - No new permission: the job keeps `contents: read`. The 10-minute timeout stays.
 - `openspec --version` is printed and compared to `1.14.1`; a different version fails the step, so the pin cannot drift silently.
@@ -894,9 +894,9 @@ These scenarios are not in the old specs. Each restates the rule of its body in 
 - cascade-wiring-check (16): A missing config; A merge key; A key-holding job with another timeout; Env key outside the allow-list; A receiver trigger that differs; References at two SHAs; A path filter on the CI job; The config keys; An unknown config key; Commands in the reference; A matching copy; A failed fetch; Mismatch message; A declared reference that is missing; ENV set with the flag; A pin failure is never bypassed.
 - cascade-gates (11): Worktree after an error; Upload after a failed step; Release PR pending with deps; Nothing pending; Status table; Gates job in a dry run; The list cannot be read; Gates workflow checkout; Dispatch fails in enforce mode; Dispatch fails in warn mode; Gates-only run.
 - cascade-pr-text (11): Base ref fallback; Pins script exits non-zero; Unknown class; Paths changed, no pin moved; Body layout; Counts per class; Dropped value with a hostile character; Extra name that is not a repo name; Explicit warnings file missing; No warnings; Notes from the file.
-- cascade-notify (5): Notify downstream job; A caller names another source; Target map; Target list with the new name; Tag shape of another source.
+- cascade-notify (4): Notify downstream job; A caller names another source; Target map; Target list with the new name.
 
-Total 58. "Tag shape of another source" (a source other than `catalog_opm` with an `opm-` tag) follows from the old second tag pattern; the old text names no such case.
+Total 57.
 
 ## Risks
 

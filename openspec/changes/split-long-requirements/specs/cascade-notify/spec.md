@@ -80,8 +80,3 @@ The `tag` input SHALL match `^opm-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$` whe
 
 - **WHEN** `catalog_opm` calls it with `tag: v4.5.1`
 - **THEN** the job fails before the mint because the tag lacks the `opm-` prefix
-
-#### Scenario: Tag shape of another source
-
-- **WHEN** a source other than `catalog_opm` calls it with `tag: opm-v4.5.1`
-- **THEN** the job fails before the mint because the tag does not match `^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$`
