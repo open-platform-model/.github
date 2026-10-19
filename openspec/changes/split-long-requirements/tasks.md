@@ -1,10 +1,10 @@
 ## 1. Batch .github-B1: cascade-receive, cascade-resolver, cascade-resolver-checks, tag-ledger (28 requirements)
 
-- [ ] 1.1 For each long requirement of the four specs (cascade-receive 13, cascade-resolver 9, cascade-resolver-checks 5, tag-ledger 1), read the text, choose the form by design.md D1, and grep the repo outside `openspec/changes/archive` for the header text before any rename or split
-- [ ] 1.2 Write the deltas in `specs/<spec>/spec.md` of this change; keep every old scenario byte for byte; keep RFC 2119 keywords and citations in bodies; no `**Key**:` line, no `#####` heading, no fenced block in a body
-- [ ] 1.3 Append the scenario ledger and clause tables of the 28 requirements to design.md
-- [ ] 1.4 Run the guide gate in a scratch copy (design.md D4): N = 28, warnings 55 to 27, no new ERROR item, no "Archive would refuse"; run `validate <spec> --type spec --strict` for the four specs and the scenario check per requirement (no `DIFF`, no `LOST`)
-- [ ] 1.5 `shellcheck`, `actionlint` and every `test/run.sh` green, then commit docs(openspec): split the long requirements of batch B1
+- [x] 1.1 For each long requirement of the four specs (cascade-receive 13, cascade-resolver 9, cascade-resolver-checks 5, tag-ledger 1), read the text, choose the form by design.md D1, and grep the repo outside `openspec/changes/archive` for the header text before any rename or split
+- [x] 1.2 Write the deltas in `specs/<spec>/spec.md` of this change; keep every old scenario byte for byte; keep RFC 2119 keywords and citations in bodies; no `**Key**:` line, no `#####` heading, no fenced block in a body
+- [x] 1.3 Append the scenario ledger and clause tables of the 28 requirements to design.md
+- [x] 1.4 Run the guide gate in a scratch copy (design.md D4): N = 28, warnings 55 to 27, no new ERROR item, no "Archive would refuse"; run `validate <spec> --type spec --strict` for the four specs and the scenario check per requirement (no `DIFF`, no `LOST`)
+- [x] 1.5 `shellcheck`, `actionlint` and every `test/run.sh` green, then commit docs(openspec): split the long requirements of batch B1
 
 ## 2. Batch .github-B2: cascade-workflows, cascade-wiring-check, cascade-gates, cascade-pr-text, cascade-notify (27 requirements)
 
