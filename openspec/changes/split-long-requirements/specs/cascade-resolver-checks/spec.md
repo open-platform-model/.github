@@ -186,6 +186,25 @@ The job `Resolver tests` SHALL run a pinned, checksum-verified `shellcheck` rele
 - **WHEN** the job `Resolver tests` runs
 - **THEN** `shellcheck` covers the resolver's `curl` and `git` shims and the wiring suite's `gh` shim, and `actionlint` covers the two reusable cascade workflows
 
+### Requirement: Resolver tests validate the OpenSpec specs
+
+The job `Resolver tests` SHALL install the OpenSpec CLI at one pinned version with `npm install --ignore-scripts`, after `actionlint` and before the offline suites. It SHALL then run `openspec validate --all --strict --no-interactive` and fail when the CLI version differs from the pin or when the validation exits non-zero.
+
+#### Scenario: A spec with a long requirement fails the job
+
+- **WHEN** a PR adds a requirement whose body is longer than 500 characters
+- **THEN** `openspec validate --all --strict --no-interactive` exits non-zero and the `Resolver tests` job fails
+
+#### Scenario: A different CLI version fails the job
+
+- **WHEN** the installed OpenSpec CLI reports a version other than the pin
+- **THEN** the step fails before it validates and the `Resolver tests` job fails
+
+#### Scenario: The validation reports on every pull request
+
+- **WHEN** a PR changes only `README.md`
+- **THEN** the `Resolver tests` job runs the OpenSpec validation and reports a status
+
 ### Requirement: Resolver tests run both offline suites
 
 The job `Resolver tests` SHALL run both offline suites: the resolver suite and the wiring suite.

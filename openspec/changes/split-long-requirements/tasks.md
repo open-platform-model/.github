@@ -16,11 +16,11 @@
 
 ## 3. Repo extra: OpenSpec gate in the Resolver tests job
 
-- [ ] 3.1 Confirm in a scratch folder that `@fission-ai/openspec@1.14.1` installs with `--ignore-scripts` and runs `validate`; if it needs an install script, stop and ask
-- [ ] 3.2 Add the pinned install step and the `openspec validate --all --strict --no-interactive` step to the job `Resolver tests` of `.github/workflows/cascade-resolver.yml` as in design.md D5; add no job, no permission and no action; update the header comment of the workflow
-- [ ] 3.3 Write the delta for `cascade-resolver-checks`: one ADDED requirement for the step (a body of at most 500 characters, scenarios for pass and fail); add its ledger line to design.md
-- [ ] 3.4 Run the new commands locally in the worktree (`openspec validate --all --strict --no-interactive` exits 0 after groups 1 and 2), `actionlint .github/workflows/*.yml`, shellcheck and every `test/run.sh`; rerun the guide gate
-- [ ] 3.5 Commit ci(cascade): gate the specs with openspec validate in resolver tests
+- [x] 3.1 Confirm in a scratch folder that `@fission-ai/openspec@1.14.1` installs with `--ignore-scripts` and runs `validate`; if it needs an install script, stop and ask
+- [x] 3.2 Add the pinned install step and the `openspec validate --all --strict --no-interactive` step to the job `Resolver tests` of `.github/workflows/cascade-resolver.yml` as in design.md D5; add no job, no permission and no action; update the header comment of the workflow
+- [x] 3.3 Write the delta for `cascade-resolver-checks`: one ADDED requirement for the step (a body of at most 500 characters, scenarios for pass and fail); add its ledger line to design.md
+- [x] 3.4 Run the new commands locally in the worktree (`openspec validate --all --strict --no-interactive` exits 0 after groups 1 and 2), `actionlint .github/workflows/*.yml`, shellcheck and every `test/run.sh`; rerun the guide gate
+- [x] 3.5 Commit ci(cascade): gate the specs with openspec validate in resolver tests
 
 ## 4. Repo extra: AGENTS.md
 

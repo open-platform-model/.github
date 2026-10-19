@@ -877,7 +877,9 @@ Each row reads: old clause, new requirement, and how the new sentence relates to
 | Source and targets: `opm-controller` and the old name in target lists | A target list names only the old repo name | verbatim |
 | Source and targets: `tag` shape | The tag input matches a fixed shape | verbatim |
 
-#### Strength table (RFC 2119 words added in B2)
+#### Strength table (RFC 2119 words added by the whole change)
+
+Batch B1 adds no keyword. The CI step requirement is new text, written with SHALL. Batch B2 adds four, listed here:
 
 | New requirement | Old sentence | New sentence |
 | --- | --- | --- |
@@ -897,6 +899,18 @@ These scenarios are not in the old specs. Each restates the rule of its body in 
 - cascade-notify (4): Notify downstream job; A caller names another source; Target map; Target list with the new name.
 
 Total 57.
+
+### Repo extra: the CI step
+
+One requirement is new and rewrites no old text, so it has no old scenario and no clause row. Its length is 324 characters.
+
+| Old scenario name | New place (requirement, scenario name) | Changed text? |
+| --- | --- | --- |
+| (none, new requirement) | Resolver tests validate the OpenSpec specs, A spec with a long requirement fails the job | new |
+| (none, new requirement) | Resolver tests validate the OpenSpec specs, A different CLI version fails the job | new |
+| (none, new requirement) | Resolver tests validate the OpenSpec specs, The validation reports on every pull request | new |
+
+Install check (task 3.1): the installed 1.14.1 package and every dependency in its tree declare no `preinstall`, `install` or `postinstall` script, so `--ignore-scripts` costs nothing.
 
 ## Risks
 
