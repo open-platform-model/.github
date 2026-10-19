@@ -8,7 +8,7 @@ Router only. Facts and rules are in `AGENTS.md`.
 | Change the tag drift check, the ledger, the ruleset assertions, or answer a drift issue | `references/tag-ledger.md` | `tag-ledger/`, `.github/scripts/` |
 | Change the shared comment lint, its inputs or its tool pin | `references/cite-lint.md` | `.github/workflows/` |
 | Change how a version is resolved, a resolver subcommand, an exit code or the stub | `references/cascade-resolver.md` | `.github/scripts/cascade/` |
-| Change a cascade workflow, a composite action or a caller shape, or finish the move to the opm-controller repo name | `references/cascade-workflows.md` | `.github/workflows/`, `.github/actions/` |
+| Change a cascade workflow, a composite action or a caller shape | `references/cascade-workflows.md` | `.github/workflows/`, `.github/actions/` |
 | Change a dry-run rule, a repo variable or a stop switch of the cascade | `references/cascade-switches.md` | `.github/actions/` |
 | Change what `compute` or `publish` may do, an allow-list path or a receiver mirror because a receiver's own file changed | `references/cascade-security.md` | `.github/scripts/cascade/wiring/` |
 | Roll a change out to the product repos, move a pin or pick a canary | `references/cascade-pinning.md` | `.github/scripts/cascade/wiring/` |

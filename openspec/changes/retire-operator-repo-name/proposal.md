@@ -42,7 +42,7 @@ run until `REPOS` names the new repo (an assumption, see design D2).
   effect at merge, with no pin.
 - **Mirror hashes (at cutover):** opm-controller's `pins.sh`, `lib.sh`, `classes`, `cascade.sh`
   and cli's `pins.sh`, `classes`, `cascade.sh`, read from their merged mains, and the read
-  commits in the comment and README.
+  commits in the comment.
 - **`wiring-check.sh` comments** name opm-controller, so every pin PR of this round re-syncs the
   byte-identical copy (`.tasks/cascade/wiring-check.sh`).
 - **Tests, fixture (`test/fixtures/git/opm-controller.refs`), specs and README** follow. The

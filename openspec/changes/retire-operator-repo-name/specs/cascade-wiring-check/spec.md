@@ -4,7 +4,8 @@
 
 Each `extra-references` item SHALL add one expected `.github` reference of its kind in its file.
 A `resolver` reference is a step whose `with.repository` ends in `/.github` in any case, or is an
-expression. A declared reference SHALL be held to the rules of the fixed references: the one full SHA
+expression. A `cite-lint` reference is a job whose `uses` is
+`open-platform-model/.github/.github/workflows/cite-lint.yml` at the pinned SHA. A declared reference SHALL be held to the rules of the fixed references: the one full SHA
 shared by every `.github` reference and the config's pin comment. A reference neither fixed nor
 declared, and a declared one that is missing, SHALL fail `.github references` with exit 1.
 
