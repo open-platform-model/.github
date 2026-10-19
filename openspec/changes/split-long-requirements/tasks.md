@@ -24,8 +24,8 @@
 
 ## 4. Repo extra: AGENTS.md
 
-- [ ] 4.1 Change the sentence "CI runs the first three" in the Commands section of `AGENTS.md` to say that CI runs all four commands; the table row for `openspec validate --all --strict` stays as it is; check `openspec/config.yaml` gate 4 needs no edit
-- [ ] 4.2 Commit docs(openspec): state that CI runs the openspec validate gate
+- [x] 4.1 Change the sentence "CI runs the first three" in the Commands section of `AGENTS.md` to say that CI runs all four commands; the table row for `openspec validate --all --strict` stays as it is; check `openspec/config.yaml` gate 4 needs no edit
+- [x] 4.2 Commit docs(openspec): state that CI runs the openspec validate gate
 
 ## 5. Final gate
 
