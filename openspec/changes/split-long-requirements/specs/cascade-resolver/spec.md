@@ -183,12 +183,12 @@ A `release <repo> --asset NAME...` query SHALL take candidates from `git ls-remo
 
 ### Requirement: OCI queries accept the manifest and index types
 
-For `oci <repo>` (for `published` only), the manifest `HEAD` SHALL accept the OCI manifest and index types.
+For `oci <repo>` (for `published` only), published SHALL be decided by the manifest `HEAD` accepting the OCI manifest and index types.
 
 #### Scenario: OCI manifest request
 
 - **WHEN** `published oci <repo> <tag>` runs
-- **THEN** the manifest `HEAD` accepts the OCI manifest and index types
+- **THEN** the manifest `HEAD` accepts the OCI manifest and index types, and that request decides whether the tag is published
 
 ### Requirement: The resolver sends no credentials
 
@@ -451,7 +451,7 @@ The resolver SHALL learn whether a tag is on `main` with git only (a tree-less b
 
 ### Requirement: Other pins and published do not check tags
 
-Other pins (fixtures, templates, `oci`) SHALL NOT be checked, and `published` SHALL NOT check.
+Pins that are not tags of an `open-platform-model` repo (fixtures, templates, `oci`) SHALL NOT be checked for a tag on `main`, and `published` SHALL NOT check.
 
 #### Scenario: Published does not check a tag
 
@@ -460,7 +460,7 @@ Other pins (fixtures, templates, `oci`) SHALL NOT be checked, and `published` SH
 
 ### Requirement: tag-on-main answers the check for one version
 
-`tag-on-main <pin-key> <v>` SHALL answer the same check for one version: exit 0 when the tag is on `main` or the pin has no tag to check, 3 when the tag is missing or off `main`, 1 on a git failure after four attempts.
+`tag-on-main <pin-key> <v>` SHALL answer whether the tag of `<v>` is reachable from its repo's `main`, for one version: exit 0 when the tag is on `main` or the pin has no tag to check, 3 when the tag is missing or off `main`, 1 on a git failure after four attempts.
 
 #### Scenario: One version checked on its own
 

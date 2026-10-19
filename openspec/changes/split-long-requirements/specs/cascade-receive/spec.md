@@ -88,7 +88,7 @@ For `push` and `recreate`, `publish` SHALL check the new tip out into a scratch 
 
 ### Requirement: Publish verifies before it mints
 **Reason**: Split into requirements that each state one behavior.
-**Migration**: See "Publish treats the plan as untrusted", "Publish verifies the bundle before it mints", "Publish bounds the increment and renders the text before it mints", "Publish builds comments from fixed texts and pushes under a lease" and "A hold added after compute stops publish".
+**Migration**: See "Publish treats the plan as untrusted", "Publish verifies the bundle before it mints", "Publish bounds the increment before it mints", "Publish renders the text before it mints", "Publish builds comments from fixed texts and pushes under a lease" and "A hold added after compute stops publish".
 
 ### Requirement: Gates-only runs never publish
 **Reason**: Split into requirements that each state one behavior.
@@ -434,25 +434,39 @@ The rule constant `WF_GUARD_RULE` SHALL ship as `tree` (sandbox cycle E4c: GitHu
 
 ### Requirement: Publish verifies the bundle before it mints
 
-For `push` and `recreate`, `publish` SHALL, before the token exists, verify the bundle, require its tip to equal the planned new tip, re-run the workflows guard, and lint the body above the Notes marker and every comment it builds for a bare mention.
+For `push` and `recreate`, `publish` SHALL, with `GITHUB_TOKEN` and plain git only and before the token exists, verify the bundle, require its tip to equal the planned new tip, re-run the workflows guard, and lint the body above the Notes marker for a bare mention.
 
 #### Scenario: Bundle tip differs from the plan
 
 - **WHEN** the tip of the verified bundle is not the planned new tip
 - **THEN** `publish` refuses before minting the token
 
-### Requirement: Publish bounds the increment and renders the text before it mints
+### Requirement: Publish bounds the increment before it mints
 
-For `push` and `recreate`, `publish` SHALL, before the token exists, bound the increment (requirements "Publish bounds the increment's commits", "Publish limits what a single-parent commit changes", "Publish checks merge commits", "Allow-lists live in .github", "The deny-list wins over the allow-list", "Publish refuses to drop a human commit" and "Publish checks the tag of each moved pin") and render the title, body and labels itself (requirement "Publish renders the PR text").
+For `push` and `recreate`, `publish` SHALL, with `GITHUB_TOKEN` and plain git only and before the token exists, bound the increment (requirements "Publish bounds the increment's commits", "Publish limits what a single-parent commit changes", "Publish checks merge commits", "Allow-lists live in .github", "The deny-list wins over the allow-list", "Publish refuses to drop a human commit" and "Publish checks the tag of each moved pin").
 
-#### Scenario: Increment and text come first
+#### Scenario: Increment comes first
 
 - **WHEN** `publish` verifies a `push` plan
-- **THEN** it bounds the increment and renders the title, body and labels itself before any token exists
+- **THEN** it bounds the increment before any token exists
+
+### Requirement: Publish renders the text before it mints
+
+For `push` and `recreate`, `publish` SHALL, with `GITHUB_TOKEN` and plain git only and before the token exists, render the title, body and labels itself (requirement "Publish renders the PR text").
+
+#### Scenario: Text comes first
+
+- **WHEN** `publish` verifies a `push` plan
+- **THEN** it renders the title, body and labels itself before any token exists
 
 ### Requirement: Publish builds comments from fixed texts and pushes under a lease
 
-Every comment SHALL be built inside `publish` from fixed texts. Every push and branch delete SHALL carry a lease on the planned old tip (an empty lease where the branch must not exist).
+Every comment SHALL be built inside `publish` from fixed texts, and `publish` SHALL lint every comment it builds for a bare mention, with `GITHUB_TOKEN` and plain git only and before the token exists. Every push and branch delete SHALL carry a lease on the planned old tip (an empty lease where the branch must not exist).
+
+#### Scenario: A comment with a bare mention
+
+- **WHEN** a comment that `publish` builds holds a bare mention
+- **THEN** the lint fails before the token exists, whatever the action
 
 #### Scenario: A push under a lease
 
@@ -604,7 +618,7 @@ For every pin whose version differs between the merge base and the new tip (read
 
 ### Requirement: Publish refuses an oversize body or an empty push diff
 
-`publish` SHALL refuse a body over 65000 bytes, and an empty diff for a push.
+`publish` SHALL refuse a body rendered for a `push` or `recreate` that is over 65000 bytes, and an empty diff for a push.
 
 #### Scenario: Empty diff for a push
 

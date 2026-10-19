@@ -386,9 +386,11 @@ Form per requirement of B1 (the old length is in the ledger heading; the new len
 | Workflows guard: table | scenario "Guard table" of the same requirement |
 | Workflows guard: `WF_GUARD_RULE` ships as `tree`, `strict` implemented | "The workflows guard rule ships as tree" |
 | Publish verifies before it mints: untrusted plan, unknown action or label, PR mismatch, moved tip | "Publish treats the plan as untrusted" |
-| Publish verifies before it mints: bundle, new tip, workflows guard, lint | "Publish verifies the bundle before it mints" |
-| Publish verifies before it mints: bound the increment, render the text (the two requirement references) | "Publish bounds the increment and renders the text before it mints" |
-| Publish verifies before it mints: comments from fixed texts, leases | "Publish builds comments from fixed texts and pushes under a lease" |
+| Publish verifies before it mints: bundle, new tip, workflows guard, body lint | "Publish verifies the bundle before it mints" |
+| Publish verifies before it mints: bound the increment (requirement references) | "Publish bounds the increment before it mints" |
+| Publish verifies before it mints: render the text (requirement reference) | "Publish renders the text before it mints" |
+| Publish verifies before it mints: "with `GITHUB_TOKEN` and plain git only" | repeated in the bodies of the four requirements that carry a pre-mint step |
+| Publish verifies before it mints: comments from fixed texts, lint of every comment for any action, leases | "Publish builds comments from fixed texts and pushes under a lease" |
 | Publish verifies before it mints: hold seen only by `publish` | "A hold added after compute stops publish" |
 | Gates-only runs never publish: never mint or write, caller `if:` and input | "A gates-only run never writes" |
 | Gates-only runs never publish: `cascade-publish` input check in `verify` and `act` | "cascade-publish checks the gates-only input first" |
@@ -410,7 +412,7 @@ Form per requirement of B1 (the old length is in the ledger heading; the new len
 | Publish refuses a stale mirror: mirrored `pins.sh` reports the same rows | "The mirrored pins report matches the receiver's" |
 | Publish refuses a stale mirror: cli rows, before and after the rename | "The cli mirror reports the controller pins" |
 
-The grammar of one old sentence is repaired in "Publish refuses a plan from a stale mirror" ("reads the bundle, runs the workflows guard or bounds the increment" was "before it reads the bundle, runs ... or bounds"); the list of times is the same.
+The sentence of "Publish refuses a plan from a stale mirror" is kept word for word.
 
 #### cascade-resolver
 
@@ -421,7 +423,7 @@ The grammar of one old sentence is repaired in "Publish refuses a plan from a st
 | SemVer 2.0.0 precedence: `semver-cmp` and `semver-sort` output | "semver-cmp and semver-sort have fixed output" |
 | Candidate rules for newest | three requirements as in guide section 5.2 (valid candidates; ten newest; exit 3) |
 | Query kinds: lead sentence "support these kinds, with published defined per kind" | each kind states its own published rule, in the five kind requirements |
-| Query kinds: `cue`, `go`, `release` plus `opm-cli`, `oci` | "Cue queries read the GHCR tag list", "Go queries read the module proxy", "Release queries read git tags and release assets", "OCI queries accept the manifest and index types" |
+| Query kinds: `cue`, `go`, `release` plus `opm-cli`, `oci` (for `oci`, the manifest `HEAD` decides published) | "Cue queries read the GHCR tag list", "Go queries read the module proxy", "Release queries read git tags and release assets", "OCI queries accept the manifest and index types" |
 | Query kinds: no credentials, no `api.github.com` | "The resolver sends no credentials" |
 | Query kinds: `git ls-remote` isolation | "git ls-remote runs isolated from the caller's git config" |
 | Query kinds: unknown or private GHCR package | "Unknown or private GHCR packages" |
