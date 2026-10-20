@@ -65,7 +65,7 @@ None.
 - `cascade-notify`, `cascade-receive`, `cascade-gates`, `cascade-pr-text`, `cascade-resolver`,
   `cascade-wiring-check`, `cascade-workflows`: `opm-controller` replaces
   `opm-operator`; requirements whose scenarios were named after the old repo are retitled
-  (REMOVED plus ADDED); the two-name requirement is removed.
+  (REMOVED plus ADDED); the requirements of the two-name window are removed.
 
 ## Impact
 

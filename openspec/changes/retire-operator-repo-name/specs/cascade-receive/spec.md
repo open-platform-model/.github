@@ -1,66 +1,23 @@
 ## ADDED Requirements
 
-### Requirement: Payload is a validated hint from a known source
+### Requirement: The allow-lists are keyed by receiver
 
-On a `repository_dispatch` run `compute` SHALL accept the payload only when `source` is a string
-in the receiver's allowlist and `tags` is an array of 1 to 8 strings each matching the tag shape
-for that source; unknown keys SHALL be ignored. A `source` or tag holding a control character
-(U+0000 to U+001F or U+007F) SHALL make the payload invalid, and each tag SHALL be matched whole,
-so a tag with a trailing newline is refused. Allowlists: `catalog_opm` accepts `core`, `cli`;
-`library` accepts `core`, `catalog_opm`; `opm-controller` accepts `catalog_opm`, `library`, `cli`;
-`cli` accepts `catalog_opm`, `library`, `opm-controller`; `cascade-sandbox-down` accepts
-`cascade-sandbox-up`. A receiver outside this list SHALL fail with "not a cascade receiver". A
-valid payload SHALL set `CASCADE_SOURCE`, `CASCADE_TAGS` and one `CASCADE_EXPECT` pair built from
-the last tag (`catalog_opm` tags lose their `opm-` prefix). An invalid payload SHALL be dropped
-whole with a warning and a summary line naming why, and the run SHALL continue as a sweep. The
-payload SHALL never set a label. Only `cascade-sandbox-down` SHALL export
-`CASCADE_EXTRA_SOURCES=cascade-sandbox-up`. `publish` SHALL read the payload from the event
-itself, with the same validation, never from `compute`.
+The allow-lists SHALL live in `.github` (`wiring/lib.sh`), keyed by the receiver, never read from the receiver's tree.
 
-#### Scenario: Hostile payload
+#### Scenario: cli's controller module pin file
 
-- **WHEN** the payload is `{"source":"evil","tags":["@x"]}`
-- **THEN** the payload is dropped with a warning, the run behaves as a sweep, and no mention appears in any text the bot writes
+- **WHEN** cli's task commit changes `internal/controller/pin.go`
+- **THEN** `publish` accepts the path, and refuses `internal/controller/install.go`
 
-#### Scenario: Nine tags
+#### Scenario: cli's embedded controller CRDs
 
-- **WHEN** the payload carries nine valid tags
-- **THEN** the whole payload is dropped and the run continues as a sweep
+- **WHEN** cli's task commit changes `internal/controller/crds/platforms.opmodel.dev.yaml`, a CRD manifest `hack/controller-pin` writes beside the pin
+- **THEN** `publish` accepts the path, and refuses `internal/controller/crds/crds.go`
+- **AND** it refuses a commit that adds or deletes a manifest there (status other than `M`), so a module version that changes the CRD set needs a human
 
-#### Scenario: Tag with a trailing newline
+### Requirement: The deny-list wins over every allow-list
 
-- **WHEN** the payload for cli is `{"source":"library","tags":["v1.0.0\n","v1.0.1"]}`
-- **THEN** the whole payload is dropped and the run continues as a sweep
-
-#### Scenario: The controller's release reaches cli
-
-- **WHEN** cli receives `{"source":"opm-controller","tags":["v1.0.0-beta.9"]}`
-- **THEN** the payload is valid and `CASCADE_EXPECT` is `github.com/open-platform-model/opm-controller=v1.0.0-beta.9`
-
-### Requirement: Publish bounds the bot's commits
-
-For `push` and `recreate`, `publish` SHALL take as the bot's increment the new tip's commits that
-`origin/main` does not have and, for a `push` whose old tip is an ancestor of the new one, that
-the old tip does not have either. It SHALL refuse the plan, before any token exists, when the
-increment has more than two commits, a root commit or a commit with more than two parents; when a
-commit's author or committer email is not the bot's; when a single-parent commit changes a path
-with a status other than `M`, changes a mode, has a mode other than `100644` or `100755` (a
-symlink `120000` or gitlink `160000`), or changes a path outside the receiver's allow-list or
-inside the deny-list; and when a merge commit's second parent is not on `origin/main` or its tree
-differs from `git merge-tree --write-tree` of its parents in a path that is not a derived path
-carrying the second parent's content. The allow-lists SHALL live in `.github` (`wiring/lib.sh`),
-keyed by the receiver, never read from the receiver's tree. The deny-list SHALL be `.github/**`,
-`.tasks/**`, any `Taskfile*`, `hack/**` (except cli's `hack/kind-platform.yaml` and
-`hack/platform/cue.mod/module.cue`), `*.sh`, any `CODEOWNERS`, `release-please-config.json`,
-`.release-please-manifest.json`, `.cascade-frozen`, `.cascade-hold` and, for opm-controller,
-`modules/**` (its controller module moves only through its own `module-deps.yml`), and SHALL win
-over the allow-list. When a `push` does not contain the old tip and `origin/main..old` holds a commit the
-bot did not make, `publish` SHALL refuse; it SHALL refuse a `recreate` whenever `origin/main..old`
-holds such a commit, since `recreate` rebuilds the branch on `main`; `close` SHALL then keep the
-branch and delete only a bot-only one. For every pin whose version differs between the merge
-base and the new tip (read with the `.github` pin mirror), `publish` SHALL run the resolver's
-`tag-on-main` itself and SHALL refuse when the tag is not on its repo's `main` or the check
-fails, so a forged tag is refused even when `compute` skipped the resolver.
+The deny-list SHALL be `.github/**`, `.tasks/**`, any `Taskfile*`, `hack/**` (except cli's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), `*.sh`, any `CODEOWNERS`, `release-please-config.json`, `.release-please-manifest.json`, `.cascade-frozen`, `.cascade-hold` and, for opm-controller, `modules/**` (its controller module moves only through its own `module-deps.yml`), and SHALL win over the allow-list.
 
 #### Scenario: A bundle that edits the cascade task
 
@@ -72,155 +29,81 @@ fails, so a forged tag is refused even when `compute` skipped the resolver.
 - **WHEN** `compute`'s commit changes `Taskfile.yml`
 - **THEN** `publish` refuses before the mint
 
-#### Scenario: A symlink
-
-- **WHEN** `compute`'s commit turns an allowed path into a symlink
-- **THEN** `publish` refuses before the mint
-
-#### Scenario: A commit the bot did not make
-
-- **WHEN** the bundle's commit has a human committer
-- **THEN** `publish` refuses before the mint
-
-#### Scenario: A rebuild over a human commit
-
-- **WHEN** the remote branch holds a human commit and the plan's new tip does not contain it
-- **THEN** `publish` refuses with "would drop commits", and `close` keeps such a branch
-
-#### Scenario: A pin moved to a forged tag
-
-- **WHEN** the new tip moves a pin to `v0.2.0` and that tag of its repo is not on `main`
-- **THEN** `publish` refuses with "whose tag is not on its repo's main" before the mint
-
-#### Scenario: A recreate over a kept human commit
-
-- **WHEN** a branch `close` kept for its human commit has no PR, so `compute` plans `recreate`
-- **THEN** `publish` refuses with "recreate would drop commits" before the mint
-
-#### Scenario: Merge mode with a human commit
-
-- **WHEN** the branch holds a human commit that changes `.tasks/` and the bot merges `main` and commits a pin move
-- **THEN** `publish` accepts: the human commit is not in the increment, and the bot's merge and pin commits pass
-
-#### Scenario: cli's controller module pin file
-
-- **WHEN** cli's task commit changes `internal/controller/pin.go`
-- **THEN** `publish` accepts the path, and refuses `internal/controller/install.go`
-
-#### Scenario: cli's embedded controller CRDs
-
-- **WHEN** cli's task commit changes `internal/controller/crds/platforms.opmodel.dev.yaml`, a CRD
-  manifest `hack/controller-pin` writes beside the pin
-- **THEN** `publish` accepts the path, and refuses `internal/controller/crds/crds.go`
-- **AND** it refuses a commit that adds or deletes a manifest there (status other than `M`), so a
-  module version that changes the CRD set needs a human
-
 #### Scenario: The controller's module
 
 - **WHEN** an opm-controller bot commit changes `modules/opm_controller/cue.mod/module.cue`
 - **THEN** `publish` refuses it, although any other `cue.mod/module.cue` is allowed
 
-### Requirement: Publish refuses a stale receiver mirror
+### Requirement: The cli mirror reports the controller release and module pins
 
-`.github` (`wiring/lib.sh`, `mirror_sources`) SHALL record, per receiver, the sha256 of each
-receiver file its publish mirrors copy or were read from: `.tasks/cascade/pins.sh`,
-`.tasks/cascade/classes`, the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does
-(library, opm-controller), and, for catalog_opm, library, opm-controller and cli, the
-`.tasks/cascade/cascade.sh` its allow-list (`publish_paths`) was read from. For
-`push` and `recreate`, `publish` SHALL, before it reads the bundle, runs the workflows guard or
-bounds the increment, and before any token exists, read each recorded file on the receiver's
-`origin/main` and refuse the plan when its sha256 differs from the recorded one or the file is
-missing there, with one message naming the receiver, the path, the sha256 found (or `missing`)
-and the recorded sha256. `close`, `conflict` and `too_long` SHALL NOT be refused for a stale
-mirror. The mirror of each receiver's `pins.sh` SHALL report the same rows as that receiver's
-own `pins.sh` on its `main`: for cli, the library, the controller release and the controller
-module (`github.com/open-platform-model/opm-controller` and
-`opmodel.dev/modules/opm_controller@v0`, from `PinnedControllerVersion` and
-`PinnedModuleVersion` in `internal/controller/pin.go`), the opm catalog and core.
-
-#### Scenario: pins.sh changed on main
-
-- **WHEN** the receiver's `main` holds a `.tasks/cascade/pins.sh` whose sha256 is not the recorded one, and `compute` planned a `push`
-- **THEN** `publish` refuses with "the .github mirror of <receiver> is stale: .tasks/cascade/pins.sh on its main has sha256 <found>, the mirror was written from <recorded>" and mints no token
-
-#### Scenario: classes removed from main
-
-- **WHEN** the receiver's `main` has no `.tasks/cascade/classes`
-- **THEN** `publish` refuses naming `.tasks/cascade/classes` with sha256 `missing`
-
-#### Scenario: cascade.sh changed on main
-
-- **WHEN** cli's `main` holds a `.tasks/cascade/cascade.sh` whose sha256 is not the recorded one, while its `pins.sh`, `lib.sh` and `classes` are unchanged, and `compute` planned a `push`
-- **THEN** `publish` refuses naming `.tasks/cascade/cascade.sh` and mints no token
-
-#### Scenario: A stale mirror does not hold a close
-
-- **WHEN** the receiver's `main` holds a `pins.sh` the mirror was not written from, and `compute` planned `close`, `conflict` or `too_long`
-- **THEN** `publish` verifies the plan as it would with a current mirror
-
-#### Scenario: An unrelated change on main
-
-- **WHEN** `main` changed only files the mirrors do not copy
-- **THEN** the mirror check passes and `publish` verifies the plan as before
+For cli, the mirrored pin report SHALL show the library, the controller release and the controller module (`github.com/open-platform-model/opm-controller` and `opmodel.dev/modules/opm_controller@v0`, from `PinnedControllerVersion` and `PinnedModuleVersion` in `internal/controller/pin.go`), the opm catalog and core.
 
 #### Scenario: cli's module pin in the body
 
 - **WHEN** cli's `internal/controller/pin.go` moves `PinnedModuleVersion` from `0.1.0` to `0.2.0`
 - **THEN** the mirrored pin report shows `opmodel.dev/modules/opm_controller@v0` moving from `v0.1.0` to `v0.2.0`, as cli's own `pins.sh` does
 
-#### Scenario: cli's controller pins in the body
+#### Scenario: cli's controller pin file in the body
 
-- **WHEN** cli's `main` holds `internal/controller/pin.go` with `PinnedControllerVersion = "v1.0.0-beta.9"` and `PinnedModuleVersion = "0.1.0"`
-- **THEN** the mirrored pin report has the rows `github.com/open-platform-model/opm-controller` (`opm-controller`, `v1.0.0-beta.9`) and `opmodel.dev/modules/opm_controller@v0` (`opm-controller module`, `v0.1.0`)
+- **WHEN** cli's `main` holds `internal/controller/pin.go` with `PinnedControllerVersion = "v1.0.0-beta.9"` and `PinnedModuleVersion = "0.2.0"`
+- **THEN** the mirrored pin report has the rows `github.com/open-platform-model/opm-controller` (`opm-controller`, `v1.0.0-beta.9`) and `opmodel.dev/modules/opm_controller@v0` (`opm-controller module`, `v0.2.0`)
 
 ## MODIFIED Requirements
 
-### Requirement: Mode selection
+### Requirement: The payload source allowlists
 
-`compute` SHALL pick the mode from the remote `deps/cascade` tip (`OLD`) and the cascade PR:
+The allowlists SHALL be: `catalog_opm` accepts `core`, `cli`; `library` accepts `core`, `catalog_opm`; `opm-controller` accepts `catalog_opm`, `library`, `cli`; `cli` accepts `catalog_opm`, `library`, `opm-controller`; `cascade-sandbox-down` accepts `cascade-sandbox-up`. A receiver outside this list SHALL fail with "not a cascade receiver".
 
-| State | Mode |
-| --- | --- |
-| the cascade PR carries `deps-cascade:hold` | `skip` |
-| no `OLD` | `fresh` |
-| `OLD` set and no open cascade PR | `recreate` |
-| open cascade PR, every commit in `origin/main..origin/deps/cascade` has author and committer email `337635439+opm-cascade[bot]@users.noreply.github.com` | `rebuild` |
-| open cascade PR, any other author or committer in that range | `merge` |
+#### Scenario: Receiver outside the list
 
-`fresh`, `rebuild` and `recreate` SHALL start from `origin/main`. `merge` SHALL check out
-`origin/deps/cascade` and run `git merge --no-edit origin/main`: when only derived files conflict
-(`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/controller/pin.go` and its
-`internal/controller/crds/*.yaml` manifests), it SHALL take `main`'s side, commit
-`Merge origin/main into deps/cascade` and let
-the task regenerate them; any other conflict SHALL abort the merge and give mode `conflict` with
-the conflicting paths. The bot SHALL never rebase and never drop a human commit.
+- **WHEN** a receiver that is not in the allowlists runs `compute`
+- **THEN** it fails with "not a cascade receiver"
 
-#### Scenario: Human commit survives
+### Requirement: Merge mode merges main into the branch
 
-- **WHEN** a human pushed a commit to `deps/cascade` and a new upstream release arrives
-- **THEN** the human commit is an ancestor of the new tip and the bot's commit is on top
+`merge` SHALL check out `origin/deps/cascade` and run `git merge --no-edit origin/main`: when only derived files conflict (`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/controller/pin.go` and its `internal/controller/crds/*.yaml` manifests), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let the task regenerate them; any other conflict SHALL abort the merge and give mode `conflict` with the conflicting paths.
 
-#### Scenario: Bot-only branch is rebuilt
+#### Scenario: Only derived files conflict
 
-- **WHEN** the branch holds only bot commits and a new upstream release arrives
-- **THEN** the branch is rebuilt from `origin/main` to one bot commit and the PR number is unchanged
+- **WHEN** the merge of `origin/main` conflicts only in `go.mod` and `go.sum`
+- **THEN** `compute` takes `main`'s side, commits `Merge origin/main into deps/cascade` and lets the task regenerate them
+
+#### Scenario: Another file conflicts
+
+- **WHEN** the merge of `origin/main` conflicts in a file that is not a derived file
+- **THEN** `compute` aborts the merge and gives mode `conflict` with the conflicting paths
+
+### Requirement: The mirror records the sha256 of receiver files
+
+`.github` (`wiring/lib.sh`, `mirror_sources`) SHALL record, per receiver, the sha256 of each receiver file its publish mirrors copy or were read from: `.tasks/cascade/pins.sh`, `.tasks/cascade/classes`, the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does (library, opm-controller), and, for catalog_opm, library, opm-controller and cli, the `.tasks/cascade/cascade.sh` its allow-list (`publish_paths`) was read from.
+
+#### Scenario: Recorded files of a receiver
+
+- **WHEN** the recorded files of cli are read
+- **THEN** they hold the sha256 of `.tasks/cascade/pins.sh`, `.tasks/cascade/classes` and `.tasks/cascade/cascade.sh` on the receiver
 
 ## REMOVED Requirements
 
-### Requirement: Payload is a validated hint
+### Requirement: The renamed repo records the same files
 
-**Reason**: Retitled for the rename of opm-operator to opm-controller: a scenario named after the old repo is replaced, and OpenSpec 1.12 refuses a MODIFIED that drops one.
+**Reason**: The rename of opm-operator to opm-controller is done and every receiver's and source's own rename has merged; the maps name `opm-controller` only.
+
+**Migration**: none; a caller still pinned to the earlier `.github` commit keeps running that commit's code until its pin moves.
+
+### Requirement: Allow-lists live in .github
+
+**Reason**: Retitled for the rename of opm-operator to opm-controller: a scenario named after the old repo is replaced, and OpenSpec refuses a MODIFIED that drops one.
 
 **Migration**: see the requirement that replaces it in this change.
 
-### Requirement: Publish bounds the bot's increment
+### Requirement: The deny-list wins over the allow-list
 
-**Reason**: Retitled for the rename of opm-operator to opm-controller: a scenario named after the old repo is replaced, and OpenSpec 1.12 refuses a MODIFIED that drops one.
+**Reason**: Retitled for the rename of opm-operator to opm-controller: a scenario named after the old repo is replaced, and OpenSpec refuses a MODIFIED that drops one.
 
 **Migration**: see the requirement that replaces it in this change.
 
-### Requirement: Publish refuses a stale mirror
+### Requirement: The cli mirror reports the controller pins
 
-**Reason**: Retitled for the rename of opm-operator to opm-controller: a scenario named after the old repo is replaced, and OpenSpec 1.12 refuses a MODIFIED that drops one.
+**Reason**: Retitled for the rename of opm-operator to opm-controller: a scenario named after the old repo is replaced, and OpenSpec refuses a MODIFIED that drops one.
 
 **Migration**: see the requirement that replaces it in this change.
