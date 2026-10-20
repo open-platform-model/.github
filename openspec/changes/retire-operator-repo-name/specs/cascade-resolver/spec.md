@@ -18,7 +18,7 @@ The checked tag SHALL carry a prefix for these pins: `cue opmodel.dev/catalogs/o
 
 ### Requirement: Newest answers only candidates whose tag is on main
 
-For a pin whose versions are tags of an `open-platform-model` repo (the pins of "Go, release and core pins check their own tag" and "Catalog and controller module pins check a prefixed tag"), `newest` SHALL answer a published candidate only when its tag's commit is reachable from that repo's `main`. A candidate whose tag is not on `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on `<repo>` main; skipped", and the walk SHALL continue with the next candidate.
+For a pin whose versions are tags of an `open-platform-model` repo (the pins of "Go, release and core pins check their own tag" and "Catalog and controller module pins check a prefixed tag"), `newest` SHALL answer a published candidate only when its tag's commit is on that repo's `main`. A candidate whose tag is not on `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on `<repo>` main; skipped", and the walk SHALL continue with the next candidate.
 
 #### Scenario: A forged tag
 
