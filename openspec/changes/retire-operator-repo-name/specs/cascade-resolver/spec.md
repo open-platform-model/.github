@@ -16,6 +16,24 @@ The checked tag SHALL carry a prefix for these pins: `cue opmodel.dev/catalogs/o
 
 ## MODIFIED Requirements
 
+### Requirement: Newest answers only candidates whose tag is on main
+
+For a pin whose versions are tags of an `open-platform-model` repo (the pins of "Go, release and core pins check their own tag" and "Catalog and controller module pins check a prefixed tag"), `newest` SHALL answer a published candidate only when its tag's commit is reachable from that repo's `main`. A candidate whose tag is not on `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on `<repo>` main; skipped", and the walk SHALL continue with the next candidate.
+
+#### Scenario: A forged tag
+
+- **WHEN** the Go proxy lists library `v1.2.0` and `v1.1.0`, both published, and the `v1.2.0` tag points to a commit not on library's `main`
+- **THEN** `newest go github.com/open-platform-model/library --current v1.0.0` prints `v1.1.0` and warns that `v1.2.0`'s tag is not on main
+
+### Requirement: Other pins and published do not check tags
+
+Other pins, those not named in "Go, release and core pins check their own tag" and "Catalog and controller module pins check a prefixed tag" (fixtures, templates, `oci`), SHALL NOT be checked, and `published` SHALL NOT check.
+
+#### Scenario: Published does not check a tag
+
+- **WHEN** `published` runs for a version whose tag is not on its repo's `main`
+- **THEN** it makes no tag check and answers from the publication check only
+
 ### Requirement: Release queries read git tags and release assets
 
 A `release <repo> --asset NAME...` query SHALL take candidates from `git ls-remote --tags --refs` of `https://github.com/open-platform-model/<repo>`. A `release <repo> --asset NAME...` version SHALL be published when every asset answers 200 to an anonymous `HEAD -L` of its release download URL. `opm-cli` SHALL be `release cli --asset opm-linux-amd64.tar.gz --asset checksums.txt`.
