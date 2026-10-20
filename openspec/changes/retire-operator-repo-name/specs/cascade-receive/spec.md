@@ -73,6 +73,15 @@ The allowlists SHALL be: `catalog_opm` accepts `core`, `cli`; `library` accepts 
 - **WHEN** the merge of `origin/main` conflicts in a file that is not a derived file
 - **THEN** `compute` aborts the merge and gives mode `conflict` with the conflicting paths
 
+### Requirement: Publish bounds the increment before it mints
+
+For `push` and `recreate`, `publish` SHALL, with `GITHUB_TOKEN` and plain git only and before the token exists, bound the increment (requirements "Publish bounds the increment's commits", "Publish limits what a single-parent commit changes", "Publish checks merge commits", "The allow-lists are keyed by receiver", "The deny-list wins over every allow-list", "Publish refuses to drop a human commit" and "Publish checks the tag of each moved pin").
+
+#### Scenario: Increment comes first
+
+- **WHEN** `publish` verifies a `push` plan
+- **THEN** it bounds the increment before any token exists
+
 ### Requirement: The mirror records the sha256 of receiver files
 
 `.github` (`wiring/lib.sh`, `mirror_sources`) SHALL record, per receiver, the sha256 of each receiver file its publish mirrors copy or were read from: `.tasks/cascade/pins.sh`, `.tasks/cascade/classes`, the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does (library, opm-controller), and, for catalog_opm, library, opm-controller and cli, the `.tasks/cascade/cascade.sh` its allow-list (`publish_paths`) was read from.
