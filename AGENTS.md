@@ -45,7 +45,7 @@ The `.github/` folder also holds `CODEOWNERS`, the Dependabot config and the act
 
 ## Commands
 
-There is no Taskfile. Run these from the repo root before you push. CI runs the first three.
+There is no Taskfile. Run these from the repo root before you push. CI runs all four.
 
 | Command | What it does | When |
 | --- | --- | --- |
