@@ -248,7 +248,9 @@ is_derived_path() {
 # The bot's own commits may change only the files the receiver's task writes.
 # The lists are read from each receiver's .tasks/cascade/cascade.sh on main
 # (catalog_opm 0560990, library ca7c56b, opm-controller 53ccaab, cli bd4d1a7c,
-# 2026-10-05; cli sha256 re-read at 88268e46, cli#364 changed comments only) and live here, never in the receiver's tree, because publish
+# 2026-10-05; cli sha256 re-read at 88268e46, cli#364 changed comments only;
+# TODO(cutover): opm-controller and cli at their rename merges) and live here,
+# never in the receiver's tree, because publish
 # trusts only this SHA-pinned code. A receiver whose task starts writing
 # another file needs this list changed, and its pin moved, first; the sha256
 # of each cascade.sh read is in mirror_sources, so publish refuses a receiver
@@ -494,6 +496,8 @@ mirror_sources() {
         '.tasks/cascade/cascade.sh f741dec56ae8d5f2dce214b057e7ce4cdb35fc83c359e3c2802419d62c8b94c6'
       ;;
     cli)
+      # TODO(cutover): the sha256 of pins.sh, classes and cascade.sh on cli
+      # main once its rename PR has merged (they are still 88268e46's).
       printf '%s\n' '.tasks/cascade/pins.sh 37dcf51de1d95705e759e8d8e1c22abf784f418d646e43b5981367207a3716df' \
         '.tasks/cascade/classes 4a0a74ffea8d3415b2edcb634ab143a7d84011bc7da0eecf39f3d66536d0e528' \
         '.tasks/cascade/cascade.sh 59def41222811d8946e175660e7fc69211e689a5f628dd315c7d49b92d2c639c'
