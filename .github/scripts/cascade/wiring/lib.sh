@@ -461,7 +461,7 @@ receiver_pins() {
 
 # --- the mirrors' sources -----------------------------------------------------
 # The receiver files the mirrors above copy, with the sha256 of the version on
-# main they were written from (same commits as above, but cli at 88268e46; the archived sandbox's
+# main they were written from (the commits named above; the archived sandbox's
 # from its last main): pins.sh, the lib.sh it sources, classes, and, for the
 # four product receivers, the cascade.sh that publish_paths was read from.
 # publish refuses a push or recreate when the receiver's main holds another
