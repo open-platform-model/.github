@@ -28,7 +28,7 @@ back.
 
 ### Requirement: The tag-ledger scan covers exactly six repos
 
-The `tag-ledger` workflow SHALL scan exactly these `open-platform-model` repos: `core`, `library`, `catalog_opm`, `cli`, `opm-operator` and `opm`. `release-flow-sandbox`, which is in the workspace immutable-tag scope, SHALL stay excluded until the owner decides whether the ledger covers it. A scanned repo that cannot be read SHALL fail the run, not drop out of the scan.
+The `tag-ledger` workflow SHALL scan exactly these `open-platform-model` repos: `core`, `library`, `catalog_opm`, `cli`, `opm-controller` and `opm`. `release-flow-sandbox`, which is in the workspace immutable-tag scope, SHALL stay excluded until the owner decides whether the ledger covers it. A scanned repo that cannot be read SHALL fail the run, not drop out of the scan.
 
 #### Scenario: An unreadable repo fails the run
 
@@ -66,4 +66,4 @@ The job summary's `Repos:` line SHALL name all six repos. The tag-ledger referen
 #### Scenario: The summary names every scanned repo
 
 - **WHEN** any run completes
-- **THEN** its job summary contains `Repos: core library catalog_opm cli opm-operator opm.`
+- **THEN** its job summary contains `Repos: core library catalog_opm cli opm-controller opm.`
