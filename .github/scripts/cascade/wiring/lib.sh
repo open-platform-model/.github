@@ -247,9 +247,9 @@ is_derived_path() {
 # --- what publish accepts from compute ----------------------------------------
 # The bot's own commits may change only the files the receiver's task writes.
 # The lists are read from each receiver's .tasks/cascade/cascade.sh on main
-# (catalog_opm 0560990, library ca7c56b, opm-controller 53ccaab, cli bd4d1a7c,
-# 2026-10-05; cli sha256 re-read at 88268e46, cli#364 changed comments only;
-# TODO(cutover): opm-controller and cli at their rename merges) and live here,
+# (catalog_opm 0560990, library ca7c56b, opm-controller e211da9e3433178606c6b56b735052eb7d14a2dd,
+# cli 105cadee506e20b1b715b9a1d4158499d3b6c2cf; the last two are the origin/main
+# commits read on 2026-10-21 after the rename merges) and live here,
 # never in the receiver's tree, because publish
 # trusts only this SHA-pinned code. A receiver whose task starts writing
 # another file needs this list changed, and its pin moved, first; the sha256
@@ -488,19 +488,15 @@ mirror_sources() {
         '.tasks/cascade/cascade.sh 4f0f4e44b62c9906f6780f645760729c22403bb14c6d8bf922dc02eb231e1717'
       ;;
     opm-controller)
-      # TODO(cutover): the sha256 of these four files on opm-controller main
-      # once its rename PR has merged (they are still opm-operator 53ccaab's).
-      printf '%s\n' '.tasks/cascade/pins.sh 3ec912b5736303f1a74dc6d457e4edae7bc3868129a839ddd3fc7c82068e3825' \
+      printf '%s\n' '.tasks/cascade/pins.sh 8f4d185193425acd5f23ade53e20eb624b5c46998e2e0d9002d50329a09bbccc' \
         '.tasks/cascade/lib.sh d72bca993a94d836cb91959b869fdeba5a0d9043a1263af0ecef7135d0f3b7aa' \
-        '.tasks/cascade/classes d761876b3bafc8078207f8aae04b5beb2da1c8a821cd529e4ebba2af16f1ba40' \
-        '.tasks/cascade/cascade.sh f741dec56ae8d5f2dce214b057e7ce4cdb35fc83c359e3c2802419d62c8b94c6'
+        '.tasks/cascade/classes 46419df9ba39b70d869e4be0dfc5fb539d6f874fa633df0a23c3923942eeb073' \
+        '.tasks/cascade/cascade.sh 46be41818d04511fb4861d7655b953fe90171c0aa194fb49f6d0f3e241b6ff6a'
       ;;
     cli)
-      # TODO(cutover): the sha256 of pins.sh, classes and cascade.sh on cli
-      # main once its rename PR has merged (they are still 88268e46's).
-      printf '%s\n' '.tasks/cascade/pins.sh 37dcf51de1d95705e759e8d8e1c22abf784f418d646e43b5981367207a3716df' \
+      printf '%s\n' '.tasks/cascade/pins.sh 3f2479dbebd86c3edf242ff7716e9065669d82ca7b6bc5b54c1791b70159ef40' \
         '.tasks/cascade/classes 4a0a74ffea8d3415b2edcb634ab143a7d84011bc7da0eecf39f3d66536d0e528' \
-        '.tasks/cascade/cascade.sh 59def41222811d8946e175660e7fc69211e689a5f628dd315c7d49b92d2c639c'
+        '.tasks/cascade/cascade.sh c7f4667ddefe9dc6de6969841b7a9cf3a1f178e9d0b3b444c9cda1ead448307b'
       ;;
     cascade-sandbox-down)
       printf '%s\n' '.tasks/cascade/pins.sh 70791e2e9c6124a01bdddfd5647c9e5fde6283109c2ff61bd082efd619b51147' \
