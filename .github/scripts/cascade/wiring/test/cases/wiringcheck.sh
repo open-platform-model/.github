@@ -390,13 +390,13 @@ wc_cfg "no publish-workflows" 'del(.["publish-workflows"])' "publish-workflows m
 wc_cfg "publish-workflows without release.yml" '.["publish-workflows"] = ["docs.yml"]' "publish-workflows must list release.yml"
 wc_cfg "a publish-workflows path" '.["publish-workflows"] += ["../x.yml"]' "is not a workflow file name"
 
-# --- declared extra references (opm-operator's module-deps.yml) ---------------------
+# --- declared extra references (opm-controller's module-deps.yml) -------------------
 # wc_mdeps: the receiver fixture plus a module-deps.yml with a second resolver
-# checkout, as opm-operator main has, declared in the config.
+# checkout, as opm-controller main has, declared in the config.
 wc_mdeps() {
   wc_fresh
   cat >"$WCD/.github/workflows/module-deps.yml" <<YAML
-name: Operator module deps
+name: Controller module deps
 on:
   workflow_dispatch:
 permissions: {}

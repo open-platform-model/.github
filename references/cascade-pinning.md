@@ -12,7 +12,7 @@ branch or tag. Every product repo has `sha_pinning_required` on, which refuses a
 branch. The `ref:` of the `open-platform-model/.github` checkout in each receiver's cascade-task
 workflow (the CI job that tests the repo's `deps:cascade` task against the resolver; core has none)
 carries the same SHA, so CI tests the resolver the receiver runs. Any other checkout of `.github` a
-repo needs (the operator's module-deps workflow) is declared in its wiring config and carries the
+repo needs (opm-controller's module-deps workflow) is declared in its wiring config and carries the
 same SHA too. A repo uses one SHA in all these references.
 
 Pinning the reusable workflows as well as the actions keeps the scripts and the plan consistent: the
@@ -38,7 +38,7 @@ reference alone.
    on `main`: `gh api repos/open-platform-model/.github/compare/<SHA>...main --jq .status` must print
    `identical` or `ahead`. This repo is squash-only and deletes the PR branch on merge, so a branch
    commit prints `diverged`. Pin the squash SHA, never a branch commit.
-2. **Dry run in one receiver** (catalog_opm, library, opm-operator or cli; core has no receiver). Set
+2. **Dry run in one receiver** (catalog_opm, library, opm-controller or cli; core has no receiver). Set
    that repo's variable `CASCADE_DRY_RUN` to `true` if it is not already, and note the old value. Open
    and merge its pin PR as in steps 3 and 4. Run
    `gh workflow run deps-cascade.yml -R open-platform-model/<receiver>` and check that:
@@ -52,13 +52,13 @@ reference alone.
    Then set `CASCADE_DRY_RUN` back. A dry run skips `Publish`, and notify runs only on a release. A
    change to `cascade-publish` or `cascade-notify` therefore first meets real GitHub on the first
    live publish run, or on the first release of an upstream that pins it.
-3. **Pin PR in each other repo** among core, catalog_opm, library, opm-operator and cli. Title it
+3. **Pin PR in each other repo** among core, catalog_opm, library, opm-controller and cli. Title it
    `ci(deps): pin the cascade to .github <first 7 of the SHA>`. It replaces the SHA in every cascade
    reference and the copy of the wiring check, and changes nothing else. If the change altered an
    input or a caller shape, the caller edit and the wiring-config edit ride the same PR. Find the
    references with `grep -rn -A1 'open-platform-model/.github' .github/workflows`: the `uses:` lines
    and the `repository:` line of the cascade-task checkout, whose `ref:` the `-A1` prints on the next
-   line (comment lines also match and need no change). The operator's module-deps workflow has a
+   line (comment lines also match and need no change). opm-controller's module-deps workflow has a
    second such checkout, declared in its config's `extra-references`. Before the PR is opened,
    `bash .tasks/cascade/wiring-check.sh --pin-on-main` passes.
 4. **Merge each** after its CI is green and its "Verify the cascade wiring" step printed

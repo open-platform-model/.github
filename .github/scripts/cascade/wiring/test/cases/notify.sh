@@ -5,9 +5,9 @@
 new_fx
 N() { env CASCADE_REPO="$1" bash "$NOTIFY" "${@:2}"; }
 
-expect "notify: library targets" 0 "opm-operator,cli" -- N library validate --tag v1.0.0-beta.4
-expect "notify: catalog_opm targets" 0 "library,opm-operator,cli" -- N catalog_opm validate --tag opm-v4.5.1
-expect "notify: opm-controller, the renamed opm-operator, targets cli" 0 "cli" -- N opm-controller validate --tag v1.0.0-beta.9
+expect "notify: library targets" 0 "opm-controller,cli" -- N library validate --tag v1.0.0-beta.4
+expect "notify: catalog_opm targets" 0 "library,opm-controller,cli" -- N catalog_opm validate --tag opm-v4.5.1
+expect "notify: opm-controller targets cli" 0 "cli" -- N opm-controller validate --tag v1.0.0-beta.9
 expect "notify: the sandbox target" 0 "cascade-sandbox-down" -- N cascade-sandbox-up validate --tag v0.2.0
 expect "notify: a catalog tag without opm- fails" 1 "" "is not a release tag of catalog_opm" -- N catalog_opm validate --tag v4.5.1
 expect "notify: an opm- tag outside catalog_opm fails" 1 "" "is not a release tag of core" -- N core validate --tag opm-v2.0.0
@@ -18,26 +18,26 @@ expect "notify: no repo" 2 "" "CASCADE_REPO is not set" -- env -u CASCADE_REPO b
 
 # --- dispatch -----------------------------------------------------------------
 new_fx
-gh_fx 0 "" -- api -X POST repos/open-platform-model/opm-operator/dispatches --input -
+gh_fx 0 "" -- api -X POST repos/open-platform-model/opm-controller/dispatches --input -
 gh_fx 0 "" -- api -X POST repos/open-platform-model/cli/dispatches --input -
 run N library dispatch --tag v1.0.0-beta.4
 WANT='{"event_type":"upstream-released","client_payload":{"source":"library","tags":["v1.0.0-beta.4"]}}'
 check "notify: dispatch exits 0" test "$RC" = 0
-check "notify: exact payload bytes to opm-operator" test "$(cat "$GHFX/stdin.1")" = "$WANT"
+check "notify: exact payload bytes to opm-controller" test "$(cat "$GHFX/stdin.1")" = "$WANT"
 check "notify: exact payload bytes to cli" test "$(cat "$GHFX/stdin.2")" = "$WANT"
 check "notify: no trailing newline in the payload" bash -c '[ "$(wc -c <"$1")" = "${#2}" ]' _ "$GHFX/stdin.1" "$WANT"
-check "notify: one summary line per target" test "$(cat "$GITHUB_STEP_SUMMARY")" = $'- `opm-operator`: dispatched (HTTP 204)\n- `cli`: dispatched (HTTP 204)'
+check "notify: one summary line per target" test "$(cat "$GITHUB_STEP_SUMMARY")" = $'- `opm-controller`: dispatched (HTTP 204)\n- `cli`: dispatched (HTTP 204)'
 check "notify: no sleep when every dispatch succeeds" test ! -s "$FX/sleep.log"
 
 new_fx
-for _ in 1 2 3; do gh_fx_err 1 "gh: Server Error (HTTP 500)" -- api -X POST repos/open-platform-model/opm-operator/dispatches --input -; done
+for _ in 1 2 3; do gh_fx_err 1 "gh: Server Error (HTTP 500)" -- api -X POST repos/open-platform-model/opm-controller/dispatches --input -; done
 gh_fx 0 "" -- api -X POST repos/open-platform-model/cli/dispatches --input -
 run N library dispatch --tag v1.0.0-beta.4
 check "notify: one target down fails the job" test "$RC" = 1
 check "notify: the next target is still dispatched" test "$(gh_count '*repos/open-platform-model/cli/dispatches*')" = 1
-check "notify: three attempts at the failing target" test "$(gh_count '*repos/open-platform-model/opm-operator/dispatches*')" = 3
+check "notify: three attempts at the failing target" test "$(gh_count '*repos/open-platform-model/opm-controller/dispatches*')" = 3
 check "notify: waits 5 and 15 seconds between attempts" test "$(cat "$FX/sleep.log")" = $'5\n15'
-check "notify: both results in the summary" test "$(cat "$GITHUB_STEP_SUMMARY")" = $'- `opm-operator`: failed after 3 attempts (HTTP 500)\n- `cli`: dispatched (HTTP 204)'
+check "notify: both results in the summary" test "$(cat "$GITHUB_STEP_SUMMARY")" = $'- `opm-controller`: failed after 3 attempts (HTTP 500)\n- `cli`: dispatched (HTTP 204)'
 
 new_fx
 gh_fx_err 1 "HTTP 502" -- api -X POST repos/open-platform-model/cascade-sandbox-down/dispatches --input -

@@ -55,7 +55,7 @@ SHALL name the code owners of `/.github/`.
 
 ### Requirement: Daily mirror drift check
 
-`cascade-mirror-drift.yml` (job `Mirror drift`) SHALL read, from the `main` of catalog_opm, library, opm-operator and cli, every file whose sha256 `mirror_sources` records, and SHALL fail, with an error annotation naming the receiver, the path and both hashes, when one differs, and with one naming the receiver and path when a file cannot be read; it SHALL check every file before it exits. It SHALL never be a required check.
+`cascade-mirror-drift.yml` (job `Mirror drift`) SHALL read, from the `main` of catalog_opm, library, opm-controller and cli, every file whose sha256 `mirror_sources` records, and SHALL fail, with an error annotation naming the receiver, the path and both hashes, when one differs, and with one naming the receiver and path when a file cannot be read; it SHALL check every file before it exits. It SHALL never be a required check.
 
 #### Scenario: A receiver changed its classes
 
@@ -65,7 +65,7 @@ SHALL name the code owners of `/.github/`.
 #### Scenario: Every mirror current
 
 - **WHEN** every recorded file on every receiver's `main` has its recorded sha256
-- **THEN** the run passes and prints one `ok` line per file, fourteen in all (each receiver's `pins.sh`, `classes` and `cascade.sh`, and library's and opm-operator's `lib.sh`)
+- **THEN** the run passes and prints one `ok` line per file, fourteen in all (each receiver's `pins.sh`, `classes` and `cascade.sh`, and library's and opm-controller's `lib.sh`)
 
 #### Scenario: A file cannot be read
 
@@ -130,7 +130,7 @@ The scripts SHALL run at that same commit, with no input naming another `.github
 
 #### Scenario: A pinned action runs its own commit's code
 
-- **WHEN** opm-operator, with `sha_pinning_required` on, runs `cascade-publish@<sha>`
+- **WHEN** opm-controller, with `sha_pinning_required` on, runs `cascade-publish@<sha>`
 - **THEN** the action's scripts come from `<sha>`, not from `.github` `main`
 
 ### Requirement: The receive workflow checks the scripts out at its own commit
@@ -350,30 +350,3 @@ A change that touches both actions SHALL follow the notify rule and the publish 
 
 - **WHEN** a `.github` change touches both `cascade-publish` and `cascade-notify`, and one receiver has `CASCADE_DRY_RUN` set to `false`
 - **THEN** the pinning reference makes a live receiver the canary and keeps every other repo on its old pin until both the canary's first live publish run and its first live notify run on the new pin have succeeded
-
-### Requirement: The renamed controller repo gets the same answers
-
-While the repo `opm-operator` is renamed `opm-controller`, every fixed map in `wiring/lib.sh` keyed by a receiver or a source SHALL give `opm-operator` and `opm-controller` the same answer (`expect_pair` differing only in the repo name it prints), so a run of the renamed repo works at a pinned `.github` commit on both sides of the GitHub rename.
-
-#### Scenario: The renamed repo as a receiver
-
-- **WHEN** `receiver_sources`, `g3_upstreams`, `publish_paths`, `receiver_classes` and `mirror_sources` are asked for `opm-controller`
-- **THEN** each prints what it prints for `opm-operator`
-
-### Requirement: A target list keeps the old repo name
-
-While the repo `opm-operator` is renamed `opm-controller`, a value that names a repo GitHub must find (the target lists of `notify_targets`, which set the App token's `repositories:`, and the upstreams G3 reads through the API) SHALL keep `opm-operator` only.
-
-#### Scenario: A target list keeps the old name
-
-- **WHEN** `notify_targets library` runs
-- **THEN** it prints `opm-operator cli`, not `opm-controller`
-
-### Requirement: same_repo treats the two names as one repo
-
-While the repo `opm-operator` is renamed `opm-controller`, `same_repo <a> <b>` SHALL exit 0 for two equal names and for the pair `opm-operator`, `opm-controller`, and 1 otherwise.
-
-#### Scenario: Two names, one repo
-
-- **WHEN** `same_repo opm-controller opm-operator` and `same_repo opm-operator cli` run
-- **THEN** the first exits 0 and the second exits 1

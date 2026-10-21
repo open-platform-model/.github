@@ -27,7 +27,7 @@ any target still failed.
 #### Scenario: Payload bytes
 
 - **WHEN** `library` notifies with tag `v1.0.0-beta.4`
-- **THEN** `opm-operator` and `cli` each receive `{"event_type":"upstream-released","client_payload":{"source":"library","tags":["v1.0.0-beta.4"]}}`
+- **THEN** `opm-controller` and `cli` each receive `{"event_type":"upstream-released","client_payload":{"source":"library","tags":["v1.0.0-beta.4"]}}`
 
 #### Scenario: One target down
 
@@ -44,7 +44,7 @@ This wait SHALL never fail the job.
 #### Scenario: Proxy lags
 
 - **WHEN** the proxy never serves the tag within 10 minutes
-- **THEN** the job logs a warning and still dispatches to `opm-operator` and `cli`
+- **THEN** the job logs a warning and still dispatches to `opm-controller` and `cli`
 
 ### Requirement: The upstream runs the notify action as its only step
 
@@ -86,20 +86,11 @@ The targets SHALL come from this fixed map, and a source outside it SHALL fail t
 | Source | Targets |
 | --- | --- |
 | `core` | `catalog_opm`, `library` |
-| `catalog_opm` | `library`, `opm-operator`, `cli` |
-| `library` | `opm-operator`, `cli` |
-| `opm-operator` or `opm-controller` | `cli` |
-| `cli` | `catalog_opm`, `opm-operator` |
+| `catalog_opm` | `library`, `opm-controller`, `cli` |
+| `library` | `opm-controller`, `cli` |
+| `opm-controller` | `cli` |
+| `cli` | `catalog_opm`, `opm-controller` |
 | `cascade-sandbox-up` | `cascade-sandbox-down` |
-
-### Requirement: A target list names only the old repo name
-
-`opm-controller` is the name GitHub gives `opm-operator` at its rename; a target list SHALL name only the repo's old name until a later change flips it, because the targets set the App token's `repositories:`.
-
-#### Scenario: Target list with the new name
-
-- **WHEN** a target list names `opm-controller`
-- **THEN** that breaks the rule that a target list SHALL name only the repo's old name until a later change flips it
 
 ### Requirement: The tag input matches a fixed shape
 

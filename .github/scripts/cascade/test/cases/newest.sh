@@ -136,12 +136,12 @@ expect "go: missing module is exit 1" 1 "" "has no module" -- "$R" newest go exa
 
 # --- release and opm-cli ----------------------------------------------------------
 new_fx
-fx_refs_file opm-operator "$FIXTURES/git/opm-operator.refs"
-fx_status "$(rel_url opm-operator v1.0.0-beta.5 install.yaml)" 404
-rel_ok opm-operator v1.0.0-beta.4 install.yaml
+fx_refs_file opm-controller "$FIXTURES/git/opm-controller.refs"
+fx_status "$(rel_url opm-controller v1.0.0-beta.5 install.yaml)" 404
+rel_ok opm-controller v1.0.0-beta.4 install.yaml
 expect "release: draft skipped" 0 v1.0.0-beta.4 "skip \`v1.0.0-beta.5\`" -- \
-  "$R" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3
-expect "release: needs --asset" 2 "" -- "$R" newest release opm-operator --current v1.0.0-beta.3
+  "$R" newest release opm-controller --asset install.yaml --current v1.0.0-beta.3
+expect "release: needs --asset" 2 "" -- "$R" newest release opm-controller --current v1.0.0-beta.3
 
 new_fx
 fx_refs_file cli "$FIXTURES/git/cli.refs"
@@ -157,25 +157,25 @@ check "opm-cli warnings are keyed github.com/open-platform-model/cli" \
 check "opm-cli: git ls-remote asks for v* tags of the cli repo" \
   grep -qF "git ls-remote --tags --refs https://github.com/open-platform-model/cli refs/tags/v*" "$FX/git.log"
 new_fx
-fx_refs opm-operator v1.0.0-beta.3 v1.0.0-beta.4 v2.0.0
-rel_ok opm-operator v1.0.0-beta.4 install.yaml
+fx_refs opm-controller v1.0.0-beta.3 v1.0.0-beta.4 v2.0.0
+rel_ok opm-controller v1.0.0-beta.4 install.yaml
 : >"$FX/warnings"
-run env CASCADE_WARNINGS="$FX/warnings" "$R" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3
+run env CASCADE_WARNINGS="$FX/warnings" "$R" newest release opm-controller --asset install.yaml --current v1.0.0-beta.3
 check "release warnings are keyed github.com/open-platform-model/<repo>" \
-  grep -qxF $'github.com/open-platform-model/opm-operator\tnew major available: `v2.0.0`' "$FX/warnings"
+  grep -qxF $'github.com/open-platform-model/opm-controller\tnew major available: `v2.0.0`' "$FX/warnings"
 new_fx
-fx_refs opm-operator v1.0.0-beta.3
-touch "$FX/git/opm-operator.refs.fail"
+fx_refs opm-controller v1.0.0-beta.3
+touch "$FX/git/opm-controller.refs.fail"
 expect "release: git ls-remote failure is exit 1" 1 "" "git ls-remote failed after 4 attempts" -- \
-  "$R" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3
+  "$R" newest release opm-controller --asset install.yaml --current v1.0.0-beta.3
 check "release: a failing git ls-remote is tried 4 times, sleeping 2, 4 and 8" \
   bash -c '[ "$(grep -c "^git ls-remote" "$1/git.log")" = 4 ] && [ "$(cat "$1/sleep.log")" = $'"'"'2\n4\n8'"'"' ]' _ "$FX"
 new_fx
-fx_refs opm-operator v1.0.0-beta.3 v1.0.0-beta.4
-rel_ok opm-operator v1.0.0-beta.4 install.yaml
-echo 1 >"$FX/git/opm-operator.refs.fail"
+fx_refs opm-controller v1.0.0-beta.3 v1.0.0-beta.4
+rel_ok opm-controller v1.0.0-beta.4 install.yaml
+echo 1 >"$FX/git/opm-controller.refs.fail"
 expect "release: one failed git ls-remote is retried" 0 v1.0.0-beta.4 "retrying in 2s" -- \
-  "$R" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3
+  "$R" newest release opm-controller --asset install.yaml --current v1.0.0-beta.3
 check "release: the retry slept 2s once" bash -c '[ "$(cat "$1/sleep.log")" = 2 ]' _ "$FX"
 
 # git ls-remote is isolated from the caller: run from inside a checkout whose
@@ -183,8 +183,8 @@ check "release: the retry slept 2s once" bash -c '[ "$(cat "$1/sleep.log")" = 2 
 # AUTHORIZATION extraheader and a credential helper, with GIT_DIR pointing
 # at it and no GIT_TERMINAL_PROMPT.
 new_fx
-fx_refs opm-operator v1.0.0-beta.3 v1.0.0-beta.4
-rel_ok opm-operator v1.0.0-beta.4 install.yaml
+fx_refs opm-controller v1.0.0-beta.3 v1.0.0-beta.4
+rel_ok opm-controller v1.0.0-beta.4 install.yaml
 CK="$FX/checkout"
 git -c init.defaultBranch=main init -q "$CK"
 git -C "$CK" config http.https://github.com/.extraheader "AUTHORIZATION: basic bG9jYWwtc2VjcmV0"
@@ -194,7 +194,7 @@ expect "release: ls-remote from inside a credentialed checkout still answers" 0 
   env -u GIT_TERMINAL_PROMPT GIT_DIR="$CK/.git" GIT_CONFIG_GLOBAL="$FX/gitconfig" \
   GIT_CONFIG_PARAMETERS="'http.extraheader'='AUTHORIZATION: basic cGFyYW0tc2VjcmV0'" \
   GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=osxkeychain \
-  bash -c 'cd "$1" && "$2" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3' _ "$CK" "$R"
+  bash -c 'cd "$1" && "$2" newest release opm-controller --asset install.yaml --current v1.0.0-beta.3' _ "$CK" "$R"
 check "release: ls-remote sees no extraheader and no credential helper" \
   bash -c 'test -f "$1/git.config" && ! grep -v -x "credential.helper " "$1/git.config"' _ "$FX"
 check "release: ls-remote never prompts and reads no caller config" grep -qxF \
@@ -209,7 +209,7 @@ check "tag on main: the clone never prompts and reads no caller config" grep -qx
   "GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_PARAMETERS=unset GIT_CONFIG_COUNT=unset GIT_ASKPASS=unset GIT_DIR=unset" "$FX/git-clone.env"
 check "tag on main: the clone runs outside the caller's checkout, tree-less, main only" \
   bash -c 'o=$(cat "$1/git-clone.opts"); [[ $o == "opts=-C "* && $o == *" -c credential.helper= "* && $o != *"$2"* ]] &&
-    grep -qF "git clone --bare --quiet --filter=tree:0 --no-tags --single-branch --branch main https://github.com/open-platform-model/opm-operator " "$1/git.log"' _ "$FX" "$CK"
+    grep -qF "git clone --bare --quiet --filter=tree:0 --no-tags --single-branch --branch main https://github.com/open-platform-model/opm-controller " "$1/git.log"' _ "$FX" "$CK"
 
 # --- tags on main -------------------------------------------------------------------
 # A tag made with the release App on a commit main never had is still listed
@@ -276,12 +276,6 @@ expect "tag-on-main: the opm catalog's opm- prefix" 0 "" -- "$R" tag-on-main opm
 check "tag-on-main: catalog_opm, opm-v4.6.0" bash -c '
   grep -qF "https://github.com/open-platform-model/catalog_opm " "$1" && grep -q "^git fetch .*+refs/tags/opm-v4.6.0:refs/tags/opm-v4.6.0$" "$1"' _ "$FX/git.log"
 new_fx
-expect "tag-on-main: the operator module's opm_operator- prefix" 0 "" -- "$R" tag-on-main opmodel.dev/modules/opm_operator@v0 v0.1.0
-check "tag-on-main: opm-operator, opm_operator-v0.1.0" bash -c '
-  grep -qF "https://github.com/open-platform-model/opm-operator " "$1" && grep -q "^git fetch .*+refs/tags/opm_operator-v0.1.0:refs/tags/opm_operator-v0.1.0$" "$1"' _ "$FX/git.log"
-echo opm_operator-v0.2.0 >"$FX/git/opm-operator.offmain"
-expect "tag-on-main: an operator module tag off main" 3 "" -- "$R" tag-on-main opmodel.dev/modules/opm_operator@v0 v0.2.0
-new_fx
 expect "tag-on-main: the controller module's opm_controller- prefix" 0 "" -- "$R" tag-on-main opmodel.dev/modules/opm_controller@v0 v0.1.0
 check "tag-on-main: opm-controller, opm_controller-v0.1.0" bash -c '
   grep -qF "https://github.com/open-platform-model/opm-controller " "$1" && grep -q "^git fetch .*+refs/tags/opm_controller-v0.1.0:refs/tags/opm_controller-v0.1.0$" "$1"' _ "$FX/git.log"
@@ -301,11 +295,11 @@ cat >"$FX/root/.cascade-hold" <<'EOF'
 holds:
   - pin: github.com/open-platform-model/library
     max: v1.0.0-beta.2
-    reason: "beta.3 breaks the operator build"
+    reason: "beta.3 breaks the controller build"
     expires: 2026-10-10
 EOF
 expect "hold caps the target" 0 v1.0.0-beta.2 \
-  "held at \`v1.0.0-beta.2\` until \`2026-10-10\`: beta.3 breaks the operator build" -- \
+  "held at \`v1.0.0-beta.2\` until \`2026-10-10\`: beta.3 breaks the controller build" -- \
   "$R" newest go "$LIB" --current v1.0.0-beta.1 --repo-root "$FX/root"
 expect "expired hold moves again" 0 v1.0.0-beta.3 "expired \`2026-10-10\`; moving again" -- \
   env CASCADE_TODAY=2026-10-11 "$R" newest go "$LIB" --current v1.0.0-beta.1 --repo-root "$FX/root"

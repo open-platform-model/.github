@@ -20,7 +20,7 @@ topics.
 - The `publish` job's `if:` repeats the switches only so that a dry run does not start a `cascade`
   Environment job. It reads them itself, not from the reusable job that ran repo code.
 - `cascade-publish` also refuses any ref but `main` and a plan marked as a dry run.
-- `setup-go: true` installs Go from the repo's `go.mod` (opm-operator, cli). `labels-managed: true`
+- `setup-go: true` installs Go from the repo's `go.mod` (opm-controller, cli). `labels-managed: true`
   (cli) only checks that the five cascade labels exist instead of creating them. `setup-cue`
   (default true) and `cue-version` install CUE, and only a version whose sha256 the install script
   holds is accepted.

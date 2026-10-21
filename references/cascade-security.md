@@ -54,7 +54,7 @@ push and writes the PR text itself.
   merge of its parents, with its second parent on `main`, except derived files that carry `main`'s
   content. A deny-list always wins: `.github/**`, `.tasks/**`, any `Taskfile*`, `hack/**` (except the
   CLI's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), any `*.sh`, any `CODEOWNERS`, the release-please files,
-  `.cascade-frozen` and `.cascade-hold`, and the operator's `modules/**` (its operator module moves
+  `.cascade-frozen` and `.cascade-hold`, and opm-controller's `modules/**` (its controller module moves
   only through its own deps workflow).
 - **Human commits.** A push that does not contain the old tip is refused when the old branch holds a
   commit the bot did not make. A `recreate` over such a branch is refused, and `close` keeps such a
@@ -78,10 +78,23 @@ on the receiver's `origin/main`. It refuses, naming the receiver, the file and b
 differs. A stale pin mirror or a stale allow-list therefore stops the run before it renders a body or
 judges a path.
 
-Code that `cascade.sh` only runs (the CLI's operator pin program, a Taskfile task) is not hashed.
+Code that `cascade.sh` only runs (the CLI's controller pin program, a Taskfile task) is not hashed.
 When a change there makes the task write a new path, `publish` still refuses that path as one the
 task never writes, and the allow-list needs the same update. The mirror-drift workflow runs the same
 comparison daily (read-only, with the run's own token) and fails red on drift.
+
+The CLI's task also writes the controller module's CRD manifests to `internal/controller/crds/<name>.yaml`
+(the CLI embeds them for the offline `opm controller install --crds-only`). The derived files, which
+`is_derived_path` lists, are `go.mod`, `go.sum`, any `cue.mod/module.cue`, `internal/controller/pin.go` and
+these manifests. When a `merge` conflicts only in them, the bot takes `main`'s side and the task writes
+them again. A controller module version that adds or drops a CRD makes the task add or delete a manifest
+(status `A` or `D`), and `publish` refuses that. A human lands that pin bump as an ordinary PR to the
+CLI's `main` that moves the pin and adds or deletes the manifest. Until then every CLI cascade run is
+refused at publish. An open bot cascade PR needs nothing: the next run builds it again on that `main`
+(or close it, and the next run creates it again). Later runs rewrite the manifest in place (status `M`),
+and only those rewrites go through the bot. Do not commit the bump on `deps/cascade`: without an open
+bot PR, `compute` plans a `recreate`, and `publish` refuses a recreate over a commit the bot did not
+make. A human PR from that branch does not help, since only the bot's own PR counts.
 
 A receiver change to its `cascade.sh` (or to what its task writes), its pin parser, the `lib.sh` it
 sources or its classes needs the matching change here (mirror, allow-list and hash) merged first. The
@@ -102,9 +115,9 @@ through the allow-list function.
   runs in that run: `hack/` programs, scripts the task calls and the `go.mod` toolchain line. Anyone
   who can push to `deps/cascade` gets this, the same class as G2, and the cache sink is closed the
   same way.
-- A receiver's own publisher outside the receive workflow and `cascade-publish` (the operator's
+- A receiver's own publisher outside the receive workflow and `cascade-publish` (opm-controller's
   module-deps workflow) gets only its own repo's bounds. Its `publish` job runs in the `release`
-  Environment and takes only plain files under `modules/opm_operator/` from `compute`'s artifact. The
+  Environment and takes only plain files under `modules/opm_controller/` from `compute`'s artifact. The
   PR title and body still come from `compute`, and its tools are not pinned here. Routing it through
   these workflows needs its own mirror entries.
 - `main` requires a pull request but no approval while OPM is in beta, so a write collaborator, or

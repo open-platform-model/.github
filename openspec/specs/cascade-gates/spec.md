@@ -52,7 +52,7 @@ This evaluation SHALL run before any pin work in the run, and its results SHALL 
 
 ### Requirement: G3 is a problem when an upstream has an open cascade PR
 
-For each G3 upstream of the receiver (`catalog_opm`: `core`; `library`: `core`, `catalog_opm`; `opm-operator` and `opm-controller`: `catalog_opm`, `library`; `cli`: `catalog_opm`, `library`, `opm-operator`; `cascade-sandbox-down`: `cascade-sandbox-up`), G3 SHALL be a problem when the upstream's own cascade PR (same filter as the receiver's) has a title starting `fix(deps)` or `feat(deps)` (`<upstream> has open cascade #<n>`).
+For each G3 upstream of the receiver (`catalog_opm`: `core`; `library`: `core`, `catalog_opm`; `opm-controller`: `catalog_opm`, `library`; `cli`: `catalog_opm`, `library`, `opm-controller`; `cascade-sandbox-down`: `cascade-sandbox-up`), G3 SHALL be a problem when the upstream's own cascade PR (same filter as the receiver's) has a title starting `fix(deps)` or `feat(deps)` (`<upstream> has open cascade #<n>`).
 
 #### Scenario: Upstream cascade open
 
@@ -66,7 +66,7 @@ For each G3 upstream of the receiver (`catalog_opm`: `core`; `library`: `core`, 
 
 ### Requirement: G3 is a problem when an upstream release PR is pending with deps
 
-For each G3 upstream of the receiver (`catalog_opm`: `core`; `library`: `core`, `catalog_opm`; `opm-operator` and `opm-controller`: `catalog_opm`, `library`; `cli`: `catalog_opm`, `library`, `opm-operator`; `cascade-sandbox-down`: `cascade-sandbox-up`), G3 SHALL be a problem when an open PR labelled `autorelease: pending` in the upstream has a `**deps:**` bullet in its body (`<upstream> release #<n> pending with deps`).
+For each G3 upstream of the receiver (`catalog_opm`: `core`; `library`: `core`, `catalog_opm`; `opm-controller`: `catalog_opm`, `library`; `cli`: `catalog_opm`, `library`, `opm-controller`; `cascade-sandbox-down`: `cascade-sandbox-up`), G3 SHALL be a problem when an open PR labelled `autorelease: pending` in the upstream has a `**deps:**` bullet in its body (`<upstream> release #<n> pending with deps`).
 
 #### Scenario: Release PR pending with deps
 

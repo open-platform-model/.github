@@ -55,11 +55,11 @@ expect "published go: CASCADE_GOPROXY is the base" 0 "" -- \
   env CASCADE_GOPROXY=https://proxy.example.invalid/ bash -c 'mkdir -p "$1/http/proxy.example.invalid/$2/@v" && : >"$1/http/proxy.example.invalid/$2/@v/v1.0.0.info" && "$3" published go "$2" v1.0.0' _ "$FX" "$LIB" "$R"
 
 new_fx
-rel_ok opm-operator v1.0.0-beta.4 install.yaml
-fx_status "$(rel_url opm-operator v1.0.0-beta.5 install.yaml)" 404
-expect "published release: asset 200" 0 "" -- "$R" published release opm-operator v1.0.0-beta.4 --asset install.yaml
-expect "published release: draft answers 404" 3 "" "not downloadable" -- "$R" published release opm-operator v1.0.0-beta.5 --asset install.yaml
-check "release probes are HEAD -L" grep -qF -- "-I -L $(rel_url opm-operator v1.0.0-beta.4 install.yaml)" "$FX/curl.log"
+rel_ok opm-controller v1.0.0-beta.4 install.yaml
+fx_status "$(rel_url opm-controller v1.0.0-beta.5 install.yaml)" 404
+expect "published release: asset 200" 0 "" -- "$R" published release opm-controller v1.0.0-beta.4 --asset install.yaml
+expect "published release: draft answers 404" 3 "" "not downloadable" -- "$R" published release opm-controller v1.0.0-beta.5 --asset install.yaml
+check "release probes are HEAD -L" grep -qF -- "-I -L $(rel_url opm-controller v1.0.0-beta.4 install.yaml)" "$FX/curl.log"
 rel_ok cli v1.0.0-beta.7 opm-linux-amd64.tar.gz checksums.txt
 rel_ok cli v1.0.0-beta.6 opm-linux-amd64.tar.gz
 fx_status "$(rel_url cli v1.0.0-beta.6 checksums.txt)" 404

@@ -31,8 +31,8 @@ fx_body "$PROXY/$LIB/@v/list" "$FIXTURES/goproxy/library.list"
 fx_body "$PROXY/$LIB/@v/v1.0.0-beta.3.info" "$FIXTURES/goproxy/library-v1.0.0-beta.3.info"
 fx_refs_file cli "$FIXTURES/git/cli.refs"
 rel_ok cli v1.0.0-beta.7 opm-linux-amd64.tar.gz checksums.txt
-fx_refs_file opm-operator "$FIXTURES/git/opm-operator.refs"
-rel_ok opm-operator v1.0.0-beta.5 install.yaml
+fx_refs_file opm-controller "$FIXTURES/git/opm-controller.refs"
+rel_ok opm-controller v1.0.0-beta.5 install.yaml
 fx_text "$(ghcr_token_url open-platform-model/docs/library)" '{"token":"dummy-ghcr-token"}'
 fx_status "$(ghcr_manifest_url open-platform-model/docs/library 1.0.0-beta.3)" 200
 
@@ -43,12 +43,12 @@ newest	cue	opmodel.dev/core@v2	v2.0.0-beta.2
 newest	cue	opmodel.dev/catalogs/opm@v4	v4.5.1
 newest	go	github.com/open-platform-model/library	v1.0.0-beta.3
 newest	opm-cli	-	v1.0.0-beta.7
-newest	release	opm-operator	v1.0.0-beta.5
+newest	release	opm-controller	v1.0.0-beta.5
 published	cue	opmodel.dev/core@v2	v2.0.0-beta.2
 published	cue	opmodel.dev/catalogs/opm@v4	v4.5.1
 published	go	github.com/open-platform-model/library	v1.0.0-beta.3
 published	opm-cli	-	v1.0.0-beta.7
-published	release	opm-operator	v1.0.0-beta.5
+published	release	opm-controller	v1.0.0-beta.5
 published	oci	open-platform-model/docs/library	1.0.0-beta.3
 pin-of	opmodel.dev/catalogs/opm@v4	v4.5.1	opmodel.dev/core@v2	v2.0.0-beta.1
 pin-of	opmodel.dev/catalogs/opm@v4	v4.5.1	cue.dev/x/k8s.io@v0	v0.12.0
@@ -92,7 +92,7 @@ agree "newest stable catalog stays" newest cue opmodel.dev/catalogs/opm@v4 --cur
 agree "newest go" newest go "$LIB" --current v1.0.0-beta.1
 agree "newest go stays" newest go "$LIB" --current v1.0.0-beta.3
 agree "newest opm-cli" newest opm-cli --current v1.0.0-beta.4
-agree "newest release" newest release opm-operator --asset install.yaml --current v1.0.0-beta.3
+agree "newest release" newest release opm-controller --asset install.yaml --current v1.0.0-beta.3
 agree "newest ahead of upstream" newest go "$LIB" --current v1.0.0-rc.1
 agree "published cue yes" published cue opmodel.dev/core@v2 v2.0.0-beta.2
 agree "published cue no" published cue opmodel.dev/core@v2 v2.0.0-beta.9
@@ -100,7 +100,7 @@ agree "published go yes" published go "$LIB" v1.0.0-beta.3
 agree "published go no" published go "$LIB" v1.0.0-beta.9
 agree "published opm-cli yes" published opm-cli v1.0.0-beta.7
 agree "published opm-cli no" published opm-cli v1.0.0-beta.1
-agree "published release" published release opm-operator v1.0.0-beta.5 --asset install.yaml
+agree "published release" published release opm-controller v1.0.0-beta.5 --asset install.yaml
 agree "published oci" published oci open-platform-model/docs/library 1.0.0-beta.3
 agree "published oci no" published oci open-platform-model/docs/library v1.0.0-beta.3
 agree "pin-of core" pin-of opmodel.dev/catalogs/opm@v4 v4.5.1 opmodel.dev/core@v2

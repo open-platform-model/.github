@@ -92,7 +92,7 @@ cascade-task workflow, which hold the fixed references. A new kind (another acti
 workflow call) is a change here, never a config entry.
 
 `pin-comment` is `.github main` everywhere. `notify.if` and `notify.tag` are each repo's own release
-workflow values. Only opm-operator sets `extra-references`, for the resolver checkout in its
+workflow values. Only opm-controller sets `extra-references`, for the resolver checkout in its
 module-deps workflow. Each repo's values at the time of writing:
 
 | Repo | `receiver` | `env-allow` | `publish-workflows` | `ci` (workflow, job) | `notify.needs` | `labels-managed` |
@@ -100,7 +100,7 @@ module-deps workflow. Each repo's values at the time of writing:
 | core | `false` | `CUE_VERSION`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | (none) |
 | catalog_opm | `true` | `OPM_REGISTRY`, `CUE_REGISTRY` | `release.yml`, `branch-publish.yml`, `docs.yml` | `ci.yml`, `ci` | `release-please`, `publish-cue` | `false` |
 | library | `true` | (none) | `release.yml`, `docs.yml` | `test.yml`, `test` | `release-please` | `false` |
-| opm-operator | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `release.yml`, `publish-fixtures.yml`, `docs.yml`, `image-pr.yml`, `test-e2e.yml`, `module-image.yml`, `module-deps.yml` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
+| opm-controller | `true` | `REGISTRY`, `IMAGE_NAME`, `CUE_VERSION` | `release.yml`, `publish-fixtures.yml`, `docs.yml`, `image-pr.yml`, `test-e2e.yml`, `module-image.yml`, `module-deps.yml` | `lint.yml`, `lint` | `release-please`, `publish-release` | `false` |
 | cli | `true` | (none) | `release.yml`, `publish-fixtures.yml`, `docs.yml` | `pr.yml`, `lint` | `release-please`, `goreleaser` | `true` |
 
 catalog_opm's file, for example:

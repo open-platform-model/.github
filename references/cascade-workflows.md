@@ -26,21 +26,6 @@ takes or reads a secret. Callers pin every cascade workflow and action to a full
 Every job's and every action's first step, `Guard`, derives the repo name from `GITHUB_REPOSITORY`
 and refuses a repo outside `open-platform-model`.
 
-## The operator rename
-
-The repo `opm-operator` is being renamed `opm-controller`. The repo name comes from
-`GITHUB_REPOSITORY`, so it flips the moment GitHub renames the repo, whatever `.github` commit the
-caller pins, and every map in `lib.sh` fails closed on a name it does not know. Until the rename is
-done, every map keyed by a receiver or a source accepts both names with the same values, as do the
-resolver and the CLI's pin file. Two lists keep the old name only, because they name a repo that
-GitHub must find: the notify target lists (they set the App token's `repositories:`, and a name that
-does not exist fails the mint for every target) and the CLI's G3 upstream list (read by API). The
-drift workflow's receiver list (read from `main`, unpinned) and the tag-ledger `REPOS` keep the old
-name too. When the rename PRs have merged, one later change here finishes it: flip the notify
-target lists, the CLI's G3 upstream list and the drift workflow's receiver list to the new name,
-drop the old name from every map, and record the renamed repos' new mirror hashes. `REPOS` flips in
-its own change.
-
 ## Caller shapes
 
 `<sha>` stands for the full SHA of a commit on `main` of this repo. These three blocks are the
@@ -68,7 +53,7 @@ from this file, so keep the bold lead-in line and the fenced block of each as th
           private-key: ${{ secrets.CASCADE_APP_PRIVATE_KEY }}
 ```
 
-**Receiver caller** (the deps-cascade workflow in catalog_opm, library, opm-operator and cli):
+**Receiver caller** (the deps-cascade workflow in catalog_opm, library, opm-controller and cli):
 
 ```yaml
 name: Deps cascade
@@ -178,5 +163,4 @@ jobs:
 
 - [ ] The three caller blocks still have their bold lead-in line, and the wiring check passes on them.
 - [ ] A new input is in the caller shape, the wiring check and a suite case.
-- [ ] A new map in `lib.sh` accepts both operator names until the rename is done.
 - [ ] No reusable workflow reads or takes a secret.

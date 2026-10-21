@@ -39,7 +39,7 @@ anywhere but GHCR's own anonymous pull token to `ghcr.io`, and it never calls `a
 
 `newest` proposes only a version whose release tag is on its repo's `main`. This holds for every pin
 whose versions are tags of an org repo: the Go modules of org repos, `release`, `opm-cli`, and the
-CUE modules whose tags an org repo makes (core, the opm catalog and the operator module). A tag made
+CUE modules whose tags an org repo makes (core, the opm catalog and the opm-controller module). A tag made
 on a commit that `main` never had (the release App can create one) is still served by the Go proxy
 and listed by git. So `newest` clones the repo once per run, bare and without trees, fetches each
 probed tag and skips, with a warning, one whose commit is not an ancestor of `main`.
