@@ -234,7 +234,7 @@ A `source` or tag holding a control character (U+0000 to U+001F or U+007F) SHALL
 
 ### Requirement: The payload source allowlists
 
-The allowlists SHALL be: `catalog_opm` accepts `core`, `cli`; `library` accepts `core`, `catalog_opm`; `opm-operator` and `opm-controller` (its name after the rename) accept `catalog_opm`, `library`, `cli`; `cli` accepts `catalog_opm`, `library`, `opm-operator`, `opm-controller`; `cascade-sandbox-down` accepts `cascade-sandbox-up`. A receiver outside this list SHALL fail with "not a cascade receiver".
+The allowlists SHALL be: `catalog_opm` accepts `core`, `cli`; `library` accepts `core`, `catalog_opm`; `opm-controller` accepts `catalog_opm`, `library`, `cli`; `cli` accepts `catalog_opm`, `library`, `opm-controller`; `cascade-sandbox-down` accepts `cascade-sandbox-up`. A receiver outside this list SHALL fail with "not a cascade receiver".
 
 #### Scenario: Receiver outside the list
 
@@ -261,7 +261,7 @@ A valid payload SHALL set `CASCADE_SOURCE`, `CASCADE_TAGS` and one `CASCADE_EXPE
 
 ### Requirement: Merge mode merges main into the branch
 
-`merge` SHALL check out `origin/deps/cascade` and run `git merge --no-edit origin/main`: when only derived files conflict (`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/operator/pin.go` or, after cli's rename, `internal/controller/pin.go`), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let the task regenerate them; any other conflict SHALL abort the merge and give mode `conflict` with the conflicting paths.
+`merge` SHALL check out `origin/deps/cascade` and run `git merge --no-edit origin/main`: when only derived files conflict (`go.mod`, `go.sum`, any `cue.mod/module.cue`, cli's `internal/controller/pin.go` and its `internal/controller/crds/*.yaml` manifests), it SHALL take `main`'s side, commit `Merge origin/main into deps/cascade` and let the task regenerate them; any other conflict SHALL abort the merge and give mode `conflict` with the conflicting paths.
 
 #### Scenario: Only derived files conflict
 
@@ -447,7 +447,7 @@ For `push` and `recreate`, `publish` SHALL, with `GITHUB_TOKEN` and plain git on
 
 ### Requirement: Publish bounds the increment before it mints
 
-For `push` and `recreate`, `publish` SHALL, with `GITHUB_TOKEN` and plain git only and before the token exists, bound the increment (requirements "Publish bounds the increment's commits", "Publish limits what a single-parent commit changes", "Publish checks merge commits", "Allow-lists live in .github", "The deny-list wins over the allow-list", "Publish refuses to drop a human commit" and "Publish checks the tag of each moved pin").
+For `push` and `recreate`, `publish` SHALL, with `GITHUB_TOKEN` and plain git only and before the token exists, bound the increment (requirements "Publish bounds the increment's commits", "Publish limits what a single-parent commit changes", "Publish checks merge commits", "The allow-lists are keyed by receiver", "The deny-list wins over every allow-list", "Publish refuses to drop a human commit" and "Publish checks the tag of each moved pin").
 
 #### Scenario: Increment comes first
 
@@ -545,40 +545,6 @@ For `push` and `recreate`, `publish` SHALL refuse the plan, before any token exi
 - **WHEN** a merge commit of the increment has a second parent that is not on `origin/main`
 - **THEN** `publish` refuses the plan before the mint
 
-### Requirement: Allow-lists live in .github
-
-The allow-lists SHALL live in `.github` (`wiring/lib.sh`), keyed by the receiver, never read from the receiver's tree.
-
-#### Scenario: cli's operator module pin file
-
-- **WHEN** cli's task commit changes `internal/operator/pin.go`
-- **THEN** `publish` accepts the path, and refuses `internal/operator/manifest.go` or `internal/operator/dist/install.yaml`
-- **AND** it accepts `internal/controller/pin.go`, the same file after cli's rename
-
-### Requirement: The deny-list wins over the allow-list
-
-The deny-list SHALL be `.github/**`, `.tasks/**`, any `Taskfile*`, `hack/**` (except cli's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), `*.sh`, any `CODEOWNERS`, `release-please-config.json`, `.release-please-manifest.json`, `.cascade-frozen`, `.cascade-hold` and, for opm-operator under either of its names (`opm-controller` after the rename), `modules/**` (its module moves only through its own `module-deps.yml`), and SHALL win over the allow-list.
-
-#### Scenario: A bundle that edits the cascade task
-
-- **WHEN** `compute`'s commit changes `UPSTREAM_VERSION` and `.tasks/cascade/pins.sh`
-- **THEN** `publish` refuses naming `.tasks/cascade/pins.sh` and mints no token
-
-#### Scenario: A bundle that edits the Taskfile
-
-- **WHEN** `compute`'s commit changes `Taskfile.yml`
-- **THEN** `publish` refuses before the mint
-
-#### Scenario: opm-operator's module
-
-- **WHEN** an opm-operator bot commit changes `modules/opm_operator/cue.mod/module.cue`
-- **THEN** `publish` refuses it, although any other `cue.mod/module.cue` is allowed
-
-#### Scenario: The renamed repo's module
-
-- **WHEN** an `opm-controller` bot commit changes `modules/opm_controller/cue.mod/module.cue`
-- **THEN** `publish` refuses it, although any other `cue.mod/module.cue` is allowed
-
 ### Requirement: Publish refuses to drop a human commit
 
 When a `push` does not contain the old tip and `origin/main..old` holds a commit the bot did not make, `publish` SHALL refuse; it SHALL refuse a `recreate` whenever `origin/main..old` holds such a commit, since `recreate` rebuilds the branch on `main`; `close` SHALL then keep the branch and delete only a bot-only one.
@@ -631,21 +597,12 @@ For `push` and `recreate`, and for every pin whose version differs between the m
 
 ### Requirement: The mirror records the sha256 of receiver files
 
-`.github` (`wiring/lib.sh`, `mirror_sources`) SHALL record, per receiver, the sha256 of each receiver file its publish mirrors copy or were read from: `.tasks/cascade/pins.sh`, `.tasks/cascade/classes`, the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does (library, opm-operator), and, for catalog_opm, library, opm-operator and cli, the `.tasks/cascade/cascade.sh` its allow-list (`publish_paths`) was read from.
+`.github` (`wiring/lib.sh`, `mirror_sources`) SHALL record, per receiver, the sha256 of each receiver file its publish mirrors copy or were read from: `.tasks/cascade/pins.sh`, `.tasks/cascade/classes`, the `.tasks/cascade/lib.sh` that `pins.sh` sources where it does (library, opm-controller), and, for catalog_opm, library, opm-controller and cli, the `.tasks/cascade/cascade.sh` its allow-list (`publish_paths`) was read from.
 
 #### Scenario: Recorded files of a receiver
 
 - **WHEN** the recorded files of cli are read
 - **THEN** they hold the sha256 of `.tasks/cascade/pins.sh`, `.tasks/cascade/classes` and `.tasks/cascade/cascade.sh` on the receiver
-
-### Requirement: The renamed repo records the same files
-
-`opm-controller` SHALL have the same recorded files and hashes as `opm-operator` until the renamed repo's own change to them.
-
-#### Scenario: Controller records
-
-- **WHEN** the recorded files of `opm-controller` and `opm-operator` are compared before the renamed repo changes them
-- **THEN** the files and hashes are equal
 
 ### Requirement: Publish refuses a plan from a stale mirror
 
@@ -689,16 +646,50 @@ The mirror of each receiver's `pins.sh` SHALL report the same rows as that recei
 - **WHEN** a receiver's own `pins.sh` and its `.github` mirror read the same `main`
 - **THEN** both report the same rows
 
-### Requirement: The cli mirror reports the controller pins
+### Requirement: The allow-lists are keyed by receiver
 
-For cli, the mirrored pin report SHALL show the library, the controller release and the controller module (`github.com/open-platform-model/opm-controller` and `opmodel.dev/modules/opm_controller@v0`, from `PinnedControllerVersion` and `PinnedModuleVersion` in `internal/controller/pin.go`; before cli's rename `github.com/open-platform-model/opm-operator` and `opmodel.dev/modules/opm_operator@v0` from `internal/operator/pin.go`), the opm catalog and core.
+The allow-lists SHALL live in `.github` (`wiring/lib.sh`), keyed by the receiver, never read from the receiver's tree.
+
+#### Scenario: cli's controller module pin file
+
+- **WHEN** cli's task commit changes `internal/controller/pin.go`
+- **THEN** `publish` accepts the path, and refuses `internal/controller/install.go`
+
+#### Scenario: cli's embedded controller CRDs
+
+- **WHEN** cli's task commit changes `internal/controller/crds/platforms.opmodel.dev.yaml`, a CRD manifest `hack/controller-pin` writes beside the pin
+- **THEN** `publish` accepts the path, and refuses `internal/controller/crds/crds.go`
+- **AND** it refuses a commit that adds or deletes a manifest there (status other than `M`), so a module version that changes the CRD set needs a human
+
+### Requirement: The deny-list wins over every allow-list
+
+The deny-list SHALL be `.github/**`, `.tasks/**`, any `Taskfile*`, `hack/**` (except cli's `hack/kind-platform.yaml` and `hack/platform/cue.mod/module.cue`), `*.sh`, any `CODEOWNERS`, `release-please-config.json`, `.release-please-manifest.json`, `.cascade-frozen`, `.cascade-hold` and, for opm-controller, `modules/**` (its controller module moves only through its own `module-deps.yml`), and SHALL win over the allow-list.
+
+#### Scenario: A bundle that edits the cascade task
+
+- **WHEN** `compute`'s commit changes `UPSTREAM_VERSION` and `.tasks/cascade/pins.sh`
+- **THEN** `publish` refuses naming `.tasks/cascade/pins.sh` and mints no token
+
+#### Scenario: A bundle that edits the Taskfile
+
+- **WHEN** `compute`'s commit changes `Taskfile.yml`
+- **THEN** `publish` refuses before the mint
+
+#### Scenario: The controller's module
+
+- **WHEN** an opm-controller bot commit changes `modules/opm_controller/cue.mod/module.cue`
+- **THEN** `publish` refuses it, although any other `cue.mod/module.cue` is allowed
+
+### Requirement: The cli mirror reports the controller release and module pins
+
+For cli, the mirrored pin report SHALL show the library, the controller release and the controller module (`github.com/open-platform-model/opm-controller` and `opmodel.dev/modules/opm_controller@v0`, from `PinnedControllerVersion` and `PinnedModuleVersion` in `internal/controller/pin.go`), the opm catalog and core.
 
 #### Scenario: cli's module pin in the body
 
-- **WHEN** cli's `internal/operator/pin.go` moves `PinnedModuleVersion` from `0.1.0` to `0.2.0`
-- **THEN** the mirrored pin report shows `opmodel.dev/modules/opm_operator@v0` moving from `v0.1.0` to `v0.2.0`, as cli's own `pins.sh` does
+- **WHEN** cli's `internal/controller/pin.go` moves `PinnedModuleVersion` from `0.1.0` to `0.2.0`
+- **THEN** the mirrored pin report shows `opmodel.dev/modules/opm_controller@v0` moving from `v0.1.0` to `v0.2.0`, as cli's own `pins.sh` does
 
-#### Scenario: cli's pin file after its rename
+#### Scenario: cli's controller pin file in the body
 
 - **WHEN** cli's `main` holds `internal/controller/pin.go` with `PinnedControllerVersion = "v1.0.0-beta.9"` and `PinnedModuleVersion = "0.2.0"`
 - **THEN** the mirrored pin report has the rows `github.com/open-platform-model/opm-controller` (`opm-controller`, `v1.0.0-beta.9`) and `opmodel.dev/modules/opm_controller@v0` (`opm-controller module`, `v0.2.0`)

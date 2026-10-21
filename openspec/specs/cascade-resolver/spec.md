@@ -195,8 +195,8 @@ A `release <repo> --asset NAME...` query SHALL take candidates from `git ls-remo
 
 #### Scenario: Draft release skipped
 
-- **WHEN** the newest operator tag's `install.yaml` download answers 404 and the previous tag's answers 200
-- **THEN** `newest release opm-operator --asset install.yaml` prints the previous tag
+- **WHEN** the newest controller tag's `install.yaml` download answers 404 and the previous tag's answers 200
+- **THEN** `newest release opm-controller --asset install.yaml` prints the previous tag
 
 #### Scenario: Missing second asset
 
@@ -427,7 +427,7 @@ Every warning SHALL be printed to stderr as `cascade-resolve: warning: <message>
 
 ### Requirement: Newest answers only candidates whose tag is on main
 
-For a pin whose versions are tags of an `open-platform-model` repo (the pins of "Go, release and core pins check their own tag" and "Catalog and module pins check a prefixed tag"), `newest` SHALL answer a published candidate only when its tag's commit is reachable from that repo's `main`. A candidate whose tag is not on `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on `<repo>` main; skipped", and the walk SHALL continue with the next candidate.
+For a pin whose versions are tags of an `open-platform-model` repo (the pins of "Go, release and core pins check their own tag" and "Catalog and controller module pins check a prefixed tag"), `newest` SHALL answer a published candidate only when its tag's commit is on that repo's `main`. A candidate whose tag is not on `main`, or is missing, SHALL be skipped with the warning "`<v>` is published but its tag is not on `<repo>` main; skipped", and the walk SHALL continue with the next candidate.
 
 #### Scenario: A forged tag
 
@@ -443,25 +443,6 @@ The checked tag SHALL be `v<x>` of the repo for these pins: `go github.com/open-
 - **WHEN** `newest cue opmodel.dev/core@v2` finds `v2.0.0-beta.2` published
 - **THEN** it checks the tag `v2.0.0-beta.2` of `core` against `main`
 
-### Requirement: Catalog and module pins check a prefixed tag
-
-The checked tag SHALL carry a prefix for these pins: `cue opmodel.dev/catalogs/opm@vN` (repo `catalog_opm`, tag `opm-v<x>`), `cue opmodel.dev/modules/opm_operator@vN` (repo `opm-operator`, tag `opm_operator-v<x>`) and `cue opmodel.dev/modules/opm_controller@vN` (repo `opm-controller`, tag `opm_controller-v<x>`, the module's train after `opm-operator` is renamed `opm-controller`).
-
-#### Scenario: Catalog tags carry their prefix
-
-- **WHEN** `newest cue opmodel.dev/catalogs/opm@v4` finds `v4.6.0` published
-- **THEN** it checks the tag `opm-v4.6.0` of `catalog_opm` against `main`
-
-#### Scenario: Operator module tags carry their prefix
-
-- **WHEN** `tag-on-main opmodel.dev/modules/opm_operator@v0 v0.2.0` runs and the tag `opm_operator-v0.2.0` of `opm-operator` points to a commit not on its `main`
-- **THEN** it exits 3, and for `v0.1.0`, whose tag `opm_operator-v0.1.0` is on `main`, it exits 0
-
-#### Scenario: Controller module tags carry their prefix
-
-- **WHEN** `tag-on-main opmodel.dev/modules/opm_controller@v0 v0.2.0` runs and the tag `opm_controller-v0.2.0` of `opm-controller` points to a commit not on its `main`
-- **THEN** it exits 3, and for `v0.1.0`, whose tag `opm_controller-v0.1.0` is on `main`, it exits 0
-
 ### Requirement: The tag check uses git only
 
 The resolver SHALL learn whether a tag is on `main` with git only (a tree-less bare clone of the repo and a fetch of the one tag, isolated like `git ls-remote`: no system or global config, no credential helper, no prompt), never with `api.github.com`; a git failure after four attempts SHALL be exit 1, never a guess.
@@ -473,7 +454,7 @@ The resolver SHALL learn whether a tag is on `main` with git only (a tree-less b
 
 ### Requirement: Other pins and published do not check tags
 
-Other pins, those not named in "Go, release and core pins check their own tag" and "Catalog and module pins check a prefixed tag" (fixtures, templates, `oci`), SHALL NOT be checked, and `published` SHALL NOT check.
+Other pins, those not named in "Go, release and core pins check their own tag" and "Catalog and controller module pins check a prefixed tag" (fixtures, templates, `oci`), SHALL NOT be checked, and `published` SHALL NOT check.
 
 #### Scenario: Published does not check a tag
 
@@ -488,3 +469,17 @@ Other pins, those not named in "Go, release and core pins check their own tag" a
 
 - **WHEN** the `v1.2.0` tag of library points to a commit not on library's `main`
 - **THEN** `tag-on-main github.com/open-platform-model/library v1.2.0` exits 3, and `tag-on-main example.com/mod v0.2.0` exits 0 without a clone
+
+### Requirement: Catalog and controller module pins check a prefixed tag
+
+The checked tag SHALL carry a prefix for these pins: `cue opmodel.dev/catalogs/opm@vN` (repo `catalog_opm`, tag `opm-v<x>`) and `cue opmodel.dev/modules/opm_controller@vN` (repo `opm-controller`, tag `opm_controller-v<x>`).
+
+#### Scenario: Catalog tags carry their prefix
+
+- **WHEN** `newest cue opmodel.dev/catalogs/opm@v4` finds `v4.6.0` published
+- **THEN** it checks the tag `opm-v4.6.0` of `catalog_opm` against `main`
+
+#### Scenario: Controller module tags carry their prefix
+
+- **WHEN** `tag-on-main opmodel.dev/modules/opm_controller@v0 v0.2.0` runs and the tag `opm_controller-v0.2.0` of `opm-controller` points to a commit not on its `main`
+- **THEN** it exits 3, and for `v0.1.0`, whose tag `opm_controller-v0.1.0` is on `main`, it exits 0

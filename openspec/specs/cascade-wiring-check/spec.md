@@ -316,15 +316,6 @@ A mismatch of the release-key readers and `environment: release` is the one name
 - **WHEN** a job reads the release key and declares no `environment: release`
 - **THEN** the check prints `release key readers without environment: release` and exits 1
 
-### Requirement: A declared extra reference adds one expected reference
-
-Each `extra-references` item SHALL add one expected `.github` reference of its kind in its file. A `resolver` reference SHALL be a step whose `with.repository` ends in `/.github` in any case, or is an expression. A `cite-lint` reference SHALL be a job whose `uses` is `open-platform-model/.github/.github/workflows/cite-lint.yml` at the pinned SHA.
-
-#### Scenario: opm-operator's module dependency bot
-
-- **WHEN** opm-operator's config lists `extra-references: [{file: module-deps.yml, kind: resolver}]` and `module-deps.yml` checks out `.github` at the same SHA with `# .github main`
-- **THEN** the check passes
-
 ### Requirement: A declared reference follows the fixed rules
 
 A declared reference SHALL be held to the rules of the fixed references: the one full SHA shared by every `.github` reference and the config's pin comment.
@@ -406,3 +397,12 @@ The wiring-check reference (`references/cascade-wiring-check.md`) SHALL tell an 
 
 - **WHEN** the wiring step fails with `not on .github main` or `differs from`
 - **THEN** the runbook allows no admin bypass
+
+### Requirement: A declared extra reference adds an expected reference
+
+Each `extra-references` item SHALL add one expected `.github` reference of its kind in its file. A `resolver` reference SHALL be a step whose `with.repository` ends in `/.github` in any case, or is an expression. A `cite-lint` reference SHALL be a job whose `uses` is `open-platform-model/.github/.github/workflows/cite-lint.yml` at the pinned SHA.
+
+#### Scenario: The controller module's dependency bot
+
+- **WHEN** opm-controller's config lists `extra-references: [{file: module-deps.yml, kind: resolver}]` and `module-deps.yml` checks out `.github` at the same SHA with `# .github main`
+- **THEN** the check passes

@@ -234,7 +234,7 @@ A dropped value SHALL be named only with every character outside `[A-Za-z0-9._/-
 
 ### Requirement: A source outside the allowlist is dropped
 
-A source outside `core`, `catalog_opm`, `library`, `opm-operator`, `opm-controller` (the name `opm-operator` takes at its rename), `cli` and the names in `CASCADE_EXTRA_SOURCES` SHALL be dropped with a warning, and its tags with it.
+A source outside `core`, `catalog_opm`, `library`, `opm-controller`, `cli` and the names in `CASCADE_EXTRA_SOURCES` SHALL be dropped with a warning, and its tags with it.
 
 #### Scenario: Unknown source dropped
 
