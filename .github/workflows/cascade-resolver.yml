@@ -31,9 +31,8 @@ jobs:
       contents: read
     env:
       # The OpenSpec CLI that gate 4 of openspec/config.yaml runs; the version
-      # here is the pin (it is also the generatedBy version of the repo's
-      # OpenSpec skills).
-      OPENSPEC_VERSION: 1.14.1
+      # here is the pin.
+      OPENSPEC_VERSION: 2.1.1
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
       # The runner image's own shellcheck (0.9.0 on ubuntu-24.04) lags the
@@ -86,8 +85,15 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -color .github/workflows/*.yml
 
-      # Node and npm come with the runner image. --ignore-scripts keeps any
-      # install script of the package or its dependencies from running.
+      # The OpenSpec CLI runs on Node. The Node major version is set here, so
+      # it does not change with the runner image. npm comes with Node.
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      # --ignore-scripts keeps any install script of the package or its
+      # dependencies from running.
       - name: Install OpenSpec
         run: |
           set -euo pipefail
