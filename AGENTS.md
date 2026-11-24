@@ -38,7 +38,8 @@ workspace `RELEASING.md`.
 tag-ledger/              acknowledged tag drift, one row per accepted state
 openspec/                OpenSpec specs, changes and the rules for writing them
 references/              one file per topic: mention-guard, tag-ledger, cite-lint, the cascade
-.claude/skills/          the OpenSpec skills
+.agents/skills/          the generated OpenSpec skills; never edit them, because every update rewrites them
+.claude/skills/          links to the skills in .agents/skills/
 ```
 
 The `.github/` folder also holds `CODEOWNERS`, the Dependabot config and the actionlint config.

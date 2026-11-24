@@ -128,3 +128,6 @@ operations:
     guidance:
       - "The archive commit rides the implementing PR; nothing is pushed to main afterwards."
       - "If the change delivers a line of an enhancement's `tasks.md`, name it in the PR body; after the repo PR merges, a PR on `enhancements` ticks that line."
+
+# Keep the generated skills in this repo; stops openspec update from asking.
+skillsScope: project
