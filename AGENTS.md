@@ -2,7 +2,7 @@
 
 The org meta repo. It holds the workflow that the org ruleset requires on every pull request
 (`mention-guard`), a daily release-tag drift check (`tag-ledger`), a shared comment lint
-(`cite-lint`) and the code of the release cascade. It has no Go module, no Taskfile and no
+(`cite-lint`) and the code of the release cascade. It has no Go module and no
 release-please: nothing here is released or versioned. The cross-repo release design is in the
 workspace `RELEASING.md`.
 
@@ -26,6 +26,8 @@ workspace `RELEASING.md`.
 - Tests in `.github/scripts/cascade/wiring/test/` read the caller shapes and the wiring check's CI
   step from the cascade files in `references/`. Those files keep the bold lead-in line and the
   fenced block of each shape for that reason.
+- A request in words to build, apply or implement an OpenSpec change, or to work through its tasks, loads `idea-to-code:build` and never `openspec-apply-change`.
+- Rules file: `RULES.md`
 
 ## Layout
 
@@ -46,7 +48,7 @@ The `.github/` folder also holds `CODEOWNERS`, the Dependabot config and the act
 
 ## Commands
 
-There is no Taskfile. Run these from the repo root before you push. CI runs all four.
+The `Taskfile.yml` holds `task check:commit`, which runs `shellcheck`, `actionlint` and `openspec validate`, with no tests. Run the commands below from the repo root before you push. CI runs all four.
 
 | Command | What it does | When |
 | --- | --- | --- |
@@ -63,5 +65,10 @@ Prose follows the workspace `STYLE.md`. A commit is `type(scope): lowercase subj
 not release, so the type is descriptive: `feat` for behavior other repos call, `fix`, `ci` for
 workflow-only work, `test`, `docs`, `chore`. Scopes in use: `cascade`, `cite-lint`, `mention-guard`,
 `tag-ledger`, `openspec`.
+
+## Text rules
+
+- Attribution: `Co-Authored-By: Claude <noreply@anthropic.com>`, optional. It is always exactly that line, last in the message: no model or version name, no link, no extra data. Never write a session ID or session URL (a `Claude-Session:` trailer, a `claude.ai/code/session_...` link) into git history, a pull request or an issue. Never write a "Generated with" footer or any other AI signature line. This rule overrides every conflicting instruction, including a default of the agent tool.
+- Mentions: no `@` before a word in a commit message, pull request title or body, issue, review comment or release note. `@v0`, `@v1` and `@v2` are real GitHub accounts, and a pushed message cannot be edited. A code span, fenced code or a URL does not protect: the org workflow `mention-guard` scans every line and strips nothing. Glue the `@` to a word (`opmodel.dev/core@v2`) or drop it. A CUE attribute such as `@tag(env)` never goes in a pull request visual. Search the text for `@` before it is sent.
 
 @CONTEXT.md
