@@ -1,0 +1,41 @@
+version: "3"
+
+# Silent by default - set TASK_VERBOSE=1 or use --verbose to show commands
+silent: true
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  check:commit:
+    desc: The checks before a commit (shellcheck, actionlint, openspec validate); no tests
+    cmds:
+      - task: lint:shell
+      - task: lint:workflows
+      - task: openspec:check
+
+  lint:shell:
+    desc: shellcheck every script and the test shims, as CI does
+    cmds:
+      - |
+        find .github/scripts -name '*.sh' -print0 \
+          | xargs -0 shellcheck -x \
+              .github/scripts/cascade/test/shim/curl \
+              .github/scripts/cascade/test/shim/git \
+              .github/scripts/cascade/wiring/test/shim/gh \
+              .github/scripts/cascade/wiring/test/shim/git
+
+  lint:workflows:
+    desc: actionlint over the workflows
+    cmds:
+      - actionlint .github/workflows/*.yml
+
+  openspec:check:
+    desc: Validate every spec and active change with --strict
+    preconditions:
+      - sh: command -v openspec >/dev/null
+        msg: "openspec not found: install @fission-ai/openspec at the version CI pins"
+    cmds:
+      - openspec validate --all --strict --no-interactive

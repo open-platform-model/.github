@@ -5,6 +5,12 @@ references:
     remote: https://github.com/open-platform-model/enhancements.git
 
 context: |
+  Owner gates: apply them with the `idea-to-code:owner-gate` skill.
+
+  Checks before a commit: `task check:commit`. It runs before every commit except a tests commit.
+  Tests: `bash .github/scripts/cascade/test/run.sh && bash .github/scripts/cascade/wiring/test/run.sh`.
+  Test files: `.github/scripts/**/test/**`.
+
   # open-platform-model/.github: org meta repo
 
   This repo holds org-wide GitHub configuration and the code it runs: required PR workflows
@@ -110,9 +116,6 @@ rules:
 
   tasks:
     - "Focus: STEPS to take for implementation"
-    - "CRITICAL: Every `## N.` section MUST end green under the validation gates and MUST close
-      with a commit task naming the Conventional Commit, e.g. `- [ ] 1.4 shellcheck, actionlint and
-      test/run.sh green, then commit feat(cascade): add the semver helpers`."
     - Each task should be independently testable offline
     - "The section-closing commit is the ONLY delivery operation allowed in tasks.md: no pushing,
       opening or merging PRs, and no ruleset or repo-settings edits (those are owner steps listed
@@ -121,8 +124,7 @@ rules:
 operations:
   apply:
     guidance:
-      - "Work section by section: run the validation gates on the whole tree before checking a
-        section's commit task, then make exactly the named commit. Never commit to main."
+      - "Never commit to main."
       - "No push, no PR, no ruleset or settings change from apply."
   archive:
     guidance:
