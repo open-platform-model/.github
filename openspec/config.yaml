@@ -47,9 +47,8 @@ context: |
 
   ### IV. Mergeable Sections
   A change is delivered as the sections of its `tasks.md` (`## N. Title` headings with `N.M`
-  checkboxes). Every section ends green under the validation gates and closes with a commit
-  task naming its Conventional Commit. Nothing that would break `main` is carried across a
-  section boundary. One PR per change, one commit per section. More than about five sections
+  checkboxes). Every section ends green under the validation gates. Nothing that would break
+  `main` is carried across a section boundary. One PR per change, one commit per section. More than about five sections
   means split the change.
 
   ## Validation Gates (before merge)
@@ -117,7 +116,7 @@ rules:
   tasks:
     - "Focus: STEPS to take for implementation"
     - Each task should be independently testable offline
-    - "The section-closing commit is the ONLY delivery operation allowed in tasks.md: no pushing,
+    - "No delivery operation is allowed in tasks.md: no committing, pushing,
       opening or merging PRs, and no ruleset or repo-settings edits (those are owner steps listed
       in the proposal)."
 
